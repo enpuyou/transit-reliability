@@ -376,6 +376,93 @@ for s in vehicle_positions trip_updates alerts; do
 done
 ```
 
+## Collector (Cloudflare Worker)
+
+Code lives in `workers/collector`. Run these from that directory.
+
+### Local checks
+
+```bash
+cd workers/collector
+npm ci
+npm run typecheck
+npm test
+```
+
+### One-time Cloudflare setup (interactive)
+
+```bash
+npx wrangler login           # opens a browser; or export CLOUDFLARE_API_TOKEN
+npx wrangler whoami
+```
+
+### Secrets (never put these in `wrangler.toml`)
+
+```bash
+npx wrangler secret put DATABRICKS_HOST     # https://<workspace-host>, no trailing path
+npx wrangler secret put DATABRICKS_TOKEN
+npx wrangler secret list
+```
+
+### Deploy, watch, and test
+
+```bash
+npm run deploy                       # wrangler deploy
+npm run tail                         # live logs, one JSON line per source per minute
+npm run dev                          # local, with a scheduled-trigger endpoint
+curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"   # fire a run while `npm run dev`
+```
+
+A healthy run logs `{"source":"vehicle_positions","ok":true,"bytes":...}`. Failures log
+`ok:false` with an error and a `collect_failed` event.
+
+### Verify files are landing
+
+```bash
+TODAY="$(date -u +%F)"
+databricks fs ls "dbfs:/Volumes/workspace/transit_landing/raw/vehicle_positions/dt=$TODAY" --profile enpu | tail -5
+databricks fs ls "dbfs:/Volumes/workspace/transit_landing/raw/vehicle_positions/dt=$TODAY" --profile enpu | wc -l
+```
+
+Expect about 60 files per hour for vehicle positions and trip updates, and about 12 per
+hour for alerts. Count and gap check in SQL (exit criterion: no gap over 5 minutes):
+
+```sql
+WITH f AS (
+  SELECT modificationTime AS t FROM read_files(
+    '/Volumes/workspace/transit_landing/raw/vehicle_positions/', format => 'binaryFile')
+)
+SELECT count(*) AS files, min(t) AS first, max(t) AS last,
+       max(gap_min) AS max_gap_minutes
+FROM (SELECT t, (unix_timestamp(t) - unix_timestamp(lag(t) OVER (ORDER BY t))) / 60 AS gap_min FROM f);
+```
+
+Decode one landed file locally (replace the date and file name):
+
+```bash
+databricks fs cp "dbfs:/Volumes/workspace/transit_landing/raw/vehicle_positions/dt=<date>/<epoch_ms>.pb" /tmp/vp.pb --profile enpu
+```
+
+then use the "Check feed headers and entity counts" script above on `/tmp/vp.pb`.
+
+### Roll back or stop collection
+
+```bash
+npx wrangler rollback            # previous version
+npx wrangler delete              # removes the Worker and its cron
+```
+
+## CI
+
+`.github/workflows/pr.yml` runs ruff, mypy, and pytest for Python and typecheck plus
+vitest for the collector on every push to `main` and every pull request.
+
+```bash
+gh run list --limit 5
+gh run watch
+gh run view <run-id> --log-failed
+```
+
 ## Git and GitHub
 
 ### Review changes
@@ -459,8 +546,6 @@ git check-ignore -v .env
 
 Keep future manual procedures in this document under a focused heading. Planned additions:
 
-- Cloudflare Wrangler login, secrets, local Worker development, and deployment
-- collector cron and tail commands
 - Databricks SQL checks for silver, gold, and operations tables
 - static GTFS download and verification
 - backfill and replay procedures

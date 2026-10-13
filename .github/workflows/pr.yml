@@ -1,0 +1,36 @@
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --python 3.12
+      - run: uv run --group dev python -m ruff check .
+      - run: uv run --group dev python -m mypy src tests
+      - run: uv run --group dev python -m pytest -q
+
+  collector:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/collector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/collector/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test

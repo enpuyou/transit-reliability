@@ -1,0 +1,15 @@
+name = "transit-collector"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Every minute. Alerts are only fetched when minute % 5 == 0 (see src/collect.ts).
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+KCM_BASE_URL = "https://s3.amazonaws.com/kcm-alerts-realtime-prod"
+LANDING_VOLUME_PATH = "/Volumes/workspace/transit_landing/raw"
+
+# Secrets (set with `wrangler secret put <NAME>`, never in this file):
+#   DATABRICKS_HOST   e.g. https://dbc-xxxx.cloud.databricks.com
+#   DATABRICKS_TOKEN

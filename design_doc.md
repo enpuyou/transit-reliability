@@ -160,8 +160,6 @@ transit-reliability/
 │   ├── export/                        # gold -> JSON snapshots
 │   ├── quality/                       # expectations, feed health
 │   └── entrypoints/                   # thin CLI entrypoints called by jobs
-├── sql/
-│   └── setup.sql                      # schemas, volumes (idempotent)
 ├── tests/
 │   ├── fixtures/                      # real sample .pb files, small GTFS subset
 │   ├── unit/
@@ -388,7 +386,7 @@ Each phase: goal, build tasks, manual verification, exit criteria. Estimates ass
 **Bronze schemas (minimum):**
 - `vehicle_positions`: feed_header_ts, vehicle_ts, entity_id, vehicle_id, trip_id, route_id, direction_id, start_date, start_time, lat, lon, bearing, speed, current_stop_sequence, stop_id, current_status, source_file, ingested_at
 - `trip_updates`: feed_header_ts, trip_update_ts, trip_id, route_id, direction_id, start_date, vehicle_id, stop_sequence, stop_id, arrival_delay, arrival_time, departure_delay, departure_time, schedule_relationship, source_file, ingested_at
-- `alerts`: feed_header_ts, alert_id, cause, effect, header_text, description_text, active_start, active_end, informed_entities (array/struct), source_file, ingested_at
+- `alerts`: feed_header_ts, entity_id, cause, effect, severity_level, header_text, description_text, url, active_periods (array of JSON strings), informed_entities (array of JSON strings), source_file, ingested_at
 
 Keep every trip-update snapshot (do not overwrite). These snapshots are the agency-prediction baseline for Phase 7.
 
