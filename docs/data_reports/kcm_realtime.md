@@ -198,7 +198,9 @@ and [decision 0002](../decisions/0002-storage-and-dedupe-strategy.md):
 - Trip updates: about 1,190 trips and 35,500 stop predictions per snapshot; about 67 percent
   of predictions are identical to the previous pull. Predictions reach up to about 3 hours ahead.
 - Alerts: about 80, almost all unchanged between pulls.
-- Feed header advanced about 63 seconds per 60-second pull; the cadence effect is unresolved.
+- The feed regenerates about every 21 seconds and buses report about every 16 seconds, so
+  one-minute polling captures roughly one in three feed versions (see the collection
+  pipeline doc, sections 1b and 7).
 
 ## Engineering data model
 

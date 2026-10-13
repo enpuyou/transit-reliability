@@ -134,6 +134,17 @@ for name in ("vehiclepositions", "tripupdates", "alerts"):
 PY
 ```
 
+### Measure how often the source updates
+
+Polls KCM directly (does not touch Databricks) and reports the feed-version spacing and
+how often each bus reports a new position. Measured 2026-10-13: a new feed version about
+every 21 seconds, a new fix per bus about every 16 seconds.
+
+```bash
+uv run python scripts/feed_cadence.py 130        # seconds to run
+curl -sI "$KCM_VEHICLE_POSITIONS_URL" | grep -i 'last-modified\|etag\|content-length'
+```
+
 ### Download two snapshots and compare timestamps
 
 ```bash
