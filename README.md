@@ -24,5 +24,7 @@ The available realtime fields and their analytical uses are summarized in
 `docs/data_inventory.md`.
 The source-by-source engineering and product reports, with example records, are
 organized in `docs/data_reports/README.md`.
+The current implementation and Databricks verification state are recorded in
+`docs/status/2026-10-13-phase-2-progress.md`.
 Manual setup, validation, Databricks, feed, Git, and troubleshooting commands are collected
 in `docs/commands.md`.

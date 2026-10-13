@@ -1,0 +1,21 @@
+resources:
+  jobs:
+    setup_job:
+      name: transit-reliability-${bundle.target}-setup
+      tasks:
+        - task_key: create_schemas
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: setup_schemas
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --state-volume
+              - ${var.state_volume}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl

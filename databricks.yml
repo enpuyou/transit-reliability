@@ -1,0 +1,42 @@
+bundle:
+  name: transit-reliability
+
+include:
+  - resources/*.yml
+
+artifacts:
+  default:
+    type: whl
+    build: uv build --wheel --out-dir dist
+    path: .
+
+variables:
+  schema_prefix:
+    description: Prefix for bronze, silver, gold, ml, and ops schemas.
+    default: transit
+  landing_volume:
+    description: Fully qualified raw landing volume.
+    default: workspace.transit_landing.raw
+  state_volume:
+    description: Fully qualified state volume for checkpoints and exports.
+    default: workspace.transit_ops.state
+  ingest_pause_status:
+    description: Whether the scheduled ingest job is paused.
+    default: UNPAUSED
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      profile: enpu
+    variables:
+      schema_prefix: dev_transit
+      ingest_pause_status: PAUSED
+  prod:
+    mode: production
+    workspace:
+      profile: enpu
+    variables:
+      schema_prefix: transit
+      ingest_pause_status: UNPAUSED

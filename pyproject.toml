@@ -13,6 +13,10 @@ dependencies = [
     "protobuf>=5.26.0",
 ]
 
+[project.scripts]
+setup_schemas = "transit_reliability.entrypoints.jobs:setup_schemas"
+ingest_bronze = "transit_reliability.entrypoints.jobs:ingest_bronze"
+
 [dependency-groups]
 dev = [
     "mypy>=1.15.0",
@@ -36,3 +40,7 @@ select = ["E", "F", "I"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+
+[[tool.mypy.overrides]]
+module = ["pyspark.*", "pandas"]
+ignore_missing_imports = true

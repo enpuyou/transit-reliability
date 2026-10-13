@@ -1,0 +1,27 @@
+resources:
+  jobs:
+    ingest_job:
+      name: transit-reliability-${bundle.target}-ingest
+      schedule:
+        quartz_cron_expression: 0 0/30 * * * ?
+        timezone_id: UTC
+        pause_status: ${var.ingest_pause_status}
+      tasks:
+        - task_key: bronze
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: ingest_bronze
+            parameters:
+              - --landing-volume
+              - ${var.landing_volume}
+              - --state-volume
+              - ${var.state_volume}
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl
