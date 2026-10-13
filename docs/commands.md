@@ -504,6 +504,48 @@ gh run watch
 gh run view <run-id> --log-failed
 ```
 
+## Limits and usage checks
+
+Limits and our current usage are in `docs/limits.md`. Run these after any change to
+schedules, and daily during the first week.
+
+### Cloudflare CPU time per run (limit: 10 ms)
+
+```bash
+cd workers/collector
+npx wrangler tail --format json > /tmp/tail.json    # let it run a few minutes, then Ctrl-C
+python3 - <<'PY'
+import json
+t = open("/tmp/tail.json").read(); dec = json.JSONDecoder(); i = 0
+while (i := t.find("{", i)) >= 0:
+    try: d, i = dec.raw_decode(t, i)
+    except ValueError: i += 1; continue
+    if "outcome" in d: print(d["outcome"], "cpu_ms=", d.get("cpuTime"), "wall_ms=", d.get("wallTime"))
+PY
+```
+
+Anything near 10 ms, or an outcome other than `ok`, needs action (see `docs/limits.md`).
+
+### Databricks compute and storage (system tables, lag of hours)
+
+```sql
+SELECT usage_date, sku_name, round(sum(usage_quantity), 3) AS quantity, usage_unit
+FROM system.billing.usage
+GROUP BY ALL ORDER BY usage_date DESC LIMIT 20;
+```
+
+Run it in the SQL editor, or with the statement API shown under "Run SQL from the
+shell". Record the daily DBU figure in `docs/runbook.md`.
+
+### Size of the landing volume and bronze tables
+
+```bash
+databricks fs ls dbfs:/Volumes/workspace/transit_landing/raw/trip_updates --profile enpu
+```
+```sql
+DESCRIBE DETAIL workspace.transit_bronze.trip_updates;   -- sizeInBytes, numFiles
+```
+
 ## Git and GitHub
 
 ### Review changes

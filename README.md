@@ -30,3 +30,4 @@ Manual setup, validation, Databricks, feed, Git, and troubleshooting commands ar
 in `docs/commands.md`.
 The collection pipeline from King County Metro through Cloudflare to Databricks, including
 what each pull contains, is explained in `docs/collection_pipeline.md`.
+Free-tier limits and current usage are tracked in `docs/limits.md`.
