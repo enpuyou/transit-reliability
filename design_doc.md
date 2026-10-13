@@ -100,7 +100,7 @@ Verified from Databricks docs (Free Edition limitations page, last updated Sep 2
 | KCM vehicle positions | poll 1 min | `https://s3.amazonaws.com/kcm-alerts-realtime-prod/vehiclepositions.pb` | URL verified via MobilityDatabase; no key seen | 1 |
 | KCM trip updates | poll 1 min | expected `.../kcm-alerts-realtime-prod/tripupdates.pb` | **verify in Phase 0** (listed on MobilityDatabase as mdb-1540) | 1 |
 | KCM service alerts | poll 5 min | `.../kcm-alerts-realtime-prod/alerts.pb` | verified | 1 |
-| KCM static GTFS | daily | `https://www.soundtransit.org/GTFS-KCM/google_transit.zip` | verified on Sound Transit OTD page | 3 |
+| KCM static GTFS | daily | `https://metro.kingcounty.gov/GTFS/google_transit.zip` | verified 2026-10-13 (old Sound Transit URL now redirects) | 3 |
 | NOAA weather | hourly | `api.weather.gov` (no key, requires User-Agent with contact) | not verified here | 6 |
 | Event schedules | daily | MLB Stats API, team sites, hand-maintained seed CSV | partially manual | 6 |
 | KCM ridership (APC) | per service change | data.kingcounty.gov Metro Rider Dashboard; seattletransitridership.com | verified to exist; format TBD | 6 |

@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Planned** |
 | Phase | 3 |
-| Owner | King County Metro (via Sound Transit open data); URL to verify |
+| Owner | King County Metro (`https://metro.kingcounty.gov/GTFS/google_transit.zip`, verified 2026-10-13, about 10.9 MB) |
 | Format | ZIP of CSV files |
 | Cadence | daily check, changes per service change |
 | Profiled | not yet |

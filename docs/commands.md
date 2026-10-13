@@ -524,7 +524,7 @@ schedules, and daily during the first week.
 
 ```bash
 cd workers/collector
-npx wrangler tail --format json > /tmp/tail.json    # let it run a few minutes, then Ctrl-C
+npx wrangler tail transit-collector --format json > /tmp/tail.json    # let it run a few minutes, then Ctrl-C
 python3 - <<'PY'
 import json
 t = open("/tmp/tail.json").read(); dec = json.JSONDecoder(); i = 0
@@ -535,7 +535,9 @@ while (i := t.find("{", i)) >= 0:
 PY
 ```
 
-Anything near 10 ms, or an outcome other than `ok`, needs action (see `docs/limits.md`).
+Anything at 10 ms, or an outcome other than `ok`, needs action (see `docs/limits.md` and
+decision 0003). Expect `wall_ms` of about 43,000: the run waits between fetches on purpose.
+Do not pipe `perl alarm` into the tail output; it buffers and loses the events.
 
 ### Databricks compute and storage (system tables, lag of hours)
 

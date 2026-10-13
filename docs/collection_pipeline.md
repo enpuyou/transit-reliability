@@ -105,7 +105,7 @@ Base URL: `https://s3.amazonaws.com/kcm-alerts-realtime-prod/`
 
 | Feed | File | Content | Polled |
 |---|---|---|---|
-| Vehicle positions | `vehiclepositions.pb` | where each bus is now (lat/lon, speed, bearing, trip, route, stop) | every minute |
+| Vehicle positions | `vehiclepositions.pb` | where each bus is now (lat/lon, trip, route, stop; no speed or bearing) | three times a minute (every ~20 s) |
 | Trip updates | `tripupdates.pb` | predicted arrival/departure per upcoming stop for each active trip | every minute |
 | Service alerts | `alerts.pb` | detours, delays, closures with text and affected routes/stops | every 5 minutes |
 
@@ -377,17 +377,16 @@ But "rider-minutes lost" currently counts only lateness (`max(delay, 0)`), so an
 departure that strands waiting riders is not weighted. Add an early-departure metric when
 `docs/metrics.md` is finalized.
 
-## 11. Open decision: polling frequency
+## 11. Polling frequency (decided: option 2, see decision 0003)
 
 Sections 1b and 7 show that one-minute polling misses most of the feed's updates. The
-choice (needs a decision before relying on arrival inference):
+options were: keep 60 s; vehicle positions every 20 s with trip updates every 60 s; or
+everything every 20 s. Option 2 was implemented on 2026-10-13: the Worker still fires once
+a minute (the cron minimum), then fetches vehicle positions at 0 s, 20 s, and 40 s inside
+the run, waiting between fetches. Waiting is wall time, not CPU time. A live check showed
+files landing about every 21 seconds, each a distinct feed version.
 
-1. Keep 60 s for everything. Simplest and cheapest, but poor arrival timing.
-2. Vehicle positions every 20 s, trip updates every 60 s. Recommended starting point:
-   captures nearly every bus fix, small cost.
-3. Everything every 20 s. Best fidelity, but about 5 GB per day raw and probably exceeds
-   the Free-plan Worker CPU limit.
-
-Free-tier consequences are tracked in `docs/limits.md`. The Worker can sleep between
-fetches inside one run (cron wall time allows 15 minutes; only CPU time is limited), so
-this needs no second cron trigger.
+Remaining caveat: CPU per run rose from 4-5 ms to 6-10 ms against the Free-plan 10 ms
+limit. See `docs/decisions/0003-vehicle-polling-every-20-seconds.md` and `docs/limits.md`.
+Sections 4 and 7 above describe the original one-minute design; where they say "every
+minute" for vehicle positions, read "three times a minute since 2026-10-13 23:30 UTC".

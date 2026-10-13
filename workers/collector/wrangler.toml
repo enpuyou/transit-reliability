@@ -2,7 +2,8 @@ name = "transit-collector"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
-# Every minute. Alerts are only fetched when minute % 5 == 0 (see src/collect.ts).
+# Every minute. Within a run, vehicle positions are fetched 3 times, 20 seconds apart
+# (see src/collect.ts). Trip updates run once per run; alerts when minute % 5 == 0.
 [triggers]
 crons = ["* * * * *"]
 
@@ -17,6 +18,8 @@ persist = true
 [vars]
 KCM_BASE_URL = "https://s3.amazonaws.com/kcm-alerts-realtime-prod"
 LANDING_VOLUME_PATH = "/Volumes/workspace/transit_landing/raw"
+# SOURCE_SET = "all"  (default). "vehicles" or "trips" restricts this Worker to one group;
+# see docs/collection_pipeline.md for why a split Worker was tried and not adopted.
 
 # Secrets (set with `wrangler secret put <NAME>`, never in this file):
 #   DATABRICKS_HOST   e.g. https://dbc-xxxx.cloud.databricks.com

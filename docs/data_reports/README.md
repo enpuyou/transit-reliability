@@ -19,7 +19,7 @@ One report per data source. Each answers two questions:
 | [Events](events.md) | Planned | 6 | Games, concerts, event windows |
 | [Template](_template.md) | Template | | Structure for a new report |
 
-Related docs: [collection pipeline](../collection_pipeline.md) (how data reaches
+Related docs: [KCM background](../kcm_background.md), [collection pipeline](../collection_pipeline.md) (how data reaches
 Databricks), [free-tier limits](../limits.md), and [decisions](../decisions/).
 
 ## Conventions

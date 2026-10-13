@@ -9,10 +9,10 @@ something starts failing, because free-plan limits change.
 |---|---|---|---|
 | Cloudflare cron triggers | 5 per account | 1 | OK |
 | Cloudflare requests | 100,000 per day | about 1,440 cron runs per day | OK |
-| Cloudflare CPU per cron run | 10 ms | 4 to 5 ms measured (`wrangler tail --format json`) | OK, tight: about 2x margin |
-| Cloudflare subrequests | 50 per invocation | 4 to 6 (fetch + upload per source) | OK |
+| Cloudflare CPU per cron run | 10 ms | 6 to 10 ms over 11 runs after the 20-second change (was 4 to 5 ms); one run hit 10 ms | AT RISK, see decision 0003 |
+| Cloudflare subrequests | 50 per invocation | about 10 (fetch + upload per source, vehicle positions 3x) | OK |
 | Cloudflare memory | 128 MB | largest body is 1.2 MB | OK |
-| Cloudflare log events | 200,000 per day, 3 day retention | about 6,000 per day | OK |
+| Cloudflare log events | 200,000 per day, 3 day retention | about 10,000 per day | OK |
 | Cloudflare log size | 256 KB per request | under 1 KB | OK |
 | Databricks concurrent job tasks | 5 | 1 | OK |
 | Databricks SQL warehouse | 1, 2X-Small | used only for manual checks | OK |
@@ -32,8 +32,8 @@ something starts failing, because free-plan limits change.
   day (1.2 MB trip updates per minute plus 54 KB vehicle positions), roughly 54 GB per
   month, before bronze Delta tables. Do not assume this fits. Retention below is the
   mitigation.
-- **Cloudflare CPU is the tightest verified limit.** Measured 4 to 5 ms per run against a
-  10 ms limit. A slower upload day or larger feed could exceed it. A run over the limit
+- **Cloudflare CPU is the tightest verified limit.** Measured 6 to 10 ms per run against a
+  10 ms limit since vehicle positions moved to three fetches per run (4 to 5 ms before). A slower upload day or larger feed could exceed it. A run over the limit
   is killed and that minute's data is lost. Mitigations, in order: watch the tail;
   if runs approach 8 ms, stop fetching trip updates every minute; or move to the paid
   Workers plan.
