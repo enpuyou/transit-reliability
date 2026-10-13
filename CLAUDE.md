@@ -57,9 +57,10 @@ Run all of these before committing; CI runs the same.
 - Cloudflare free plan allows 10 ms CPU per cron run; we use 6 to 10 ms (at risk, decision
   0003). Check it (see `docs/commands.md`) after any change to the Worker.
 - Never move sources to a new Worker without first confirming the new cron fires. A new
-  Worker's cron did not fire on 2026-10-13 and caused a gap. Databricks compute and storage
-  quotas are unpublished, so measure rather than assume.
-- macOS has no `timeout`; use `perl -e 'alarm N; exec @ARGV' cmd`.
+  Worker's cron did not fire on 2026-10-13 and caused a gap.
+- Databricks compute and storage quotas are unpublished, so measure rather than assume.
+- macOS has no `timeout`; use `perl -e 'alarm N; exec @ARGV' cmd` (but not for
+  `wrangler tail`, whose output is lost when killed that way).
 
 ## Conventions
 
