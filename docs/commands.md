@@ -43,6 +43,14 @@ uv run --group dev python -m mypy src tests
 git diff --check
 ```
 
+If `uv run pytest` or the `.venv/bin/mypy` script fails to spawn, call the module form
+(`python -m ...`) or `.venv/bin/python -m pytest`. Everything at once:
+
+```bash
+uv run --group dev python -m pytest -q && uv run --group dev ruff check . \
+  && uv run --group dev python -m mypy src tests && git diff --check
+```
+
 Run one test or one test file:
 
 ```bash
@@ -242,25 +250,131 @@ scheduled polling, retry handling, or per-source health metrics.
 
 ## Databricks bundle commands
 
-These commands apply after `databricks.yml` and bundle resources are added.
+The bundle targets use the `enpu` profile (set in `databricks.yml`). Dev resources are
+prefixed `[dev <user>]` and the dev schemas use the `dev_transit` prefix. The bundle
+builds the wheel with `uv build`, so run these from the repository root after the local
+checks pass.
 
 ```bash
 databricks bundle validate -t dev
 databricks bundle deploy -t dev
-databricks bundle run ingest_job -t dev
+databricks bundle summary -t dev
+```
+
+### Run jobs
+
+```bash
+databricks bundle run setup_job -t dev     # create schemas and the state volume
+databricks bundle run ingest_job -t dev    # bronze Auto Loader, availableNow
+```
+
+The dev ingest schedule is deliberately `PAUSED`; `bundle run` still works. Expected
+smoke result with the three fixtures landed: about 2 minutes first run, about 1 minute on
+rerun, `TERMINATED SUCCESS`.
+
+### Inspect runs
+
+```bash
+databricks jobs list --profile enpu
+databricks jobs list-runs --job-id <job-id> --limit 5 --profile enpu
+databricks jobs get-run <run-id> --profile enpu
+databricks jobs get-run-output <task-run-id> --profile enpu   # traceback of a failed task
+databricks jobs cancel-run <run-id> --profile enpu
+```
+
+`get-run-output` needs the task run id (under `tasks[].run_id` in `get-run`), not the job
+run id. Pipe to `head -c 4000` if the output is large.
+
+### Pause or unpause the schedule
+
+Change `ingest_pause_status` for the target in `databricks.yml` and redeploy:
+
+```bash
+databricks bundle deploy -t dev
+```
+
+### Prod
+
+```bash
 databricks bundle deploy -t prod
 databricks bundle run ingest_job -t prod
 ```
 
-Inspect bundle help and deployed resources:
+Do not deploy to `prod` until the dev job has been run and its manual verification
+checks are recorded in the setup notes or runbook. Prod is unpaused with a 30-minute
+schedule, so deploying it starts spending compute.
+
+### Tear down dev resources
 
 ```bash
-databricks bundle --help
-databricks bundle summary -t dev
+databricks bundle destroy -t dev
 ```
 
-Do not deploy to `prod` until the dev job has been run and its manual verification
-checks are recorded in the setup notes or runbook.
+This deletes the deployed dev jobs and bundle files. Tables, checkpoints, and landed
+volume files are not removed.
+
+## Bronze verification (SQL)
+
+Run these in the Databricks SQL editor, or from the shell with the statement API. The
+dev schema is `workspace.dev_transit_bronze`; prod is `workspace.transit_bronze`.
+
+```sql
+SELECT 'vehicle_positions' AS t, count(*) AS n FROM workspace.dev_transit_bronze.vehicle_positions
+UNION ALL SELECT 'trip_updates', count(*) FROM workspace.dev_transit_bronze.trip_updates
+UNION ALL SELECT 'alerts', count(*) FROM workspace.dev_transit_bronze.alerts;
+```
+
+Smoke-fixture expectation: 522 / 33,772 / 81, unchanged after a rerun.
+
+```sql
+-- per-day volume, vehicles, and files
+SELECT date(from_unixtime(feed_header_ts)) AS d, count(*) AS rows,
+       count(DISTINCT vehicle_id) AS vehicles, count(DISTINCT source_file) AS files
+FROM workspace.dev_transit_bronze.vehicle_positions GROUP BY d ORDER BY d;
+
+-- duplicate check (should return no rows)
+SELECT source_file, entity_id, count(*) AS n
+FROM workspace.dev_transit_bronze.vehicle_positions
+GROUP BY source_file, entity_id HAVING n > 1 LIMIT 10;
+
+-- Delta history (appends per micro-batch)
+DESCRIBE HISTORY workspace.dev_transit_bronze.vehicle_positions;
+```
+
+### Run SQL from the shell
+
+```bash
+WAREHOUSE_ID="$(databricks warehouses list -o json --profile enpu \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')"
+databricks api post /api/2.0/sql/statements --profile enpu --json "{
+  \"warehouse_id\": \"$WAREHOUSE_ID\",
+  \"wait_timeout\": \"50s\",
+  \"statement\": \"SELECT count(*) FROM workspace.dev_transit_bronze.alerts\"
+}"
+```
+
+`databricks api` does not read the bundle profile; always pass `--profile enpu`.
+
+### Re-land smoke files and force a reprocess
+
+Checkpoints skip files already seen. To test a new file, upload it under a new name (see
+"Uploading a raw feed file manually"). To rebuild a table from scratch, drop it and its
+checkpoint together, otherwise the stream will think everything was processed:
+
+```bash
+databricks fs rm -r dbfs:/Volumes/workspace/transit_ops/state/checkpoints/bronze_alerts --profile enpu
+```
+```sql
+DROP TABLE IF EXISTS workspace.dev_transit_bronze.alerts;
+```
+
+### List landed raw files
+
+```bash
+for s in vehicle_positions trip_updates alerts; do
+  databricks fs ls "dbfs:/Volumes/workspace/transit_landing/raw/$s" --profile enpu
+done
+```
 
 ## Git and GitHub
 
@@ -347,7 +461,7 @@ Keep future manual procedures in this document under a focused heading. Planned 
 
 - Cloudflare Wrangler login, secrets, local Worker development, and deployment
 - collector cron and tail commands
-- Databricks SQL checks for bronze, silver, gold, and operations tables
+- Databricks SQL checks for silver, gold, and operations tables
 - static GTFS download and verification
 - backfill and replay procedures
 - feed outage recovery
