@@ -12,12 +12,22 @@ Date: 2026-10-13
 
 ## Remaining manual checks
 
-- Databricks schemas and volumes have not yet been created or verified.
-- Databricks Files API upload has not yet been verified.
+- Databricks schemas and volumes verified on 2026-10-13 with the `enpu` CLI profile:
+	`workspace.transit_landing.raw` and `workspace.transit_ops.state` both exist as managed volumes.
+- Databricks Files API upload verified on 2026-10-13: a marker file uploaded to
+	`/Volumes/workspace/transit_landing/raw/_smoke/hello.txt` returned HTTP 204 and was readable
+	through the Databricks CLI.
 - Databricks outbound access has not yet been verified.
 - KCM realtime terms and attribution requirements still need to be reviewed.
+
+The setup gate for external collection is therefore clear: the inbound Files API path works.
+Use the external collector architecture and continue to treat Databricks outbound access as
+optional rather than a prerequisite.
 
 ## Credential hygiene
 
 The pre-existing `.env` contained live-looking credentials and must not be committed. Those credentials
-were exposed during setup and should be rotated before development continues.
+were exposed during setup. Decision recorded on 2026-10-13: keep them in local use for now because
+the user considers the risk low. Continue to avoid committing `.env`, printing token values, or
+putting credentials in documentation; revisit this decision if the repository becomes public or the
+credentials gain broader permissions.
