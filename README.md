@@ -20,8 +20,6 @@ Copy `.env.example` to `.env` for local credentials. The `.env` file is ignored 
 
 The architecture, constraints, manual setup checks, and delivery phases are documented in
 `design_doc.md`. Setup observations are recorded in `docs/decisions/0000-setup-notes.md`.
-The available realtime fields and their analytical uses are summarized in
-`docs/data_inventory.md`.
 The source-by-source engineering and product reports, with example records, are
 organized in `docs/data_reports/README.md`.
 The current implementation and Databricks verification state are recorded in

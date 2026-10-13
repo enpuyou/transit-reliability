@@ -1,9 +1,14 @@
 # Ridership
 
-Status: **Planned**
-Source role: rider impact weighting
-Expected cadence: per service change or periodic dashboard release
-Current format: to be verified
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 6 |
+| Owner | King County Metro |
+| Format | to be verified |
+| Cadence | per service change or periodic dashboard release |
+| Profiled | not yet |
+| Target tables | ridership weighting table |
 
 ## Executive summary
 
@@ -27,14 +32,14 @@ source_period: <report period>
 The actual grain, privacy aggregation, and availability of stop-level values must be
 verified before modeling.
 
-## What it enables
+## What we can do with this source
 
 - Estimated rider-minutes lost.
 - Rider-weighted route and stop rankings.
 - Prioritization of schedule recommendations.
 - Comparison of raw delay with customer impact.
 
-## Engineering and quality notes
+## Engineering plan and quality checks
 
 Keep source period and aggregation grain. Never present estimated boardings as real-time
 passenger counts. Document the formula and uncertainty for any rider-minute estimate.
@@ -43,3 +48,7 @@ passenger counts. Document the formula and uncertainty for any rider-minute esti
 
 This is the bridge from **where service is unreliable** to **where improvement would help
 the most people**. It should be introduced only after core delay measurements are trusted.
+
+## Related reports
+
+- [Data report index](README.md)

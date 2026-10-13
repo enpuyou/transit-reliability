@@ -1,10 +1,14 @@
 # WSDOT Traffic
 
-Status: **Planned**
-Source role: roadway congestion and travel-time context
-Format: WSDOT Traveler Information API
-Cadence: approximately 2 to 5 minutes for selected endpoints
-Access: access code required for relevant services
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 6 |
+| Owner | Washington State DOT |
+| Format | WSDOT Traveler Information API (access code required) |
+| Cadence | about 2 to 5 minutes for selected endpoints |
+| Profiled | not yet |
+| Target tables | context traffic tables |
 
 ## Executive summary
 
@@ -31,14 +35,14 @@ Representative shape:
 The endpoint-specific schema and access limits must be verified when the API code is
 available.
 
-## What it enables
+## What we can do with this source
 
 - Join congestion conditions to nearby route segments.
 - Compare scheduled runtime with runtime during stop-and-go traffic.
 - Add traffic features to prediction models.
 - Support a planner story about corridor-level schedule padding.
 
-## Engineering and quality notes
+## Engineering plan and quality checks
 
 Keep raw responses and API timestamps. Map stations and road segments to transit shapes
 using a documented distance threshold. Avoid treating nearby highway conditions as proof
@@ -49,3 +53,7 @@ of bus delay on a parallel local street.
 This source helps answer: **is the bus late because the corridor itself is slow, and is
 that recurring enough to change the schedule?** It is supporting evidence, not a causal
 experiment.
+
+## Related reports
+
+- [Data report index](README.md)

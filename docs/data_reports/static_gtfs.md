@@ -1,10 +1,14 @@
 # Static GTFS
 
-Status: **Planned**
-Source role: schedule and geographic reference data
-Expected format: ZIP archive containing CSV files
-Expected cadence: daily or per service change
-Current status: source URL and KCM feed ownership still need final verification
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 3 |
+| Owner | King County Metro (via Sound Transit open data); URL to verify |
+| Format | ZIP of CSV files |
+| Cadence | daily check, changes per service change |
+| Profiled | not yet |
+| Target tables | silver schedule tables (routes, trips, stops, stop_times, shapes, calendar) |
 
 ## Executive summary
 
@@ -72,7 +76,7 @@ GTFS times can exceed `24:00:00`. For example, `25:10:00` means 1:10 AM on the n
 calendar day but still belongs to the previous service day. The loader must preserve this
 meaning in `America/Los_Angeles`, including daylight-saving transitions.
 
-## What static GTFS enables
+## What we can do with this source
 
 - Human-readable route and stop maps.
 - Scheduled transit time between stops.
@@ -91,7 +95,7 @@ arrived. Observed arrival must come from historical vehicle positions, stop stat
 validated inference method. Agency trip updates provide predictions, which are useful but
 are not the same as observations.
 
-## Engineering plan
+## Engineering plan and quality checks
 
 1. Download and retain each feed version with its download date and file hash.
 2. Parse the core CSV files into versioned tables.
@@ -110,3 +114,8 @@ performance diverged from the plan.
 
 The report should be updated with real route names, stop names, mode counts, feed version,
 row counts, and a sample route map once the source is downloaded.
+
+## Related reports
+
+- [Data report index](README.md)
+- [KCM realtime](kcm_realtime.md)

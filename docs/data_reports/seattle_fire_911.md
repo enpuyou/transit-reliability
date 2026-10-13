@@ -1,9 +1,14 @@
 # Seattle Fire 911 Dispatches
 
-Status: **Planned**
-Source role: public incident context
-Format: Socrata dataset `kzjm-xkqj`
-Cadence: approximately 5 minutes
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 6 |
+| Owner | City of Seattle (data.seattle.gov) |
+| Format | Socrata dataset `kzjm-xkqj` |
+| Cadence | about 5 minutes |
+| Profiled | not yet |
+| Target tables | context incident table |
 
 ## Executive summary
 
@@ -26,14 +31,14 @@ status: <dispatch status>
 
 The exact public fields and privacy handling must be profiled before ingestion.
 
-## What it enables
+## What we can do with this source
 
 - Incident markers near route shapes and stops.
 - Delay windows before and after nearby dispatches.
 - Incident-category summaries by corridor.
 - Supporting evidence for a planner investigation.
 
-## Engineering and quality notes
+## Engineering plan and quality checks
 
 Use the Socrata API with incremental time filters, retain retrieval timestamps, normalize
 coordinates, and document the spatial buffer and active time window. Avoid publishing
@@ -43,3 +48,7 @@ sensitive details or treating all dispatches as traffic incidents.
 
 This source helps a planner investigate exceptional delay days and distinguish a possible
 one-off incident from recurring schedule or roadway problems.
+
+## Related reports
+
+- [Data report index](README.md)

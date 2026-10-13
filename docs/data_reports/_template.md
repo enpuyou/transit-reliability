@@ -1,65 +1,50 @@
 # <Source name>
 
-Status: **Observed | Planned | Unverified**
-Profiled: <date or not yet>
-Source owner: <agency or organization>
-Format: <JSON, CSV, protobuf, API, etc.>
-Source URL: <link>
+| | |
+|---|---|
+| Status | **Planned** / Collecting / Observed / Unverified |
+| Phase | <design-doc phase number> |
+| Owner | <agency or organization> |
+| Format | <JSON, CSV, protobuf, API, etc.> |
+| Cadence | <how often it changes or is polled> |
+| Profiled | <date or not yet> |
+| Target tables | <bronze/silver/context tables this feeds> |
 
 ## Executive summary
 
-Explain the source in plain language. What real-world process does it represent? What
-would a planner, PM, or stakeholder learn from it?
-
-## What is in the source
-
-| Dataset or endpoint | One record means | Cadence | Coverage |
-|---|---|---|---|
-| <name> | <meaning> | <cadence> | <known coverage> |
+What real-world process does the source represent, and what would a planner learn from
+it? Keep to a short paragraph.
 
 ## Example record
 
-Show one real decoded record or a clearly labeled representative example. Include the
-capture date and identify any fields omitted for readability.
+One real decoded record, or a clearly labeled representative one, with capture date.
 
 ```text
 <example>
 ```
 
-### What this means
+Explain identifiers, timestamps, geography, and surprising fields in a sentence or two.
 
-Translate the example into plain language. Explain identifiers, timestamps, geography,
-status values, and any surprising fields.
+## What we can do with this source
 
-## Field map
+- <analysis or product capability from this source alone>
+- Needs joins or history: <other sources or collected snapshots required>
 
-| Field | Meaning | Type or units | Useful output |
-|---|---|---|---|
-| `<field>` | <meaning> | <type or units> | <analysis or product use> |
+## Engineering plan and quality checks
 
-## What we can do with this source alone
-
-- <direct analysis or product capability>
-
-## What requires joins or history
-
-- <static reference data>
-- <historical collection>
-- <other source>
-
-## Limitations and quality checks
-
-- <missingness, ambiguity, bias, freshness, licensing, privacy, or causality caveat>
-
-## Engineering plan
-
-Describe raw retention, bronze parsing, silver cleaning, gold outputs, and tests.
+Raw retention, bronze/silver/gold outputs, keys and dedupe, known caveats (freshness,
+missingness, bias, licensing, privacy, causality), and tests.
 
 ## Product story
 
-Explain the questions this source helps answer, who benefits, and what a presentation
-could show. Separate observed facts from hypotheses and recommendations.
+Questions this source helps answer, who benefits, and what to avoid claiming.
 
 ## Related reports
 
 - [Data report index](README.md)
+
+---
+
+Optional sections once real data exists, in this order: **Field map** (field, meaning,
+units, useful output), **Observed behavior** (measured counts and change rates, with
+date), **What requires joins or history**.

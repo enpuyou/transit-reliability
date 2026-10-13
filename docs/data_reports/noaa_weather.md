@@ -1,9 +1,14 @@
 # NOAA Weather
 
-Status: **Planned**
-Source role: weather context for delay analysis
-Format: weather.gov JSON API
-Cadence: hourly observations
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 6 |
+| Owner | NOAA / National Weather Service |
+| Format | weather.gov JSON API |
+| Cadence | hourly observations |
+| Profiled | not yet |
+| Target tables | context weather observations |
 
 ## Executive summary
 
@@ -28,14 +33,14 @@ Representative shape:
 
 The actual station, fields, units, and observation coverage must be profiled before use.
 
-## What it enables
+## What we can do with this source
 
 - Compare route delay distributions in dry versus rainy periods.
 - Add weather features to prediction models.
 - Explain broad system-wide disruptions with time and location context.
 - Show weather alongside route reliability charts.
 
-## Engineering and quality notes
+## Engineering plan and quality checks
 
 Store station ID, observation timestamp, retrieval timestamp, raw response, and normalized
 units. Join observations to route segments by time and a documented spatial radius. Handle
@@ -46,3 +51,7 @@ missing observations and do not infer causality from correlation.
 A planner can ask whether a delay pattern is unusual for ordinary conditions or part of a
 repeatable weather-related operating problem. Weather should be presented as context, not
 as an automatic explanation.
+
+## Related reports
+
+- [Data report index](README.md)

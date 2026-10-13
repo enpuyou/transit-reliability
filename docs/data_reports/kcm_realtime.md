@@ -1,10 +1,14 @@
 # KCM GTFS-Realtime
 
-Status: **Observed**
-Profiled: 2026-10-13
-Source family: King County Metro realtime feeds
-Format: Protocol Buffers using the GTFS-Realtime specification
-Current fixtures: `tests/fixtures/vehiclepositions.pb`, `tripupdates.pb`, `alerts.pb`
+| | |
+|---|---|
+| Status | **Collecting** |
+| Phase | 1-2 (collect, bronze) |
+| Owner | King County Metro |
+| Format | Protocol Buffers (GTFS-Realtime) |
+| Cadence | vehicle positions and trip updates every minute, alerts every 5 minutes |
+| Profiled | 2026-10-13 |
+| Target tables | `bronze.vehicle_positions`, `bronze.trip_updates`, `bronze.alerts` |
 
 ## Executive summary
 
@@ -183,6 +187,19 @@ alert layer on a map and a context flag for route reliability analysis.
 - Whether traffic, weather, or an incident caused a delay.
 - Whether service is bus, rail, ferry, or another mode without static `route_type`.
 
+## Observed collection behavior
+
+Measured on live collected files (2026-10-13), see [collection pipeline](../collection_pipeline.md)
+and [decision 0002](../decisions/0002-storage-and-dedupe-strategy.md):
+
+- Parser test fixtures are in `tests/fixtures/*.pb`.
+- A snapshot is one instant, not a time window; the next pull replaces it at the source.
+- Vehicle positions: about 560 vehicles, about 98 percent with a new position time each pull.
+- Trip updates: about 1,190 trips and 35,500 stop predictions per snapshot; about 67 percent
+  of predictions are identical to the previous pull. Predictions reach up to about 3 hours ahead.
+- Alerts: about 80, almost all unchanged between pulls.
+- Feed header advanced about 63 seconds per 60-second pull; the cadence effect is unresolved.
+
 ## Engineering data model
 
 The raw layer should preserve each original protobuf file. Bronze parsing should produce
@@ -211,7 +228,7 @@ Gold tables can then expose `live_vehicles`, `route_status_15min`, `feed_health`
 Before publishing metrics, check:
 
 - feed header timestamp is present and reasonably fresh;
-- entity IDs are unique within a snapshot;
+- `entity_id` is a per-snapshot label (`<snapshot epoch>_<n>`), not a stable key; dedupe vehicles on `vehicle_id` + `vehicle_ts` (about 5 vehicle IDs per snapshot appear twice);
 - coordinates are valid and within the expected service area;
 - vehicle and trip IDs are not unexpectedly missing;
 - stop sequences increase plausibly over time;
@@ -239,4 +256,5 @@ those distinctions clearly so a plausible map does not get mistaken for causal e
 
 - [Data report index](README.md)
 - [Static GTFS](static_gtfs.md)
-- [Overall inventory](../data_inventory.md)
+- [Collection pipeline](../collection_pipeline.md)
+- [Free-tier limits](../limits.md)

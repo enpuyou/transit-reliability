@@ -1,9 +1,14 @@
 # Events
 
-Status: **Planned**
-Source role: scheduled demand and disruption context
-Expected cadence: daily plus a maintained seed file
-Sources: event APIs, venue/team sites, and reviewed manual entries
+| | |
+|---|---|
+| Status | **Planned** |
+| Phase | 6 |
+| Owner | event APIs, venue/team sites, reviewed manual entries |
+| Format | mixed; maintained seed file |
+| Cadence | daily plus manual seed |
+| Profiled | not yet |
+| Target tables | context events table |
 
 ## Executive summary
 
@@ -24,14 +29,14 @@ attendance_tier: high
 
 Event times and attendance tiers must be reviewed for correctness and timezone handling.
 
-## What it enables
+## What we can do with this source
 
 - Event-day versus normal-day comparisons.
 - Route and segment context near venues.
 - Prediction features for known demand windows.
 - Planner briefs about recurring post-event conditions.
 
-## Engineering and quality notes
+## Engineering plan and quality checks
 
 Retain the source URL, retrieval date, timezone, venue coordinates, and confidence of any
 attendance estimate. Event proximity is an association flag, not causal proof.
@@ -40,3 +45,7 @@ attendance estimate. Event proximity is an association flag, not causal proof.
 
 Events help answer: **does this corridor behave differently when a predictable large crowd
 leaves, and should service planning account for it?**
+
+## Related reports
+
+- [Data report index](README.md)

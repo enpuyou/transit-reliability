@@ -47,7 +47,6 @@ The branch currently tracks `origin/main`; the Phase 2 changes are not on the re
 ### Documentation and planning
 
 - Added the command reference in `docs/commands.md`.
-- Added the overall data inventory in `docs/data_inventory.md`.
 - Added the source-by-source data catalog in `docs/data_reports/`.
 - Recorded Databricks schema, volume, and Files API smoke-test results in
   `docs/decisions/0000-setup-notes.md`.
