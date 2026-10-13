@@ -378,7 +378,8 @@ done
 
 ## Collector (Cloudflare Worker)
 
-Code lives in `workers/collector`. Run these from that directory.
+Code lives in `workers/collector`. Run these from that directory. The architecture,
+reasons, and data behavior are explained in `docs/collection_pipeline.md`.
 
 ### Local checks
 
@@ -444,6 +445,46 @@ databricks fs cp "dbfs:/Volumes/workspace/transit_landing/raw/vehicle_positions/
 ```
 
 then use the "Check feed headers and entity counts" script above on `/tmp/vp.pb`.
+
+### Analyze what has landed (lag, change per pull, gaps)
+
+Download a day of one source and summarize it. Lines marked `<-- GAP` are more than 5
+minutes after the previous file.
+
+```bash
+TODAY="$(date -u +%F)"; OUT="$(mktemp -d)"
+for s in vehicle_positions trip_updates alerts; do
+  mkdir -p "$OUT/$s"
+  databricks fs cp -r "dbfs:/Volumes/workspace/transit_landing/raw/$s/dt=$TODAY" "$OUT/$s" --profile enpu
+done
+uv run python scripts/landing_report.py "$OUT"
+```
+
+Manual `*-smoke.pb` files are skipped automatically.
+
+How many distinct feed versions did we actually capture versus files pulled? If much
+lower, the feed updates slower than we poll:
+
+```sql
+SELECT count(DISTINCT feed_header_ts) AS distinct_snapshots,
+       count(DISTINCT source_file)    AS files
+FROM workspace.transit_bronze.vehicle_positions;   -- dev: workspace.dev_transit_bronze
+```
+
+### Worker secrets and logs in the dashboard
+
+Cloudflare dashboard: Workers & Pages -> transit-collector -> Logs (observability is
+enabled with persisted invocation logs).
+
+### Token rotation
+
+If uploads start returning 401/403 in `npm run tail`:
+
+```bash
+npx wrangler secret put DATABRICKS_TOKEN
+```
+
+Redeploy is not required for a secret change.
 
 ### Roll back or stop collection
 

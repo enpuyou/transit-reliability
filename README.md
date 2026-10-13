@@ -28,3 +28,5 @@ The current implementation and Databricks verification state are recorded in
 `docs/status/2026-10-13-phase-2-progress.md`.
 Manual setup, validation, Databricks, feed, Git, and troubleshooting commands are collected
 in `docs/commands.md`.
+The collection pipeline from King County Metro through Cloudflare to Databricks, including
+what each pull contains, is explained in `docs/collection_pipeline.md`.
