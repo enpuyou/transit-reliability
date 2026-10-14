@@ -33,10 +33,11 @@ something starts failing, because free-plan limits change.
   month, before bronze Delta tables. Do not assume this fits. Retention below is the
   mitigation.
 - **Cloudflare CPU is the tightest verified limit.** Measured 6 to 10 ms per run against a
-  10 ms limit since vehicle positions moved to three fetches per run (4 to 5 ms before). A slower upload day or larger feed could exceed it. A run over the limit
-  is killed and that minute's data is lost. Mitigations, in order: watch the tail;
-  if runs approach 8 ms, stop fetching trip updates every minute; or move to the paid
-  Workers plan.
+  10 ms limit since vehicle positions moved to three fetches per run (4 to 5 ms before). A slower upload day or larger feed could exceed it. Runs at 10 to 13 ms
+  were still reported `ok`, so enforcement is not strict per run, but a run that is
+  terminated would lose that minute. The paid plan is not an option (project decision).
+  Mitigations: watch the tail; try the CPU reductions listed in decision 0003; as a last
+  resort, fetch trip updates less often.
 
 ## Operating rules to stay within limits
 

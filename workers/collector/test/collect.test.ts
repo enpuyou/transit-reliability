@@ -44,7 +44,8 @@ describe("collect", () => {
         });
       }),
     );
-    const results = await collect(env, new Date("2026-10-13T10:06:30Z"), noSleep);
+    const when = new Date("2026-10-13T10:06:30Z");
+    const results = await collect(env, when, noSleep, () => when.getTime());
     expect(results.filter((r) => r.source === "trip_updates").map((r) => r.ok)).toEqual([false]);
     expect(results.filter((r) => r.source === "vehicle_positions").every((r) => r.ok)).toBe(true);
     expect(uploads.every((u) => u.includes("/vehicle_positions/"))).toBe(true);

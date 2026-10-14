@@ -31,18 +31,25 @@ previous fetch in the same run.
 ## Watch item: CPU limit
 
 The Free plan allows 10 ms CPU per cron run. Before this change the run used 4 to 5 ms; now
-6 to 10 ms. One run reached 10 ms. If a run exceeds the limit Cloudflare terminates it and
-that minute is lost. Mitigations, in order of preference:
+6 to 10 ms, typically 6 to 7. Runs at or above 10 ms were still reported `ok` (one run, the
+first after a deploy, used 13 ms and succeeded), so the limit does not look strictly
+enforced per run, but do not rely on that: Cloudflare may terminate a run that exceeds it,
+which would lose that minute. The paid Workers plan is ruled out (project decision).
+Options, in order of preference:
 
-1. Move to the paid Workers plan (removes the 10 ms cap).
-2. Split into two Workers, one for vehicle positions and one for trip updates and alerts,
+1. Do nothing and monitor. All 17 runs measured so far completed `ok`.
+2. Reduce CPU. Tried 2026-10-14: streaming the body straight into the upload (no copy into
+   Worker memory) gave no improvement (CPU 6 to 13 ms over 6 runs) and added complexity, so
+   it was reverted. Other ideas, untested: fetch trip updates every other minute (loses
+   half of the agency-prediction baseline, so only as a last resort); drop the per-result
+   console logging.
+3. Split into two Workers, one for vehicle positions and one for trip updates and alerts,
    so each run gets its own budget. The code supports this (`SOURCE_SET` = `vehicles` or
    `trips`). It was tried on 2026-10-13 and NOT adopted: a newly created second Worker's
    cron never fired (also true of a throwaway Worker) after more than 5 minutes, which
    produced a 3-minute gap in trip updates (23:30 to 23:32) until the change was rolled
    back. Do not repeat that deployment without a way to confirm the new cron fires before
    removing the sources from the existing Worker.
-3. Reduce CPU: stream the trip-update body straight into the upload instead of buffering.
 
 Check CPU with the command in `docs/commands.md` after any Worker change.
 
