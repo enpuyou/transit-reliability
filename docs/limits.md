@@ -17,7 +17,7 @@ something starts failing, because free-plan limits change.
 | Databricks concurrent job tasks | 5 | 1 | OK |
 | Databricks SQL warehouse | 1, 2X-Small | used only for manual checks | OK |
 | Databricks compute quota | not published; overrun stops compute for the rest of the day, in extreme cases the month | not measured yet (see below) | UNKNOWN, must measure |
-| Databricks storage | not published | about 1.8 GB per day raw plus Delta copies | UNKNOWN, must bound |
+| Databricks storage | not published | about 1.8 GB per day raw; bronze trip updates 146 MB for 36M rows (2026-10-14) | UNKNOWN, must bound |
 | Databricks outbound internet | trusted domains only | none needed (push design) | OK |
 | Databricks inactivity | accounts may be deleted after a prolonged period, threshold not published | active | OK |
 

@@ -7,6 +7,28 @@ Seattle transit reliability analytics for King County Metro (KCM) planners.
 - Every check/run/verify procedure: `docs/commands.md`. Add new procedures there.
 - How data flows from KCM to Databricks, and why: `docs/collection_pipeline.md`.
 - Decisions: `docs/decisions/`. Free-tier limits and usage: `docs/limits.md`.
+- Learning guide (how to run Databricks and deploy this by hand): `docs/databricks_guide.md`.
+  Measured baselines: `docs/runbook.md`.
+
+## Two goals: build it, and teach the owner
+
+The owner is learning data engineering through this project and wants to be able to deploy,
+operate, and debug it without an agent. So, on every task:
+
+- Explain what you are doing and why, in plain terms, before or as you do it. Name the
+  concept (checkpoint, bundle target, medallion layer) the first time it matters.
+- Prefer showing the manual command and what to look for over doing it silently. Never
+  trust a `SUCCESS` status; verify against the data and say how.
+- When something fails, write down the cause and the general lesson (not just the fix) in
+  `docs/databricks_guide.md` section 8 or a decision record.
+- At the end of each iteration (phase, feature, or incident), before the final commit:
+  1. update `docs/commands.md` with any new or changed procedure;
+  2. update `docs/databricks_guide.md` if a concept, workflow, or failure pattern is new;
+  3. record measured numbers (dated) in `docs/runbook.md` and `docs/limits.md`;
+  4. add a decision in `docs/decisions/` for any non-obvious choice, and a new file in
+     `docs/status/` at each phase boundary;
+  5. say in the reply what the owner should learn or try themselves next.
+- Keep docs in plain language; define a term where first used.
 
 ## Architecture
 

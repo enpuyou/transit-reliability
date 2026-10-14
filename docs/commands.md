@@ -298,11 +298,17 @@ run id. Pipe to `head -c 4000` if the output is large.
 
 ### Pause or unpause the schedule
 
-Change `ingest_pause_status` for the target in `databricks.yml` and redeploy:
+Change `ingest_pause_status` (`PAUSED` or `UNPAUSED`) for the target in `databricks.yml`,
+redeploy, and confirm the job's state:
 
 ```bash
-databricks bundle deploy -t dev
+databricks bundle deploy -t prod            # or -t dev
+databricks jobs get <job-id> -o json --profile enpu \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["settings"]["schedule"])'
 ```
+
+Pause both targets first whenever something looks wrong; collection keeps running and files
+accumulate safely.
 
 ### Prod
 
@@ -311,9 +317,23 @@ databricks bundle deploy -t prod
 databricks bundle run ingest_job -t prod
 ```
 
-Do not deploy to `prod` until the dev job has been run and its manual verification
-checks are recorded in the setup notes or runbook. Prod is unpaused with a 30-minute
-schedule, so deploying it starts spending compute.
+Prod has run on a 30-minute schedule (`0 0/30 * * * ?`, UTC) since 2026-10-14; dev is
+paused. Deploying prod changes what the *next scheduled run* executes, so try the change in
+dev first (`docs/databricks_guide.md`, section 6). `mode: production` needs
+`workspace.root_path`, which is set in `databricks.yml`.
+
+First-time prod setup (already done; for rebuilding from scratch):
+
+```bash
+databricks bundle validate -t prod
+databricks bundle deploy -t prod
+databricks bundle run setup_job -t prod      # schemas and state volume
+databricks bundle run ingest_job -t prod     # first run backfills every landed file
+```
+
+The backfill took about 25 minutes for 1.5 days of files *(measured 2026-10-14)*; later
+scheduled runs took about 110 seconds. Dev and prod use separate checkpoints
+(`<schema_prefix>_bronze_<source>`) so they cannot steal each other's files.
 
 ### Tear down dev resources
 
@@ -324,32 +344,72 @@ databricks bundle destroy -t dev
 This deletes the deployed dev jobs and bundle files. Tables, checkpoints, and landed
 volume files are not removed.
 
+## Daily ingest check (prod)
+
+The five-minute routine; the reasoning is in `docs/databricks_guide.md`, section 7.
+
+```bash
+# 1. collection gaps (landed files)
+uv run python scripts/collection_health.py
+
+# 2. recent prod runs: expect SUCCESS and durations of a few minutes
+PROD_JOB="$(databricks jobs list -o json --profile enpu | python3 -c '
+import json,sys
+print(next(j["job_id"] for j in json.load(sys.stdin) if "prod-ingest" in j["settings"]["name"]))')"
+databricks jobs list-runs --job-id "$PROD_JOB" --limit 5 -o json --profile enpu | python3 -c '
+import json,sys,datetime
+d=json.load(sys.stdin); d=d if isinstance(d,list) else d.get("runs",[])
+for r in d:
+    t=datetime.datetime.fromtimestamp(r["start_time"]/1000,datetime.UTC).strftime("%m-%d %H:%M")
+    print(t, r["state"]["life_cycle_state"], r["state"].get("result_state",""), (r.get("end_time",0)-r["start_time"])/1000,"s")'
+```
+```sql
+-- 3. bronze is current and complete (compare files to what landed)
+SELECT 'vehicle_positions' AS t, count(DISTINCT source_file) AS files,
+       from_unixtime(max(feed_header_ts)) AS latest_feed
+FROM workspace.transit_bronze.vehicle_positions
+UNION ALL SELECT 'trip_updates', count(DISTINCT source_file), from_unixtime(max(feed_header_ts))
+FROM workspace.transit_bronze.trip_updates
+UNION ALL SELECT 'alerts', count(DISTINCT source_file), from_unixtime(max(feed_header_ts))
+FROM workspace.transit_bronze.alerts;
+```
+
+Count the landed files for the same sources with `databricks fs ls ... | wc -l` per `dt=`
+folder (the manual `*-smoke.pb` file counts as one per source). Bronze `files` should be
+within the last 30 minutes of landing (about 90 vehicle, 30 trip-update, 6 alert files). A
+run that says `SUCCESS` with far fewer files than landed is wrong; see the shared-checkpoint
+case in the guide.
+
 ## Bronze verification (SQL)
 
 Run these in the Databricks SQL editor, or from the shell with the statement API. The
-dev schema is `workspace.dev_transit_bronze`; prod is `workspace.transit_bronze`.
+dev schema is `workspace.dev_transit_bronze`; prod is `workspace.transit_bronze`. The
+queries below use prod; swap the schema for dev.
 
 ```sql
-SELECT 'vehicle_positions' AS t, count(*) AS n FROM workspace.dev_transit_bronze.vehicle_positions
-UNION ALL SELECT 'trip_updates', count(*) FROM workspace.dev_transit_bronze.trip_updates
-UNION ALL SELECT 'alerts', count(*) FROM workspace.dev_transit_bronze.alerts;
+SELECT 'vehicle_positions' AS t, count(*) AS n FROM workspace.transit_bronze.vehicle_positions
+UNION ALL SELECT 'trip_updates', count(*) FROM workspace.transit_bronze.trip_updates
+UNION ALL SELECT 'alerts', count(*) FROM workspace.transit_bronze.alerts;
 ```
 
-Smoke-fixture expectation: 522 / 33,772 / 81, unchanged after a rerun.
+Smoke-fixture expectation (smoke files only): 522 / 33,772 / 81, unchanged after a rerun.
 
 ```sql
 -- per-day volume, vehicles, and files
 SELECT date(from_unixtime(feed_header_ts)) AS d, count(*) AS rows,
        count(DISTINCT vehicle_id) AS vehicles, count(DISTINCT source_file) AS files
-FROM workspace.dev_transit_bronze.vehicle_positions GROUP BY d ORDER BY d;
+FROM workspace.transit_bronze.vehicle_positions GROUP BY d ORDER BY d;
 
--- duplicate check (should return no rows)
-SELECT source_file, entity_id, count(*) AS n
-FROM workspace.dev_transit_bronze.vehicle_positions
-GROUP BY source_file, entity_id HAVING n > 1 LIMIT 10;
+-- no file ingested twice (should return 0). Do not use (source_file, entity_id): the
+-- feed itself repeats entity_ids within a file (placeholder rows), which silver removes.
+SELECT count(*) FROM (
+  SELECT source_file FROM workspace.transit_bronze.vehicle_positions
+  GROUP BY source_file HAVING count(DISTINCT ingested_at) > 1);
 
--- Delta history (appends per micro-batch)
-DESCRIBE HISTORY workspace.dev_transit_bronze.vehicle_positions;
+-- Delta history (appends per micro-batch, with the job run that wrote each)
+DESCRIBE HISTORY workspace.transit_bronze.vehicle_positions;
+-- size and file count
+DESCRIBE DETAIL workspace.transit_bronze.trip_updates;
 ```
 
 ### Run SQL from the shell
@@ -360,7 +420,7 @@ WAREHOUSE_ID="$(databricks warehouses list -o json --profile enpu \
 databricks api post /api/2.0/sql/statements --profile enpu --json "{
   \"warehouse_id\": \"$WAREHOUSE_ID\",
   \"wait_timeout\": \"50s\",
-  \"statement\": \"SELECT count(*) FROM workspace.dev_transit_bronze.alerts\"
+  \"statement\": \"SELECT count(*) FROM workspace.transit_bronze.alerts\"
 }"
 ```
 
@@ -370,7 +430,9 @@ databricks api post /api/2.0/sql/statements --profile enpu --json "{
 
 Checkpoints skip files already seen. To test a new file, upload it under a new name (see
 "Uploading a raw feed file manually"). To rebuild a table from scratch, drop it and its
-checkpoint together, otherwise the stream will think everything was processed:
+checkpoint together, otherwise the stream will think everything was processed (or, with a
+checkpoint but no table, nothing will be written). Pause the target's schedule first, and
+use the checkpoint for the same schema prefix (`dev_transit_...` or `transit_...`):
 
 ```bash
 databricks fs rm -r dbfs:/Volumes/workspace/transit_ops/state/checkpoints/dev_transit_bronze_alerts --profile enpu

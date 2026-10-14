@@ -161,17 +161,36 @@ runs `transit_reliability.entrypoints.jobs:ingest_bronze` once per source:
 
 1. **Auto Loader** (`cloudFiles`, `binaryFile`) lists the source folder and picks up only
    files it has not seen. Which files it has seen is stored in a **checkpoint** in
-   `workspace.transit_ops.state/checkpoints/<schema_prefix>_bronze_<source>`.
+   `workspace.transit_ops.state/checkpoints/<schema_prefix>_bronze_<source>`. The prefix
+   keeps dev and prod separate; they once shared a checkpoint and prod silently skipped
+   everything dev had read (2026-10-14).
+   Each micro-batch is capped (`cloudFiles.maxFilesPerTrigger`: 50 trip-update files, 1000
+   for the smaller sources) so a long backlog is processed in pieces instead of exhausting
+   the Python worker's memory.
 2. In `foreachBatch`, each file's bytes are parsed by the pure functions in
-   `gtfs_rt/parse.py` into rows (`mapInPandas`).
+   `gtfs_rt/parse.py` into rows (`mapInPandas`), one output frame per file.
 3. Rows get `source_file` and `ingested_at` and are appended to a Delta table. The write
    is tagged with a transaction id so a retried batch cannot append twice.
 4. `availableNow` makes the stream process everything pending and then stop, so the job
    uses compute for about a minute and is then done.
 
-**Result:** `bronze.vehicle_positions`, `bronze.trip_updates`, `bronze.alerts` (dev
+**Result:** `transit_bronze.vehicle_positions`, `.trip_updates`, `.alerts` (stale dev
 copies are under `dev_transit_bronze`). Rerunning with no new files changes nothing
 (verified).
+
+**Measured 2026-10-14** (prod, serverless):
+
+| Item | Value |
+|---|---|
+| First prod run (backfill, ~1.5 days of files) | 1,515 s; no table was written for the first ~11 min (cause not isolated) |
+| Scheduled run with 30 minutes of new files | 112 s |
+| Bronze rows after backfill | 1.56M vehicle positions, 36.2M trip updates, 23.3K alerts |
+| Trip-update table size | 146 MB for 36M rows (raw files for the same period are about 1.8 GB/day) |
+| Files ingested twice | 0 (one `ingested_at` per source file) |
+
+**Known data quirk:** about 18,400 vehicle-position rows are placeholders (latitude 0,
+null `vehicle_ts`) that share an `entity_id` with the real row. Bronze keeps them by
+design; silver's quality rules must drop them.
 
 ## 6. What differs between pulls, and what time each covers
 
@@ -277,7 +296,7 @@ See `docs/commands.md` for every command. In short:
 | Is the Worker running? | `npm run tail` in `workers/collector`, or the Cloudflare dashboard |
 | Are files landing? | `databricks fs ls dbfs:/Volumes/workspace/transit_landing/raw/...` |
 | Is there a gap or lag? | `scripts/landing_report.py` on downloaded files, or the SQL gap check |
-| Did ingest process everything? | `databricks jobs list-runs`, then the bronze row counts |
+| Did ingest process everything? | `databricks jobs list-runs`, then bronze distinct `source_file` vs files landed ("Daily ingest check" in `docs/commands.md`) |
 
 ## 9. Example of the data at each stage
 
