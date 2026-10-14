@@ -273,6 +273,7 @@ the first line naming the exception. If it is a streaming failure, the useful li
 | Bad deploy | fix, then deploy again; schedule uses whatever is deployed | there is no auto-rollback; revert the commit and redeploy |
 | Token leaked or expired | create a new token, `wrangler secret put DATABRICKS_TOKEN`, revoke the old one | no redeploy needed |
 | Runaway cost or quota hit | pause both jobs first, investigate second | |
+| Free storage (raw files) | run `scripts/raw_retention_report.py`, read it, then delete only the folders it lists as deletable | irreversible; raw is the only copy of what KCM published; see decision 0005 |
 | Stop collecting | `npx wrangler delete` (removes the Worker and cron) | you lose data for every minute it is off |
 
 Never run a destructive command (drop, delete, `destroy`) without first listing what it

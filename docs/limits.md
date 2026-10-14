@@ -43,7 +43,7 @@ something starts failing, because free-plan limits change.
 
 1. **Ingest schedule:** 30 minutes. Do not go lower without measuring first.
 2. **Raw retention:** once silver is validated, delete raw trip-update files older than
-   30 days. Keep vehicle positions and alerts longer (they are small). Never delete
+   30 days (policy and read-only report: decision 0005). Keep vehicle positions and alerts longer (they are small). Never delete
    raw before the silver tables built from it are verified.
 3. **Do not read from the warehouse in any public path.** Exports are files.
 4. **Keep job DAGs narrow:** at most 5 concurrent tasks.

@@ -638,6 +638,21 @@ GROUP BY ALL ORDER BY usage_date DESC LIMIT 20;
 Run it in the SQL editor, or with the statement API shown under "Run SQL from the
 shell". Record the daily DBU figure in `docs/runbook.md`.
 
+### Which raw files are safe to delete (read-only)
+
+Policy in `docs/decisions/0005-raw-retention-policy.md`. The report groups old landed
+files into blocked (not in bronze), waiting for silver, and deletable. It never deletes:
+
+```bash
+uv run python scripts/raw_retention_report.py                        # trip_updates, 30 days
+uv run python scripts/raw_retention_report.py --source alerts --keep-days 90
+uv run python scripts/raw_retention_report.py --silver-verified-through 2026-11-01
+```
+
+Do not pass `--silver-verified-through` until the Phase 3 silver checks for those dates
+have passed. Deleting folders is a separate manual step (`databricks fs rm -r ...`) that you
+run yourself on the exact folders listed, after reading the counts.
+
 ### Size of the landing volume and bronze tables
 
 ```bash
