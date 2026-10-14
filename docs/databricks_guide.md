@@ -138,6 +138,61 @@ Three verbs:
 *deployed* wheel. So a deploy of broken code breaks the next scheduled run. This is the
 main reason prod exists (section 5).
 
+### What actually gets deployed, and how the job uses it
+
+`bundle deploy` does three separate things. Knowing which one matters answers most
+"why didn't my change take effect?" questions.
+
+| Step | What | Where it ends up | Used by the job? |
+|---|---|---|---|
+| 1. Build | `uv build --wheel` packages `src/transit_reliability` into `dist/*.whl` | local `dist/` | no, just the product |
+| 2. Upload the wheel | the wheel file | `<root>/artifacts/.internal/` | **yes**, this is what runs |
+| 3. Sync files | repo files not excluded by `.gitignore` or `sync.exclude` | `<root>/files/` | no, a convenience copy |
+
+The wheel contains only the package: `bronze/`, `entrypoints/`, `gtfs_rt/`, `retention.py`
+and the entry-point metadata. Tests, scripts, docs, and the Worker are not in it.
+
+**The job installs the wheel on every run.** The job's `environments` block lists the wheel
+as a dependency. Serverless compute has no long-lived machine, so each run builds its
+environment from that spec (base image `environment_version: "3"`, plus our wheel, plus
+`gtfs-realtime-bindings` and `protobuf` from `pyproject.toml`), then calls the entry point
+(`ingest_bronze`, mapped in `[project.scripts]`). You cannot "install once" on serverless;
+a classic cluster could keep libraries installed but would sit idle or restart each run,
+and Free Edition offers serverless only. The side benefit is that every run uses exactly the
+deployed code. We have not measured how much of a run's ~110 s is environment setup (the
+run reports a 2 s setup phase, but whether the install is inside it is unverified).
+
+**Consequences**
+- Editing `src/` changes nothing in Databricks until the next `bundle deploy` rebuilds the
+  wheel. The schedule always runs the last deployed wheel.
+- The wheel version is always `0.1.0`, so you cannot tell deployed versions apart by name;
+  check `git log` and the deploy time. Bump the version if that becomes confusing.
+- `sync.exclude` in `databricks.yml` keeps docs, tests, scripts, and the Worker out of the
+  workspace copy. *(Configured 2026-10-14, previewed with `bundle sync --dry-run`: 16 files
+  instead of 54. Not deployed yet; confirm with a dev deploy and run at the next
+  deployment pass.)*
+
+### Reading `databricks.yml`
+
+| Block | What it does |
+|---|---|
+| `bundle: name` | project name; appears in deploy paths (`.bundle/transit-reliability/...`) |
+| `include: resources/*.yml` | pulls in the job definitions, so this file holds settings and `resources/` holds work |
+| `sync: exclude` | files not to upload to the workspace copy (see above) |
+| `artifacts: default` | how to build the deployable: `uv build --wheel`, project at `.` |
+| `variables` | named settings with defaults (`schema_prefix`, `landing_volume`, `state_volume`, `ingest_pause_status`), used in jobs as `${var.name}` |
+| `targets: dev / prod` | named environments that override variables; chosen with `-t` |
+
+Inside `targets`: `mode: development` prefixes resource names with `[dev <you>]`;
+`mode: production` is stricter and requires `workspace.root_path`. `workspace.profile`
+picks the CLI login. `${bundle.name}` and `${bundle.target}` are filled in at deploy time.
+
+Flow: `-t prod` selects the target, which sets the variables, which fill the job templates in
+`resources/*.yml` (for example the schedule's pause status and the `--schema-prefix`
+parameter), and `bundle deploy` builds the wheel and makes the workspace match. In the job
+files, the dependency `../dist/*.whl` is rewritten at deploy time to the uploaded wheel's
+workspace path.
+
 ### Targets: dev vs prod
 
 | | `dev` | `prod` |

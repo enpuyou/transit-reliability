@@ -272,6 +272,15 @@ databricks bundle deploy -t dev
 databricks bundle summary -t dev
 ```
 
+### Preview what a deploy would upload
+
+```bash
+databricks bundle sync -t dev --dry-run --full    # lists files that would sync; changes nothing
+ls dist/ && python3 -c "import zipfile,glob; print(*zipfile.ZipFile(sorted(glob.glob('dist/*.whl'))[-1]).namelist(), sep='\n')"
+```
+
+The second line shows exactly what is inside the wheel the job will install.
+
 ### Run jobs
 
 ```bash

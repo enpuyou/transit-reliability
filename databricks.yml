@@ -4,6 +4,19 @@ bundle:
 include:
   - resources/*.yml
 
+# Only what the workspace needs is uploaded. The jobs run from the built wheel, not from
+# these files, so docs, tests, scripts, and the Worker stay local.
+sync:
+  exclude:
+    - docs/**
+    - tests/**
+    - scripts/**
+    - workers/**
+    - .github/**
+    - CLAUDE.md
+    - README.md
+    - design_doc.md
+
 artifacts:
   default:
     type: whl
