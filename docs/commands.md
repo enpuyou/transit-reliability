@@ -279,7 +279,7 @@ databricks bundle run setup_job -t dev     # create schemas and the state volume
 databricks bundle run ingest_job -t dev    # bronze Auto Loader, availableNow
 ```
 
-The dev ingest schedule is deliberately `PAUSED`; `bundle run` still works. Expected
+The dev ingest schedule is `PAUSED` (prod runs every 30 minutes since 2026-10-14); `bundle run` still works. Expected
 smoke result with the three fixtures landed: about 2 minutes first run, about 1 minute on
 rerun, `TERMINATED SUCCESS`.
 
@@ -373,7 +373,7 @@ Checkpoints skip files already seen. To test a new file, upload it under a new n
 checkpoint together, otherwise the stream will think everything was processed:
 
 ```bash
-databricks fs rm -r dbfs:/Volumes/workspace/transit_ops/state/checkpoints/bronze_alerts --profile enpu
+databricks fs rm -r dbfs:/Volumes/workspace/transit_ops/state/checkpoints/dev_transit_bronze_alerts --profile enpu
 ```
 ```sql
 DROP TABLE IF EXISTS workspace.dev_transit_bronze.alerts;

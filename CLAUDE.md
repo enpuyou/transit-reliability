@@ -37,7 +37,8 @@ Run all of these before committing; CI runs the same.
 - Never filter or dedupe in the collector or bronze. The feeds are not recoverable;
   reduce volume in silver (decision 0002).
 - Never deploy the `prod` bundle target casually: it is unpaused and spends compute
-  immediately. Dev ingest is deliberately paused.
+  immediately. Prod ingest has run every 30 min since 2026-10-14; dev
+  ingest is paused (its tables are stale).
 - Never commit `.env`, print token values, or put secrets in docs or `wrangler.toml`.
 - Never query the Databricks warehouse from a public/serving path.
 
@@ -49,7 +50,7 @@ Run all of these before committing; CI runs the same.
   inside `foreachBatch`, nullable `Int64` for optional ints, job
   `environment_version: "3"`, and only `availableNow`/`once` triggers.
 - To rebuild a bronze table, drop the table and delete its checkpoint
-  (`workspace.transit_ops.state/checkpoints/bronze_<source>`) together.
+  (`workspace.transit_ops.state/checkpoints/<schema_prefix>_bronze_<source>`) together.
 - `*-smoke.pb` files in the landing volume are manual tests, not collector output
   (collector files have numeric epoch names).
 - Each pull is a snapshot of one instant. Collection began 2026-10-13 about 21:43 UTC;

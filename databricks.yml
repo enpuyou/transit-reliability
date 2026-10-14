@@ -37,6 +37,7 @@ targets:
     mode: production
     workspace:
       profile: enpu
+      root_path: /Workspace/Users/youenpu@gmail.com/.bundle/${bundle.name}/${bundle.target}
     variables:
       schema_prefix: transit
       ingest_pause_status: UNPAUSED

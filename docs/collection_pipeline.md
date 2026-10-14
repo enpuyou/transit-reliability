@@ -156,12 +156,12 @@ logs show the failure; there is no alert yet (planned in Phase 8).
 Catalog, addressed as `/Volumes/workspace/transit_landing/raw/...`. It is shared by dev
 and prod.
 
-**Ingest job (every 30 minutes in prod; paused in dev):** `bundle run ingest_job`
+**Ingest job (every 30 minutes in prod since 2026-10-14; dev is paused):** `bundle run ingest_job`
 runs `transit_reliability.entrypoints.jobs:ingest_bronze` once per source:
 
 1. **Auto Loader** (`cloudFiles`, `binaryFile`) lists the source folder and picks up only
    files it has not seen. Which files it has seen is stored in a **checkpoint** in
-   `workspace.transit_ops.state/checkpoints/bronze_<source>`.
+   `workspace.transit_ops.state/checkpoints/<schema_prefix>_bronze_<source>`.
 2. In `foreachBatch`, each file's bytes are parsed by the pure functions in
    `gtfs_rt/parse.py` into rows (`mapInPandas`).
 3. Rows get `source_file` and `ingested_at` and are appended to a Delta table. The write
