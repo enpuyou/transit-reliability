@@ -497,6 +497,31 @@ npx wrangler secret put DATABRICKS_TOKEN
 
 Redeploy is not required for a secret change.
 
+### Monitor cancelled or failed collection runs
+
+A run killed for exceeding the 10 ms CPU limit, a failed deploy, or any outage leaves a
+hole in the landed files. This checks the files themselves, so it works for any cause and
+needs no Cloudflare analytics. It lists every gap over 90 s in trip updates and over 35 s
+in vehicle positions, and estimates how many runs or fetches were lost.
+
+```bash
+uv run python scripts/collection_health.py                 # today (UTC)
+uv run python scripts/collection_health.py 2026-10-13 2026-10-14
+```
+
+Live view of Worker outcomes (anything other than `ok` is a failure, including an exceeded
+CPU limit); run it for a while and count non-`ok` lines:
+
+```bash
+cd workers/collector
+npx wrangler tail transit-collector --format json > /tmp/tail.json   # Ctrl-C when done
+grep -c '"outcome": "ok"' /tmp/tail.json; grep '"outcome"' /tmp/tail.json | grep -vc '"ok"'
+```
+
+Known gaps: 2026-10-13 23:30 to 23:32 UTC (3 trip-update runs lost during a rolled-back
+split-Worker attempt). A Worker deploy during a run's 40 s wait also cancels that run, so
+expect a single short gap at each deploy.
+
 ### Roll back or stop collection
 
 ```bash
