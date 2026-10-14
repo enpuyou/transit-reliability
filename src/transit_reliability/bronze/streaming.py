@@ -36,6 +36,9 @@ STRING_COLUMNS = frozenset(
 DOUBLE_COLUMNS = frozenset({"latitude", "longitude", "bearing", "speed"})
 ARRAY_COLUMNS = frozenset({"active_periods", "informed_entities"})
 # ingested_at is stamped by Spark after parsing, so the parser output omits it.
+# Files per micro-batch. A trip-update file is about 1.2 MB and 33K rows, so an unbounded
+# first batch over a backlog exhausts the Python worker's memory.
+MAX_FILES_PER_TRIGGER = {"vehicle_positions": 1000, "trip_updates": 50, "alerts": 1000}
 PARSED_COLUMNS: dict[str, tuple[str, ...]] = {
     source: tuple(name for name in columns if name != "ingested_at")
     for source, columns in SOURCE_TO_COLUMNS.items()
@@ -91,20 +94,20 @@ def _parse_partition(source: str, batches: Iterator[Any]) -> Iterator[Any]:
 
     columns = PARSED_COLUMNS[source]
     for batch in batches:
-        rows: list[dict[str, object]] = []
+        # One output frame per file keeps peak memory to a single file's rows.
         for path, content in zip(batch["path"], batch["content"], strict=True):
-            rows.extend(parse_record(source, str(path), bytes(content)))
-        data: dict[str, Any] = {}
-        for name in columns:
-            values = [row.get(name) for row in rows]
-            if name in STRING_COLUMNS or name in ARRAY_COLUMNS:
-                data[name] = pd.Series(values, dtype="object")
-            elif name in DOUBLE_COLUMNS:
-                data[name] = pd.Series(values, dtype="float64")
-            else:
-                # Nullable Int64 keeps absent optional ints as NULL, not NaN floats.
-                data[name] = pd.array(values, dtype="Int64")
-        yield pd.DataFrame(data, columns=list(columns))
+            rows = parse_record(source, str(path), bytes(content))
+            data: dict[str, Any] = {}
+            for name in columns:
+                values = [row.get(name) for row in rows]
+                if name in STRING_COLUMNS or name in ARRAY_COLUMNS:
+                    data[name] = pd.Series(values, dtype="object")
+                elif name in DOUBLE_COLUMNS:
+                    data[name] = pd.Series(values, dtype="float64")
+                else:
+                    # Nullable Int64 keeps absent optional ints as NULL, not NaN floats.
+                    data[name] = pd.array(values, dtype="Int64")
+            yield pd.DataFrame(data, columns=list(columns))
 
 
 def run_source(
@@ -121,13 +124,15 @@ def run_source(
     if source not in PARSER_BY_SOURCE:
         raise ValueError(f"Unsupported bronze source: {source}")
     source_path = volume_path(landing_volume, source)
-    checkpoint = volume_path(state_volume, "checkpoints", f"bronze_{source}")
+    # Per-prefix: dev and prod must not share a checkpoint or they steal each other's files.
+    checkpoint = volume_path(state_volume, "checkpoints", f"{schema_prefix}_bronze_{source}")
     target = table_name(schema_prefix, source)
     schema = _output_schema(source)
     stream = (
         spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "binaryFile")
         .option("cloudFiles.includeExistingFiles", "true")
+        .option("cloudFiles.maxFilesPerTrigger", MAX_FILES_PER_TRIGGER[source])
         .load(source_path)
         .select("path", "content")
     )
