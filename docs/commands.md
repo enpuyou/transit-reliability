@@ -501,8 +501,9 @@ Redeploy is not required for a secret change.
 
 A run killed for exceeding the 10 ms CPU limit, a failed deploy, or any outage leaves a
 hole in the landed files. This checks the files themselves, so it works for any cause and
-needs no Cloudflare analytics. It lists every gap over 90 s in trip updates and over 35 s
-in vehicle positions, and estimates how many runs or fetches were lost.
+needs no Cloudflare analytics. It lists every gap over 90 s in trip updates and over 50 s
+in vehicle positions (a deliberately skipped duplicate feed version leaves a ~40 s gap, so
+smaller gaps are normal), and estimates how many runs or fetches were lost.
 
 ```bash
 uv run python scripts/collection_health.py                 # today (UTC)

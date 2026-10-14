@@ -5,7 +5,8 @@ shows up as a hole in the landed files. This script finds those holes without ne
 Cloudflare analytics:
 
   trip_updates       one file per run (every 60 s)  -> a gap over 90 s means missed runs
-  vehicle_positions  three files per run (every ~20 s) -> a gap over 35 s means missed fetches
+  vehicle_positions  three files per run (every ~20 s) -> a gap over 50 s means missed fetches
+                     (a deliberately skipped duplicate version leaves about 40 s)
 
 A gap in trip updates with vehicle positions still arriving means the run partly worked
 (for example the trip fetch failed); a gap in both means the whole run was lost.
@@ -23,7 +24,7 @@ PROFILE = "enpu"
 # Before this, the Worker fetched vehicle positions once per run instead of three times.
 THREE_FETCH_START = dt.datetime(2026, 10, 13, 23, 26, tzinfo=dt.UTC)
 TRIP_GAP_SECONDS = 90
-VEHICLE_GAP_SECONDS = 35
+VEHICLE_GAP_SECONDS = 50
 
 
 def _epochs(source: str, day: str) -> list[float]:
