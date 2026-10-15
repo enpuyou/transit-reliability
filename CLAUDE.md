@@ -38,7 +38,7 @@ A Databricks job (Auto Loader, `availableNow`) parses them with the pure functio
 `gtfs_rt/parse.py` into bronze Delta tables. Push, not pull: Databricks Free Edition
 blocks most outbound internet.
 A daily GitHub Actions workflow lands KCM's static GTFS zip in `raw/gtfs_static/`, and
-`static_refresh_job` turns it into versioned silver schedule tables (decision 0006).
+`silver_job` turns it into versioned silver schedule tables (decision 0006).
 
 ## Commands
 

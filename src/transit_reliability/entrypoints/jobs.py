@@ -70,3 +70,15 @@ def expand_schedule() -> None:
     from transit_reliability.gtfs_static.silver import expand_schedule as run
 
     run(_spark_session(), args.schema_prefix)
+
+
+def build_silver_vehicle_positions() -> None:
+    """Dedupe bronze vehicle positions into silver, quarantine bad rows, flag schedule matches."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver_realtime import build_vehicle_positions
+
+    build_vehicle_positions(_spark_session(), args.schema_prefix)

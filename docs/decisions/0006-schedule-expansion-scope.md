@@ -25,7 +25,7 @@ dates we never compare with realtime.
   86400) and converted with the day's origin epoch, which is "noon minus 12h" in
   `America/Los_Angeles`. The origin is computed once per date in Python
   (`day_origin_epoch`), so Spark does no timezone arithmetic.
-- The work is one job, `static_refresh_job`, with two tasks (load feeds, then expand),
+- The work is one job, `silver_job`, with two tasks (load feeds, then expand),
   scheduled daily at 11:45 UTC, after the GitHub workflow's 11:17 download.
 
 ## Verification (dev, 2026-10-15)

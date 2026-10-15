@@ -23,6 +23,8 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 |---|---|---|---|
 | 2026-10-15 | first run | 198 s | load_feeds 146 s (1.13M stop times, 167K shape points), expand_schedule 44 s for 2 dates |
 
+| 2026-10-15 | silver_job first run (3 tasks) | 136 s | load_feeds skipped (already loaded), expand skipped, vehicle_positions 39 s for 1.46M bronze rows |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.

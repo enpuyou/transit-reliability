@@ -18,6 +18,7 @@ setup_schemas = "transit_reliability.entrypoints.jobs:setup_schemas"
 ingest_bronze = "transit_reliability.entrypoints.jobs:ingest_bronze"
 load_static_gtfs = "transit_reliability.entrypoints.jobs:load_static_gtfs"
 expand_schedule = "transit_reliability.entrypoints.jobs:expand_schedule"
+build_silver_vehicle_positions = "transit_reliability.entrypoints.jobs:build_silver_vehicle_positions"
 
 [dependency-groups]
 dev = [

@@ -400,13 +400,14 @@ exclude them.
 ## Static GTFS silver (schedule tables)
 
 Built from the zips the GitHub workflow lands in `raw/gtfs_static/dt=<date>/`. Design:
-`docs/decisions/0006-schedule-expansion-scope.md`. The job `static_refresh_job` has two
-tasks (`load_feeds`, then `expand_schedule`) and runs daily at 11:45 UTC when unpaused.
+`docs/decisions/0006-schedule-expansion-scope.md`. The job `silver_job` has three
+tasks (`load_feeds`, `expand_schedule`, then `vehicle_positions`) and runs daily at 11:45 UTC
+when unpaused. What each silver table is and why: `docs/silver_tables.md`.
 Verified in dev only; prod gets it at the next prod deploy.
 
 ```bash
 databricks bundle deploy -t dev
-databricks bundle run static_refresh_job -t dev      # about 3 minutes the first time
+databricks bundle run silver_job -t dev      # about 3 minutes the first time
 ```
 ```sql
 -- feeds loaded (one row per schedule version)
@@ -423,7 +424,23 @@ JOIN workspace.dev_transit_silver.gtfs_stop_times st
 WHERE s.service_date = DATE'2026-10-14' ORDER BY s.scheduled_arrival_ts DESC LIMIT 1;
 ```
 
-Rebuild a feed or date: the loader deletes and re-inserts by `feed_version` (tables) or
+Silver vehicle positions and quarantine (verified in dev 2026-10-15):
+
+```sql
+-- quarantine rate (target: under about 2 percent) and the reasons
+SELECT reason, count(*) FROM workspace.dev_transit_silver.quarantine_vehicle_positions GROUP BY 1;
+-- schedule match rate by service date (NULL = date not expanded yet, not a mismatch)
+SELECT service_date, count(*) AS fixes,
+       round(100 * avg(CASE WHEN matched_trip THEN 1 ELSE 0 END), 2) AS match_pct,
+       sum(CASE WHEN matched_trip IS NULL THEN 1 ELSE 0 END) AS unknown
+FROM workspace.dev_transit_silver.vehicle_positions GROUP BY 1 ORDER BY 1;
+-- no fix stored twice (both numbers must be equal)
+SELECT count(*), count(DISTINCT vehicle_id, vehicle_ts) FROM workspace.dev_transit_silver.vehicle_positions;
+```
+
+To rebuild silver vehicle positions from bronze, pause the job, drop `vehicle_positions` and
+`quarantine_vehicle_positions` in that schema together (the watermark comes from them), and
+rerun. Rebuild a feed or date: the loader deletes and re-inserts by `feed_version` (tables) or
 `service_date` (expansion), so rerunning is safe. To force a reload of a feed, delete its
 row from `gtfs_feeds` and rerun.
 
