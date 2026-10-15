@@ -69,6 +69,8 @@ jobs:
         if: steps.compare.outputs.changed == 'true'
         run: |
           DAY="$(date -u +%F)"
+          # fs cp does not create missing folders; mkdir also creates parents and is idempotent.
+          databricks fs mkdir "$LANDING/dt=$DAY"
           databricks fs cp google_transit.zip "$LANDING/dt=$DAY/google_transit.zip" --overwrite
           # Written last: if the upload above failed, the next run tries again.
           databricks fs cp new.sha "$LANDING/latest.sha" --overwrite
