@@ -4,7 +4,12 @@ import json
 from collections.abc import Iterator
 from typing import Any, cast
 
-from transit_reliability.bronze.schema import SOURCE_TO_COLUMNS, table_name, volume_path
+from transit_reliability.bronze.schema import (
+    SOURCE_TO_COLUMNS,
+    missing_columns,
+    table_name,
+    volume_path,
+)
 from transit_reliability.gtfs_rt.parse import (
     parse_alerts,
     parse_trip_updates,
@@ -43,6 +48,35 @@ PARSED_COLUMNS: dict[str, tuple[str, ...]] = {
     source: tuple(name for name in columns if name != "ingested_at")
     for source, columns in SOURCE_TO_COLUMNS.items()
 }
+
+
+def column_ddl_types(source: str) -> list[tuple[str, str]]:
+    """Spark SQL type of every bronze column in contract order (used to evolve tables)."""
+
+    types = []
+    for name in SOURCE_TO_COLUMNS[source]:
+        if name == "ingested_at":
+            ddl = "timestamp"
+        elif name in ARRAY_COLUMNS:
+            ddl = "array<string>"
+        elif name in STRING_COLUMNS:
+            ddl = "string"
+        elif name in DOUBLE_COLUMNS:
+            ddl = "double"
+        else:
+            ddl = "bigint"
+        types.append((name, ddl))
+    return types
+
+
+def ensure_table_columns(spark: Any, source: str, target: str) -> None:
+    """Add contract columns an older bronze table lacks. Old rows get NULL for them."""
+
+    if not spark.catalog.tableExists(target):
+        return
+    for name, ddl in missing_columns(spark.table(target).columns, column_ddl_types(source)):
+        spark.sql(f"ALTER TABLE {target} ADD COLUMNS ({name} {ddl})")
+        print(f"added column {name} {ddl} to {target}")
 
 
 def _output_schema(source: str) -> Any:
@@ -128,6 +162,7 @@ def run_source(
     checkpoint = volume_path(state_volume, "checkpoints", f"{schema_prefix}_bronze_{source}")
     target = table_name(schema_prefix, source)
     schema = _output_schema(source)
+    ensure_table_columns(spark, source, target)
     stream = (
         spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "binaryFile")
@@ -139,9 +174,13 @@ def run_source(
 
     def write_batch(batch_df: Any, batch_id: int) -> None:
         parsed = batch_df.mapInPandas(lambda it: _parse_partition(source, it), schema)
+        stamped = parsed.withColumn("ingested_at", F.current_timestamp())
+        if spark.catalog.tableExists(target):
+            # Write in the table's own column order, so columns added later (at the end of the
+            # table) cannot be matched by position to the wrong data.
+            stamped = stamped.select(*spark.table(target).columns)
         (
-            parsed.withColumn("ingested_at", F.current_timestamp())
-            .write.format("delta")
+            stamped.write.format("delta")
             # txnAppId/txnVersion make a retried micro-batch an idempotent no-op.
             .option("txnAppId", f"bronze_{source}")
             .option("txnVersion", batch_id)

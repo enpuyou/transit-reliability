@@ -444,6 +444,43 @@ rerun. Rebuild a feed or date: the loader deletes and re-inserts by `feed_versio
 `service_date` (expansion), so rerunning is safe. To force a reload of a feed, delete its
 row from `gtfs_feeds` and rerun.
 
+## Test a bronze change in a sandbox (do this before touching dev or prod tables)
+
+A schema or parser change can corrupt a table that took hours to build. Test it on a tiny copy
+first: a throwaway schema prefix, a small landing volume, and empty tables in the OLD schema.
+Used for decision 0009.
+
+```sql
+CREATE SCHEMA IF NOT EXISTS workspace.evo_transit_bronze;
+CREATE VOLUME IF NOT EXISTS workspace.transit_landing.evo_raw;
+-- an empty table with the current (old) schema, so the new code must evolve it
+CREATE TABLE workspace.evo_transit_bronze.trip_updates AS
+  SELECT * FROM workspace.dev_transit_bronze.trip_updates LIMIT 0;
+```
+```bash
+# land a few real files (fs cp does not create folders)
+R=dbfs:/Volumes/workspace/transit_landing/evo_raw
+databricks fs mkdir "$R/trip_updates/dt=2026-10-15" --profile enpu
+databricks fs cp tripupdates.pb "$R/trip_updates/dt=2026-10-15/1792101309000.pb" --profile enpu
+databricks bundle deploy -t dev          # builds and uploads the wheel with your change
+# run the real ingest entry point once, against the sandbox, without touching any job
+databricks jobs submit --no-wait --profile enpu --json '{
+  "run_name": "sandbox-test",
+  "tasks": [{"task_key": "bronze", "environment_key": "default",
+    "python_wheel_task": {"package_name": "transit_reliability", "entry_point": "ingest_bronze",
+      "parameters": ["--landing-volume", "workspace.transit_landing.evo_raw",
+                     "--state-volume", "workspace.transit_ops.state",
+                     "--schema-prefix", "evo_transit"]}}],
+  "environments": [{"environment_key": "default", "spec": {"environment_version": "3",
+    "dependencies": ["/Workspace/Users/<you>/.bundle/transit-reliability/dev/artifacts/.internal/transit_reliability-0.1.0-py3-none-any.whl"]}}]
+}'
+```
+
+Then compare the table with an independent computation from the same file (here: row count
+equals the feed's stop updates, and the two canceled trips have exactly 52 and 18 rows
+flagged). Clean up afterwards: drop the sandbox schema and volume and delete its
+checkpoints `.../state/checkpoints/evo_transit_bronze_*`.
+
 ## Bronze verification (SQL)
 
 Run these in the Databricks SQL editor, or from the shell with the statement API. The

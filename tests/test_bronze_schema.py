@@ -55,3 +55,32 @@ def test_parse_record_matches_expected_fixture_counts() -> None:
         rows = parse_record(source, "f.pb", (fixtures / names[source]).read_bytes())
         assert len(rows) == count
         assert set(rows[0]) == set(PARSED_COLUMNS[source])
+
+
+def test_trip_level_schedule_relationship_is_a_bronze_column_for_both_realtime_feeds() -> None:
+    assert "trip_schedule_relationship" in VEHICLE_POSITION_COLUMNS
+    assert "trip_schedule_relationship" in TRIP_UPDATE_COLUMNS
+    # The new column sits before source_file and ingested_at, which stay last.
+    assert TRIP_UPDATE_COLUMNS[-2:] == ("source_file", "ingested_at")
+    assert VEHICLE_POSITION_COLUMNS[-2:] == ("source_file", "ingested_at")
+
+
+def test_missing_columns_lists_only_what_a_table_lacks_with_types() -> None:
+    from transit_reliability.bronze.schema import missing_columns
+    from transit_reliability.bronze.streaming import column_ddl_types
+
+    old_table = [c for c in TRIP_UPDATE_COLUMNS if c != "trip_schedule_relationship"]
+    assert missing_columns(old_table, column_ddl_types("trip_updates")) == [
+        ("trip_schedule_relationship", "bigint")
+    ]
+    assert missing_columns(TRIP_UPDATE_COLUMNS, column_ddl_types("trip_updates")) == []
+
+
+def test_every_bronze_column_has_a_sql_type() -> None:
+    from transit_reliability.bronze.streaming import column_ddl_types
+
+    for source, columns in SOURCE_TO_COLUMNS.items():
+        types = dict(column_ddl_types(source))
+        assert list(types) == list(columns)
+        assert types["ingested_at"] == "timestamp"
+    assert dict(column_ddl_types("alerts"))["active_periods"] == "array<string>"

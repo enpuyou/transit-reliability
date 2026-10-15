@@ -283,13 +283,14 @@ with King County Metro's GTFS data".
 | Trip updates | No field differences between the forms. |
 | Alerts | `_enhanced` adds `created_timestamp`, `last_modified_timestamp`, `alert_lifecycle` (NEW, ONGOING, UPCOMING), `severity` (3 or 7), `duration_certainty`, `short_header_text`, `service_effect_text`, `timeframe_text`, and `activities`/`facility_id` on informed entities. The protobuf has `cause_detail` and `effect_detail` text that the enhanced form lacks. |
 
-**Fields in the feeds that bronze does not keep** (parser change needed, raw files still
-hold them, so bronze can be rebuilt):
-- Trip-level `schedule_relationship` in trip updates. Metro signals cancellations here: 2 of
-  1,219 trips were `CANCELED` in the snapshot, and their stop predictions are still
-  published. Until captured, a canceled trip looks like a normal scheduled one in bronze.
-- Trip-level `schedule_relationship` in vehicle positions (all `SCHEDULED` in the snapshot).
-- All enhanced-alert fields above (the alerts we collect are the basic protobuf).
+**Fields in the feeds that bronze did not keep, and their status:**
+- Trip-level `schedule_relationship` in trip updates and vehicle positions. Metro signals
+  cancellations here: 2 of 1,219 trips were `CANCELED` in the snapshot, and their stop
+  predictions are still published. **Now captured** as `trip_schedule_relationship`
+  (decision 0009; verified in a sandbox, not yet in prod). NULL means not set, which is
+  SCHEDULED. Files ingested before the change keep NULL until bronze is rebuilt from raw.
+- All enhanced-alert fields above (the alerts we collect are the basic protobuf). Not
+  captured yet.
 
 **Fields already captured and worth using:**
 - `occupancy_status` is set on 98 percent of vehicle fixes (2026-10-15 bronze: EMPTY 80.5

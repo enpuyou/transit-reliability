@@ -322,6 +322,18 @@ for ~11 minutes nightly, and an empty file yields no rows. Method worth repeatin
 exactly which items differ, look for a pattern (time, size, source), and inspect one by
 hand before concluding.
 
+### Changing a table's shape without breaking it
+
+Adding a parsed field means changing the table. Doing that on the real table is the risky
+way to find a bug. The habit used for decision 0009: (1) write the failing tests, (2) make
+the change, (3) run the real entry point against a sandbox with old-schema empty tables and a
+few real files, (4) check the result against an independent number from the same input, (5)
+only then deploy. Schema evolution is explicit (`ALTER TABLE ... ADD COLUMNS` at ingest), not
+silent (`mergeSchema`), so a surprise still fails loudly. See `docs/commands.md`, "Test a
+bronze change in a sandbox". The same run also taught something the tests could not:
+unset protobuf fields arrive as NULL, not as the spec's default, so NULL has to be read as the
+default (here SCHEDULED).
+
 ### Lessons that generalize
 
 - **Look at the data, not the status.** Two of the bugs reported success.

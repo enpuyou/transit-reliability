@@ -1,5 +1,6 @@
 """Bronze table contracts shared by local tests and Spark ingestion."""
 
+from collections.abc import Iterable
 from typing import Final
 
 VEHICLE_POSITION_COLUMNS: Final[tuple[str, ...]] = (
@@ -12,6 +13,7 @@ VEHICLE_POSITION_COLUMNS: Final[tuple[str, ...]] = (
     "direction_id",
     "start_date",
     "start_time",
+    "trip_schedule_relationship",
     "latitude",
     "longitude",
     "bearing",
@@ -35,6 +37,7 @@ TRIP_UPDATE_COLUMNS: Final[tuple[str, ...]] = (
     "direction_id",
     "start_date",
     "start_time",
+    "trip_schedule_relationship",
     "vehicle_id",
     "stop_sequence",
     "stop_id",
@@ -92,3 +95,12 @@ def table_name(schema_prefix: str, source: str) -> str:
     except KeyError as error:
         raise ValueError(f"Unsupported bronze source: {source}") from error
     return f"workspace.{schema_prefix}_bronze.{table}"
+
+
+def missing_columns(
+    existing: Iterable[str], wanted: Iterable[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Columns in the contract that a table does not have yet, as (name, ddl type)."""
+
+    present = set(existing)
+    return [(name, ddl) for name, ddl in wanted if name not in present]

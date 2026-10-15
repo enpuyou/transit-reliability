@@ -40,6 +40,7 @@ def parse_vehicle_positions(payload: bytes) -> list[dict[str, object]]:
                 "direction_id": _optional_value(trip, "direction_id"),
                 "start_date": str(trip.start_date) if trip.start_date else None,
                 "start_time": str(trip.start_time) if trip.start_time else None,
+                "trip_schedule_relationship": _optional_value(trip, "schedule_relationship"),
                 "latitude": float(position.latitude) if position.HasField("latitude") else None,
                 "longitude": float(position.longitude) if position.HasField("longitude") else None,
                 "bearing": _optional_value(position, "bearing"),
@@ -66,20 +67,38 @@ def parse_trip_updates(payload: bytes) -> list[dict[str, object]]:
             continue
         update = entity.trip_update
         trip = update.trip
+        trip_fields: dict[str, object] = {
+            "entity_id": str(entity.id),
+            "feed_header_ts": int(feed.header.timestamp),
+            "trip_update_ts": _optional_value(update, "timestamp"),
+            "trip_id": str(trip.trip_id) if trip.trip_id else None,
+            "route_id": str(trip.route_id) if trip.route_id else None,
+            "direction_id": _optional_value(trip, "direction_id"),
+            "start_date": str(trip.start_date) if trip.start_date else None,
+            "start_time": str(trip.start_time) if trip.start_time else None,
+            # SCHEDULED, ADDED, CANCELED, ... for the whole trip (the stop-level column below
+            # is SKIPPED/NO_DATA for one stop). Kept on every row of the trip.
+            "trip_schedule_relationship": _optional_value(trip, "schedule_relationship"),
+            "vehicle_id": str(update.vehicle.id) if update.vehicle.id else None,
+        }
+        empty_stop: dict[str, object] = {
+            "stop_sequence": None,
+            "stop_id": None,
+            "arrival_delay": None,
+            "arrival_time": None,
+            "departure_delay": None,
+            "departure_time": None,
+            "schedule_relationship": None,
+        }
+        if not update.stop_time_update:
+            # Never lose a trip-level fact (for example a cancellation) because it has no stops.
+            rows.append({**trip_fields, **empty_stop})
         for stop_update in update.stop_time_update:
             arrival = stop_update.arrival
             departure = stop_update.departure
             rows.append(
                 {
-                    "entity_id": str(entity.id),
-                    "feed_header_ts": int(feed.header.timestamp),
-                    "trip_update_ts": _optional_value(update, "timestamp"),
-                    "trip_id": str(trip.trip_id) if trip.trip_id else None,
-                    "route_id": str(trip.route_id) if trip.route_id else None,
-                    "direction_id": _optional_value(trip, "direction_id"),
-                    "start_date": str(trip.start_date) if trip.start_date else None,
-                    "start_time": str(trip.start_time) if trip.start_time else None,
-                    "vehicle_id": str(update.vehicle.id) if update.vehicle.id else None,
+                    **trip_fields,
                     "stop_sequence": _optional_value(stop_update, "stop_sequence"),
                     "stop_id": str(stop_update.stop_id) if stop_update.stop_id else None,
                     "arrival_delay": _optional_value(arrival, "delay"),
