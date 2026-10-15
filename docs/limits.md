@@ -39,6 +39,24 @@ something starts failing, because free-plan limits change.
   Mitigations: watch the tail; try the CPU reductions listed in decision 0003; as a last
   resort, fetch trip updates less often.
 
+## Cloudflare CPU limit: what the docs say and how we measure
+
+Source: https://developers.cloudflare.com/workers/platform/limits/ (read 2026-10-15). The
+Workers Free plan lists **10 ms CPU time per Cron Trigger**, and scheduled handlers are
+covered. Enforcement wording, quoted: "Each isolate has some built-in flexibility to allow
+for cases where your Worker infrequently runs over the configured limit." and "If a Worker
+consistently hits the limit, its execution will be terminated according to the limit
+configured." A terminated run shows in the dashboard as "Exceeded CPU Time Limits" and in
+analytics and Logpush as outcome `exceededCpu`. Cron Triggers have a 15 minute wall-time
+maximum.
+
+We measure CPU from `wrangler tail --format json`: each invocation event carries a `cpuTime`
+(whole milliseconds) and `wallTime` reported by Cloudflare itself. We do not time it
+ourselves. Our median of 11 ms is "consistently" over the limit, so the unexplained
+5-minute outages (2026-10-14 02:45 UTC, 2026-10-15 17:01 UTC) could be terminations, but
+that is a hypothesis: confirm by looking for `exceededCpu` outcomes in the Cloudflare
+dashboard logs for those windows.
+
 ## Operating rules to stay within limits
 
 1. **Ingest schedule:** 30 minutes. Do not go lower without measuring first.

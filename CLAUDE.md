@@ -37,6 +37,8 @@ bytes to `/Volumes/workspace/transit_landing/raw/<source>/dt=<UTC date>/<epoch_m
 A Databricks job (Auto Loader, `availableNow`) parses them with the pure functions in
 `gtfs_rt/parse.py` into bronze Delta tables. Push, not pull: Databricks Free Edition
 blocks most outbound internet.
+A daily GitHub Actions workflow lands KCM's static GTFS zip in `raw/gtfs_static/`, and
+`static_refresh_job` turns it into versioned silver schedule tables (decision 0006).
 
 ## Commands
 
