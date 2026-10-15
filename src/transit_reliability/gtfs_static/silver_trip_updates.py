@@ -12,6 +12,8 @@ version of the same thing and is verified against an independent SQL count (deci
 from functools import reduce
 from typing import Any
 
+from transit_reliability.silver_logic.runs import MAX_GAP_SECONDS
+
 SNAPSHOT_TABLE = "trip_update_snapshots"
 KEY = ("trip_id", "service_date", "stop_sequence")
 # A change in any of these starts a new run. trip_update_ts is excluded on purpose: it moves
@@ -27,7 +29,9 @@ VALUES = (
     "vehicle_id",
 )
 CARRIED = ("route_id", "direction_id", "stop_id")
-LOOKBACK_SECONDS = 3600
+# The open run of a key is looked up this far back; it must be at least MAX_GAP_SECONDS so a run
+# that could still continue is always found (a longer silence starts a new run anyway).
+LOOKBACK_SECONDS = MAX_GAP_SECONDS
 CHUNK_SECONDS = 3 * 3600  # event-time window per pass, so a backfill never sorts it all at once
 
 
@@ -101,8 +105,13 @@ def _fold_chunk(spark: Any, snaps: Any, target: str, cursor: int, upper: int) ->
 
     ordered = Window.partitionBy(*key).orderBy("ts", F.col("is_prior").desc())
     same = reduce(lambda a, b: a & b, [F.col(c).eqNullSafe(F.lag(c).over(ordered)) for c in VALUES])
+    previous = F.lag("ts").over(ordered)
     combined = combined.withColumn(
-        "chg", F.when(F.lag("ts").over(ordered).isNull(), 1).when(same, 0).otherwise(1)
+        "chg",
+        F.when(previous.isNull(), 1)
+        .when(F.col("ts") - previous > MAX_GAP_SECONDS, 1)  # a long silence ends the run
+        .when(same, 0)
+        .otherwise(1),
     ).withColumn(
         "run_id",
         F.sum("chg").over(ordered.rowsBetween(Window.unboundedPreceding, Window.currentRow)),

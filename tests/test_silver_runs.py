@@ -76,3 +76,26 @@ def test_trip_expansion_covers_realtime_dates_through_tomorrow() -> None:
 def test_trip_expansion_never_ends_before_the_last_realtime_date() -> None:
     days = trip_expansion_dates(dt.date(2026, 10, 13), dt.date(2026, 10, 20), dt.date(2026, 10, 15))
     assert days[-1] == dt.date(2026, 10, 20)
+
+
+def test_a_long_silence_ends_the_run_even_when_the_value_is_unchanged() -> None:
+    runs = extend_runs(None, [(0, A), (60, A), (60 + 4000, A)], max_gap=3600)
+    assert runs == [Run(A, 0, 60, 2), Run(A, 4060, 4060, 1)]
+
+
+def test_a_silence_of_exactly_the_limit_does_not_end_the_run() -> None:
+    assert extend_runs(None, [(0, A), (3600, A)], max_gap=3600) == [Run(A, 0, 3600, 2)]
+
+
+def test_the_silence_rule_gives_the_same_answer_however_the_work_is_batched() -> None:
+    # A 4000 s silence placed so that each split point falls before, inside, or after it.
+    stream = [(0, A), (60, A), (4060, A), (4120, A), (4180, B)]
+    whole = extend_runs(None, stream, max_gap=3600)
+    for cut in range(1, len(stream)):
+        merged: dict[int, Run] = {}
+        prior = None
+        for chunk in (stream[:cut], stream[cut:]):
+            for run in extend_runs(prior, chunk, max_gap=3600):
+                merged[run.first_seen] = run
+            prior = merged[max(merged)]
+        assert [merged[k] for k in sorted(merged)] == whole, cut

@@ -24,6 +24,10 @@ stop-level relationship, trip-level relationship, or `vehicle_id` starts a new r
 - Trip-level relationship is `coalesce(..., 0)`: NULL means SCHEDULED (decision 0009). Older
   bronze tables without the column are read as 0.
 - At most one row per (key, snapshot time) is used, so a feed version fetched twice counts once.
+- **A run also ends after a silence of more than an hour** (`MAX_GAP_SECONDS = 3600`), even
+  if the value is unchanged. This rule was added after the first prod run (see "Found in
+  prod"): without it, whether a long silence split a run depended on how the work was
+  batched.
 - The rules live in `silver_logic/runs.py` (pure, tested); the Spark build mirrors them.
 - Incremental by event time. Each run re-reads the last hour (`LOOKBACK_SECONDS`) and
   processes three-hour windows, so a backfill never sorts everything at once. The open run of
@@ -54,6 +58,23 @@ stop-level table is only for metrics.
 - Example: trip 562518701, stop 18: a flat prediction at the scheduled 07:55:17 is two runs,
   06:40:34 to 07:24:05 with no bus (45 snapshots) and 07:25:29 to 07:41:08 with bus 4353
   (17 snapshots). The bus was assigned about 15 minutes before departure.
+
+## Found in prod, and the fix
+
+The first prod run matched an independent computation on snapshots exactly (36,264,650) but
+differed by one run (11,794,031 against 11,794,030) for service date 2026-10-14. The key was
+trip 87668894, stop 4: it left the feed for 86 minutes with an identical value on return.
+The independent SQL has no notion of a gap and merged it; silver split it, because the open
+run was beyond the one-hour lookback. But inside a single three-hour chunk the same silence
+would have merged, so the result depended on batching, which breaks the guarantee that
+chunked processing equals one pass. Fix: the explicit silence rule above, in the reference
+(three new tests, including one that cuts the stream at every position), the Spark build,
+and `LOOKBACK_SECONDS = MAX_GAP_SECONDS`. Silver rows built before the rule can contain runs
+merged across a silence inside a chunk, so the prod table is rebuilt.
+
+The lesson: an independent check is only as good as its definition. The disagreement was in
+the definition of "the same run", not in a bug of either side, and writing it down made the
+behavior deterministic.
 
 ## Alternatives considered
 

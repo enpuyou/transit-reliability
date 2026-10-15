@@ -451,6 +451,8 @@ SELECT first_seen, last_seen, arrival_time, arrival_delay, snapshots, vehicle_id
 FROM workspace.dev_transit_silver.trip_update_snapshots
 WHERE trip_id = '562518701' AND service_date = DATE'2026-10-14' AND stop_sequence = 18
 ORDER BY first_seen;
+-- (a prediction not seen for more than an hour ends its run, so compare with SQL that applies
+--  the same rule: ts - lag(ts) > 3600 also starts a new run)
 -- no unknown schedule matches, and trips exist through tomorrow
 SELECT service_date, count(*) FROM workspace.dev_transit_silver.scheduled_trips GROUP BY 1 ORDER BY 1;
 ```
