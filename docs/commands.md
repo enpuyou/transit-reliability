@@ -397,6 +397,36 @@ window, large ones are a real problem. Also expect one `*-smoke.pb` source file 
 in prod bronze (the manual fixtures were ingested by the first backfill); silver must
 exclude them.
 
+## Static GTFS silver (schedule tables)
+
+Built from the zips the GitHub workflow lands in `raw/gtfs_static/dt=<date>/`. Design:
+`docs/decisions/0006-schedule-expansion-scope.md`. The job `static_refresh_job` has two
+tasks (`load_feeds`, then `expand_schedule`) and runs daily at 11:45 UTC when unpaused.
+Verified in dev only; prod gets it at the next prod deploy.
+
+```bash
+databricks bundle deploy -t dev
+databricks bundle run static_refresh_job -t dev      # about 3 minutes the first time
+```
+```sql
+-- feeds loaded (one row per schedule version)
+SELECT * FROM workspace.dev_transit_silver.gtfs_feeds;
+-- expanded service dates: rows should be about 449K and trips about 12.9K per weekday
+SELECT service_date, count(*) AS rows, count(DISTINCT trip_id) AS trips
+FROM workspace.dev_transit_silver.scheduled_stop_times GROUP BY 1 ORDER BY 1;
+-- after-midnight check: GTFS 29:30:00 on service date D is 05:30 Pacific on D+1
+SELECT s.trip_id, st.arrival_time, s.scheduled_arrival_ts,
+       from_utc_timestamp(s.scheduled_arrival_ts, 'America/Los_Angeles') AS pacific
+FROM workspace.dev_transit_silver.scheduled_stop_times s
+JOIN workspace.dev_transit_silver.gtfs_stop_times st
+  ON st.trip_id = s.trip_id AND st.stop_sequence = s.stop_sequence AND st.feed_version = s.feed_version
+WHERE s.service_date = DATE'2026-10-14' ORDER BY s.scheduled_arrival_ts DESC LIMIT 1;
+```
+
+Rebuild a feed or date: the loader deletes and re-inserts by `feed_version` (tables) or
+`service_date` (expansion), so rerunning is safe. To force a reload of a feed, delete its
+row from `gtfs_feeds` and rerun.
+
 ## Bronze verification (SQL)
 
 Run these in the Databricks SQL editor, or from the shell with the statement API. The

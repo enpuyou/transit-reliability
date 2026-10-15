@@ -45,3 +45,28 @@ def ingest_bronze() -> None:
             args.state_volume,
             args.schema_prefix,
         )
+
+
+def load_static_gtfs() -> None:
+    """Load newly landed static GTFS zips into versioned silver tables."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--landing-volume", required=True)
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver import load_feeds
+
+    load_feeds(_spark_session(), args.landing_volume, args.schema_prefix)
+
+
+def expand_schedule() -> None:
+    """Expand the schedule to scheduled stop times for each service date with realtime data."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver import expand_schedule as run
+
+    run(_spark_session(), args.schema_prefix)

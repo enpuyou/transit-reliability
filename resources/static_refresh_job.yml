@@ -1,0 +1,37 @@
+resources:
+  jobs:
+    static_refresh_job:
+      name: transit-reliability-${bundle.target}-static-refresh
+      # After the GitHub workflow uploads a new schedule (11:17 UTC). A run with nothing new is
+      # cheap: it finds the feed already loaded and only expands dates not yet expanded.
+      schedule:
+        quartz_cron_expression: 0 45 11 * * ?
+        timezone_id: UTC
+        pause_status: ${var.ingest_pause_status}
+      tasks:
+        - task_key: load_feeds
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: load_static_gtfs
+            parameters:
+              - --landing-volume
+              - ${var.landing_volume}
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: expand_schedule
+          depends_on:
+            - task_key: load_feeds
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: expand_schedule
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl

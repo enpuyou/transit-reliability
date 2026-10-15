@@ -17,6 +17,12 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 |---|---|---|---|
 | 2026-10-14 22:00 to 2026-10-15 19:00 | 43, all SUCCESS | min 112, median 176, max 264 | the first scheduled run was 112 s; runs lengthen as tables grow; watch this |
 
+## Static refresh job (dev)
+
+| Date (UTC) | Run | Duration | Notes |
+|---|---|---|---|
+| 2026-10-15 | first run | 198 s | load_feeds 146 s (1.13M stop times, 167K shape points), expand_schedule 44 s for 2 dates |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.
