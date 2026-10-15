@@ -254,6 +254,66 @@ The first three questions are supported by KCM realtime plus static GTFS. The re
 questions require historical collection and additional sources. The interface should label
 those distinctions clearly so a plausible map does not get mistaken for causal evidence.
 
+## Metro's developer page and terms of use (read 2026-10-15)
+
+Source: https://kingcounty.gov/en/dept/metro/rider-tools/mobile-and-web-apps (developer
+resources). It lists exactly three real-time feeds, which we already collect, each in three
+forms: protobuf (`.pb`, what we collect), a plain JSON copy (`*_pb.json`), and an
+"enhanced" JSON (`*_enhanced.json`). It states no update frequency. Static GTFS is at
+`metro.kingcounty.gov/GTFS/google_transit.zip`. Real-time data "must be used in conjunction
+with King County Metro's GTFS data".
+
+**Terms (quoted or closely paraphrased from the page):**
+- A "limited, revocable license to use, reproduce, and redistribute the Data in accordance
+  with these Terms"; King County may change the terms, and may modify or discontinue access at
+  any time "with or without notice".
+- **Required attribution**, displayed prominently: "Transit scheduling, geographic, and
+  real-time data provided by permission of King County". No use of King County service marks
+  or logo beyond that legend without written agreement.
+- Data is "AS IS" and "AS AVAILABLE", changes without notice, and is not professional advice;
+  the user should verify it independently and uses it at their own risk. The user indemnifies
+  King County against claims from their use. Venue: US District Court, Western District of
+  Washington, or King County Superior Court.
+
+**Which format carries what** (compared on a live snapshot, 2026-10-15 21:55 UTC):
+
+| Feed | Difference between `.pb`, `_pb.json`, `_enhanced.json` |
+|---|---|
+| Vehicle positions | JSON copies equal the protobuf except `_enhanced` adds `block_id` on every vehicle. In the snapshot it matched the static schedule's block for all 584 vehicles, so it adds nothing yet beyond `gtfs_trips.block_id`. |
+| Trip updates | No field differences between the forms. |
+| Alerts | `_enhanced` adds `created_timestamp`, `last_modified_timestamp`, `alert_lifecycle` (NEW, ONGOING, UPCOMING), `severity` (3 or 7), `duration_certainty`, `short_header_text`, `service_effect_text`, `timeframe_text`, and `activities`/`facility_id` on informed entities. The protobuf has `cause_detail` and `effect_detail` text that the enhanced form lacks. |
+
+**Fields in the feeds that bronze does not keep** (parser change needed, raw files still
+hold them, so bronze can be rebuilt):
+- Trip-level `schedule_relationship` in trip updates. Metro signals cancellations here: 2 of
+  1,219 trips were `CANCELED` in the snapshot, and their stop predictions are still
+  published. Until captured, a canceled trip looks like a normal scheduled one in bronze.
+- Trip-level `schedule_relationship` in vehicle positions (all `SCHEDULED` in the snapshot).
+- All enhanced-alert fields above (the alerts we collect are the basic protobuf).
+
+**Fields already captured and worth using:**
+- `occupancy_status` is set on 98 percent of vehicle fixes (2026-10-15 bronze: EMPTY 80.5
+  percent, MANY_SEATS 14.8, FEW_SEATS 2.9, STANDING_ROOM_ONLY 0.2, CRUSHED_STANDING under 0.1,
+  not set 1.6). `occupancy_percentage` is never set. It is a coarse, uncalibrated crowding
+  signal; how Metro derives it is not documented. At 8 AM about 24 percent of fixes are
+  above EMPTY, at 3 AM about 7 percent.
+- Stop-level `SKIPPED`: 1.35 percent of 2026-10-14 trip-update rows.
+- `trip_update_ts` and `vehicle_id` on trip updates: present when a bus is assigned.
+
+**Coverage:** the live feeds are not Metro-only. In the snapshot, vehicles by agency: Metro
+Transit 558, Sound Transit (Express buses) 23, City of Seattle (streetcar) 3. Metro's static
+schedule also lists 2 Metro routes of type 4 (water taxi) with no live vehicle seen.
+
+**Alerts are mostly planned disruptions, not incidents:** 83 alerts, median age 16 days,
+oldest 263 days; cause CONSTRUCTION 65, effect NO_SERVICE 39, STOP_MOVED 28, DETOUR 12.
+
+**How Metro's predictions seem to behave** (one snapshot; a hypothesis, not documentation):
+of 635 trips with no bus assigned, 550 have every delay equal to zero (the schedule); of the
+83 with non-zero delay, 58 are in a block that has a bus assigned, and for several the
+predicted delay is nearly the same as the delay of that bus's current trip (for example
+99 s and 99 s, 129 s and 129 s) while others are damped (858 s becoming 48 s). That looks like
+delay carried forward along a bus's chain of trips (its block), with some recovery at layover.
+
 ## Related reports
 
 - [Data report index](README.md)

@@ -46,7 +46,10 @@ why, and what to change. The evidence supports the first and the benchmark part 
      and use delay and trips affected.
    - **G3, publication check (before anything is public):** read KCM's terms of use for the
      realtime feeds, record the required attribution, and look at what Metro already
-     publishes so claims of novelty are accurate. Until then the site is local only.
+     publishes so claims of novelty are accurate. Status 2026-10-15: terms read and recorded
+     in `docs/data_reports/kcm_realtime.md` (revocable license to use and redistribute,
+     attribution legend required, data as-is); the check of what Metro already publishes is
+     still open. Until both are done nothing is public.
    - **G4, enough history (before Phase 7):** at least 3 weeks of collection and enough
      stop visits per horizon for stable error estimates. Otherwise postpone modeling.
    - **G5, compute headroom:** daily DBU stays inside a level we choose and record in

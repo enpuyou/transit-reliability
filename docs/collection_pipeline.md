@@ -91,9 +91,15 @@ these files like any other, and the parser produces no rows from them, so bronze
 loss. Late-night service is also tiny (files of 2 to 3 KB versus a daytime median near
 35 to 48 KB).
 
-**What the feed does not provide.** In the bronze rows, `speed`, `bearing`,
-`trip_update_ts`, trip-update `vehicle_id`, and `start_time` are empty. Speed must be
-derived from consecutive positions.
+**What the feed does not provide.** `speed` and `bearing` are almost never set (2 to 4
+percent of vehicles in the 2026-10-15 snapshot) and `start_time` is empty; speed must be
+derived from consecutive positions. *Correction, 2026-10-15:* an earlier version of this
+paragraph said `trip_update_ts` and the trip-update `vehicle_id` are empty. That was wrong.
+They are set only for trips that have a bus assigned: 584 of 1,219 trips in a live snapshot,
+and in bronze about 38 percent of 2026-10-15 trip-update rows. A trip with no vehicle is a
+future trip and its prediction is, in about 87 percent of cases, just the schedule. That
+makes `vehicle_id IS NOT NULL` a clean "real-time prediction" flag; do not infer it from
+a zero delay.
 
 ## 2. Why this design
 
