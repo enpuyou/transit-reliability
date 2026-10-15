@@ -168,9 +168,10 @@ run reports a 2 s setup phase, but whether the install is inside it is unverifie
 - The wheel version is always `0.1.0`, so you cannot tell deployed versions apart by name;
   check `git log` and the deploy time. Bump the version if that becomes confusing.
 - `sync.exclude` in `databricks.yml` keeps docs, tests, scripts, and the Worker out of the
-  workspace copy. *(Configured 2026-10-14, previewed with `bundle sync --dry-run`: 16 files
-  instead of 54. Not deployed yet; confirm with a dev deploy and run at the next
-  deployment pass.)*
+  workspace copy. *(Configured 2026-10-14. Dev deploy
+  verified the same day: 39 files removed from the workspace copy, 2 uploaded, and the dev
+  setup job still ran `SUCCESS` from the wheel. Prod not deployed with it yet; it applies
+  at the next prod deploy.)*
 
 ### Reading `databricks.yml`
 
