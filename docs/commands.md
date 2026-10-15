@@ -400,9 +400,11 @@ exclude them.
 ## Static GTFS silver (schedule tables)
 
 Built from the zips the GitHub workflow lands in `raw/gtfs_static/dt=<date>/`. Design:
-`docs/decisions/0006-schedule-expansion-scope.md`. The job `silver_job` has three
-tasks (`load_feeds`, `expand_schedule`, then `vehicle_positions`) and runs daily at 11:45 UTC
-when unpaused. What each silver table is and why: `docs/silver_tables.md`.
+`docs/decisions/0006-schedule-expansion-scope.md` and `0010-silver-trip-update-snapshots.md`.
+The job `silver_job` has five tasks and runs daily at 11:45 UTC when unpaused:
+`load_feeds` -> `expand_trips` -> `vehicle_positions`; `load_feeds` -> `expand_schedule`;
+and `trip_updates` (independent). The silver build is incremental and idempotent, so it can
+also be scheduled more often. What each silver table is and why: `docs/silver_tables.md`.
 Verified in dev only; prod gets it at the next prod deploy.
 
 ```bash
@@ -437,6 +439,26 @@ FROM workspace.dev_transit_silver.vehicle_positions GROUP BY 1 ORDER BY 1;
 -- no fix stored twice (both numbers must be equal)
 SELECT count(*), count(DISTINCT vehicle_id, vehicle_ts) FROM workspace.dev_transit_silver.vehicle_positions;
 ```
+
+Trip-update snapshots (decision 0010):
+
+```sql
+-- runs and snapshots for a service date; compare with a plain-SQL count from bronze
+SELECT count(*) AS runs, sum(snapshots) AS snapshots
+FROM workspace.dev_transit_silver.trip_update_snapshots WHERE service_date = DATE'2026-10-14';
+-- one stop's history: when Metro changed its mind, and when a bus was assigned
+SELECT first_seen, last_seen, arrival_time, arrival_delay, snapshots, vehicle_id
+FROM workspace.dev_transit_silver.trip_update_snapshots
+WHERE trip_id = '562518701' AND service_date = DATE'2026-10-14' AND stop_sequence = 18
+ORDER BY first_seen;
+-- no unknown schedule matches, and trips exist through tomorrow
+SELECT service_date, count(*) FROM workspace.dev_transit_silver.scheduled_trips GROUP BY 1 ORDER BY 1;
+```
+
+To test the incremental path without touching real tables, copy a slice of bronze into a
+sandbox prefix and run the build in two stages: `build_silver_trip_updates --schema-prefix
+<sandbox> --until-ts <midpoint epoch>`, then again without `--until-ts`; the result must
+equal a single pass (use `EXCEPT` both ways). Procedure: "Test a bronze change in a sandbox".
 
 To rebuild silver vehicle positions from bronze, pause the job, drop `vehicle_positions` and
 `quarantine_vehicle_positions` in that schema together (the watermark comes from them), and

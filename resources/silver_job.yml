@@ -2,8 +2,9 @@ resources:
   jobs:
     silver_job:
       name: transit-reliability-${bundle.target}-silver
-      # Daily, after the GitHub workflow uploads a new schedule (11:17 UTC): load new feeds,
-      # expand the schedule for dates with realtime data, then build silver vehicle positions.
+      # Daily, after the GitHub workflow uploads a new schedule (11:17 UTC): load new feeds, expand
+      # the schedule (trips through tomorrow, stop times for realtime dates), then build the silver
+      # realtime tables. Trip-update snapshots do not depend on the schedule and run alongside.
       # A run with nothing new is cheap; every step skips work it has already done.
       schedule:
         quartz_cron_expression: 0 45 11 * * ?
@@ -20,6 +21,24 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: expand_trips
+          depends_on:
+            - task_key: load_feeds
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: expand_trips
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: trip_updates
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_silver_trip_updates
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: expand_schedule
           depends_on:
             - task_key: load_feeds
@@ -32,7 +51,7 @@ resources:
           environment_key: default
         - task_key: vehicle_positions
           depends_on:
-            - task_key: expand_schedule
+            - task_key: expand_trips
           python_wheel_task:
             package_name: transit_reliability
             entry_point: build_silver_vehicle_positions

@@ -43,6 +43,14 @@ nothing about dates. The same trip runs on many dates. Materializing one row per
 "what was planned" into a plain table you can join to what happened, with the timezone math
 done once and tested. Only dates with realtime data are expanded (decision 0006).
 
+### `scheduled_trips` (built) — which trips run on which dates
+
+**One row =** one scheduled trip on one service date (about 13K a day): `service_date`,
+`feed_version`, `trip_id`, `route_id`, `direction_id`, `service_id`. It answers "is this trip
+scheduled today" without the 450K-row stop-level table, and it is built through **tomorrow**
+so a new service date is never unknown. Dates from today on are rebuilt each run, because a
+newly loaded schedule can change them.
+
 ### `gtfs_*` tables (built) — the reference data
 
 Routes, trips, stops, stop times, shapes, calendars, each stamped with `feed_version`. They
@@ -62,7 +70,7 @@ several overlapping snapshots and 23K rows were rejected.
 | `latitude`, `longitude` | where it was |
 | `current_stop_sequence`, `stop_id`, `current_status` | progress along the trip; status 1 means stopped at the stop |
 | `first_feed_ts` | when we first saw this fix (the earliest snapshot that contained it) |
-| `matched_trip` | true if that trip is scheduled on that date; false is a mismatch; **NULL means the date has not been expanded yet** (unknown is not the same as false) |
+| `matched_trip` | true if that trip is in `scheduled_trips` for that date; false is a mismatch; **NULL means no loaded schedule covers that date** (unknown is not the same as false). A repair step fills NULLs once a schedule covers the date. |
 | `source_file`, `bronze_ingested_at` | lineage back to the raw file and bronze load |
 
 A real example, trip 562518701 on route 100001, bus 4353, 2026-10-14 (Pacific time):
@@ -102,14 +110,34 @@ example right after a service change) is a property of the join, and the Phase 3
 "match rate above 95 percent" needs those rows present to count them. Quarantining them
 would make the problem disappear from the number that is supposed to expose it.
 
-### Still to build
+### `trip_update_snapshots` (built) — what Metro predicted, and for how long
 
-- `trip_update_snapshots`: **one row = one distinct prediction value** for a stop on a trip,
-  with `first_seen` and `last_seen` feed times, instead of one row per snapshot. About 67%
-  of predictions repeat between pulls, so this shrinks the biggest table (67M rows) a lot
-  while keeping every change (decision 0002). Its purpose is the "what did KCM predict at
-  time t" baseline that Phase 7 beats.
-- `alert_versions`: one row per version of an alert (alerts repeat every pull).
+**One row =** a *run*: a prediction for one stop of one trip on one service date that stayed
+the same over consecutive snapshots, with `first_seen`, `last_seen` and `snapshots`. Bronze
+holds one row per snapshot; about two thirds repeat, so silver keeps 30 percent of the rows
+(17.4M bronze rows became 5.2M for 2026-10-14 *(dev)*).
+
+A change in any of the predicted arrival and delay, departure and delay, the stop-level state
+(skipped), the trip-level state (canceled), or the assigned `vehicle_id` starts a new run.
+Including the vehicle means the moment a bus is assigned to a trip is visible. Real example,
+trip 562518701, stop 18 on 2026-10-14 (Pacific time):
+
+```text
+first_seen  last_seen  predicted  delay  snapshots  vehicle
+06:40:34    07:24:05   07:55:17   0      45         (none)   <- schedule only, no bus yet
+07:25:29    07:41:08   07:55:17   0      17         4353     <- bus assigned (15 min before departure)
+07:42:10    07:42:10   07:56:04   47     1          4353     <- the bus is running; revised each minute
+07:43:12    07:43:12   07:55:46   29     1          4353
+```
+
+Why runs and not snapshots: the table is a third of the size, and nothing is lost, because a
+run still says exactly what Metro was saying and during which stretch. Only consecutive repeats
+collapse: a value that returns later is a new run.
+
+### `alert_versions` (still to build)
+
+One row per version of an alert (alerts repeat every pull). The enhanced alert feed carries
+creation and modification times, which makes versions directly observable.
 
 ## 3. What you can do with these tables
 

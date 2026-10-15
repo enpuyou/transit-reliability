@@ -18,11 +18,13 @@ from transit_reliability.gtfs_static.load import (
     day_origin_epoch,
     read_feed_info,
     read_rows,
+    trip_expansion_dates,
 )
 from transit_reliability.gtfs_static.schedule import active_service_ids
 
 FEEDS_TABLE = "gtfs_feeds"
 SCHEDULED_TABLE = "scheduled_stop_times"
+TRIPS_TABLE = "scheduled_trips"
 
 
 def _compact_date(text: str) -> dt.date:
@@ -121,7 +123,9 @@ def _feed_windows(spark: Any, prefix: str) -> list[FeedWindow]:
     ]
 
 
-def _expand_one_day(spark: Any, prefix: str, day: dt.date, feed: FeedWindow) -> int:
+def _active_services(spark: Any, prefix: str, day: dt.date, feed: FeedWindow) -> set[str]:
+    """Service ids running on a date, from the calendar tables of one feed version."""
+
     from pyspark.sql import functions as F
 
     def rows(table: str) -> list[dict[str, str]]:
@@ -130,7 +134,13 @@ def _expand_one_day(spark: Any, prefix: str, day: dt.date, feed: FeedWindow) -> 
             {k: "" if v is None else str(v) for k, v in r.asDict().items()} for r in data.collect()
         ]
 
-    active = active_service_ids(day, rows("gtfs_calendar"), rows("gtfs_calendar_dates"))
+    return active_service_ids(day, rows("gtfs_calendar"), rows("gtfs_calendar_dates"))
+
+
+def _expand_one_day(spark: Any, prefix: str, day: dt.date, feed: FeedWindow) -> int:
+    from pyspark.sql import functions as F
+
+    active = _active_services(spark, prefix, day, feed)
     trips = (
         spark.table(_silver(prefix, "gtfs_trips"))
         .where(F.col("feed_version") == feed.feed_version)
@@ -200,3 +210,58 @@ def expand_schedule(spark: Any, prefix: str) -> None:
             continue
         count = _expand_one_day(spark, prefix, day, feed)
         print(f"expanded {day} with feed {feed.feed_version}: {count} rows")
+
+
+def expand_trips(spark: Any, prefix: str) -> None:
+    """One row per scheduled trip per service date (about 13K a day), through tomorrow.
+
+    This answers "is this trip scheduled on this date" without the 450K-row stop-level table,
+    and runs a day ahead so a new service date is never unknown. Dates from today on are
+    rebuilt each run, because a newly loaded feed can change tomorrow's schedule.
+    """
+
+    from pyspark.sql import functions as F
+
+    bounds = (
+        spark.table(f"workspace.{prefix}_bronze.vehicle_positions")
+        .where(F.col("start_date").rlike("^[0-9]{8}$"))
+        .agg(F.min("start_date").alias("first"), F.max("start_date").alias("last"))
+        .collect()[0]
+    )
+    if bounds["first"] is None:
+        print("no realtime service dates yet")
+        return
+    today = dt.datetime.now(dt.UTC).date()
+    wanted = trip_expansion_dates(
+        _compact_date(bounds["first"]), _compact_date(bounds["last"]), today
+    )
+    target = _silver(prefix, TRIPS_TABLE)
+    done = (
+        {r["service_date"] for r in spark.table(target).select("service_date").distinct().collect()}
+        if spark.catalog.tableExists(target)
+        else set()
+    )
+    feeds = _feed_windows(spark, prefix)
+    for day in (d for d in wanted if d not in done or d >= today):
+        feed = choose_feed(day, feeds)
+        if feed is None:
+            print(f"no feed covers {day}; skipped")
+            continue
+        active = _active_services(spark, prefix, day, feed)
+        trips = (
+            spark.table(_silver(prefix, "gtfs_trips"))
+            .where(F.col("feed_version") == feed.feed_version)
+            .where(F.col("service_id").isin(sorted(active)))
+            .select(
+                F.lit(day.isoformat()).cast("date").alias("service_date"),
+                F.lit(feed.feed_version).alias("feed_version"),
+                "trip_id",
+                "route_id",
+                "direction_id",
+                "service_id",
+            )
+        )
+        if spark.catalog.tableExists(target):
+            spark.sql(f"DELETE FROM {target} WHERE service_date = DATE'{day.isoformat()}'")
+        trips.write.format("delta").mode("append").saveAsTable(target)
+        print(f"scheduled trips {day} with feed {feed.feed_version}: {trips.count()}")

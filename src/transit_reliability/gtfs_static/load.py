@@ -169,3 +169,15 @@ def day_origin_epoch(service_date: dt.date) -> int:
 
 def dates_between(first: dt.date, last: dt.date) -> list[dt.date]:
     return [first + dt.timedelta(days=n) for n in range((last - first).days + 1)]
+
+
+def trip_expansion_dates(
+    first_realtime: dt.date, last_realtime: dt.date, today: dt.date
+) -> list[dt.date]:
+    """Service dates to expand into scheduled trips: every realtime date, through tomorrow.
+
+    Running one day ahead means a new service date (which starts at local midnight) already has
+    its trips when its first realtime rows arrive, so `matched_trip` is never unknown for it.
+    """
+
+    return dates_between(first_realtime, max(last_realtime, today + dt.timedelta(days=1)))

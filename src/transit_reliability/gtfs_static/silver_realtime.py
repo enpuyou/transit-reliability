@@ -58,6 +58,30 @@ def _merge(spark: Any, df: Any, target: str, keys: tuple[str, ...]) -> None:
     spark.sql(f"MERGE INTO {target} t USING incoming s ON {on} WHEN NOT MATCHED THEN INSERT *")
 
 
+def _repair_unknown_matches(spark: Any, silver: str, scheduled: str) -> None:
+    """Fill `matched_trip` for rows stored while their service date had no scheduled trips yet.
+
+    Only rows that are NULL are touched, and only once their date is known, so this is cheap and
+    safe to run every time. DISTINCT keeps the MERGE source unique per target row.
+    """
+
+    if not (_exists(spark, silver) and _exists(spark, scheduled)):
+        return
+    spark.sql(
+        f"""
+        MERGE INTO {silver} t USING (
+          SELECT v.vehicle_id, v.vehicle_ts, (st.trip_id IS NOT NULL) AS matched
+          FROM {silver} v
+          JOIN (SELECT DISTINCT service_date FROM {scheduled}) d ON d.service_date = v.service_date
+          LEFT JOIN (SELECT DISTINCT service_date, trip_id FROM {scheduled}) st
+            ON st.service_date = v.service_date AND st.trip_id = v.trip_id
+          WHERE v.matched_trip IS NULL
+        ) s ON t.vehicle_id = s.vehicle_id AND t.vehicle_ts = s.vehicle_ts
+        WHEN MATCHED THEN UPDATE SET t.matched_trip = s.matched
+        """
+    )
+
+
 def build_vehicle_positions(spark: Any, prefix: str) -> None:
     from pyspark.sql import Window
     from pyspark.sql import functions as F
@@ -65,7 +89,9 @@ def build_vehicle_positions(spark: Any, prefix: str) -> None:
     bronze = f"workspace.{prefix}_bronze.vehicle_positions"
     silver = f"workspace.{prefix}_silver.{SILVER_TABLE}"
     quarantine = f"workspace.{prefix}_silver.{QUARANTINE_TABLE}"
-    scheduled = f"workspace.{prefix}_silver.scheduled_stop_times"
+    scheduled = f"workspace.{prefix}_silver.scheduled_trips"
+
+    _repair_unknown_matches(spark, silver, scheduled)
 
     rows = spark.table(bronze).where(~F.col("source_file").contains("smoke"))
     if _exists(spark, silver) and _exists(spark, quarantine):

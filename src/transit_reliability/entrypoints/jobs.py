@@ -82,3 +82,28 @@ def build_silver_vehicle_positions() -> None:
     from transit_reliability.gtfs_static.silver_realtime import build_vehicle_positions
 
     build_vehicle_positions(_spark_session(), args.schema_prefix)
+
+
+def expand_trips() -> None:
+    """Expand the schedule to one row per trip per service date, through tomorrow."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver import expand_trips as run
+
+    run(_spark_session(), args.schema_prefix)
+
+
+def build_silver_trip_updates() -> None:
+    """Collapse bronze trip-update snapshots into one row per unchanged prediction run."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--until-ts", type=int, help="stop at this epoch (tests, staged backfill)")
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver_trip_updates import build_trip_update_snapshots
+
+    build_trip_update_snapshots(_spark_session(), args.schema_prefix, until_ts=args.until_ts)
