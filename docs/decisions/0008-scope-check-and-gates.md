@@ -54,19 +54,17 @@ why, and what to change. The evidence supports the first and the benchmark part 
 4. **Integration order for Phase 6** by value per effort: ridership, weather, WSDOT traffic;
    defer events and 911 until G1 passes.
 5. **An interactive tool is a goal, but it comes later.** The owner decided on 2026-10-15
-   that visualization is too early. The tool should be built on the metric tables (stop
-   visits, delay, prediction error), not on raw positions, so that what it shows is something
-   we have validated. Constraints for when it is built: a static site that reads exported
-   JSON files and never queries the warehouse; local only until gate G3 passes. A first
-   prototype (a replay of recorded positions, service delivery by hour, feed health, and
-   Metro's prediction history for a few trips) was started and parked; see "Parked work".
-
-## Parked work
-
-Untracked and uncommitted at the time of this decision: `site/` (static page, data helpers
-with Node tests, exported JSON), `scripts/export_site_data.py`,
-`src/transit_reliability/site_export/` with `tests/test_site_export.py`. Nothing in it is
-deployed or needed by any job. Revisit after arrival inference (Phase 5, gate G1).
+   that visualization is too early, and that it should eventually be an application
+   **connected to the Databricks instance**, not a viewer of exported static files. It should
+   be built on the validated metric tables (stop visits, delay, prediction error), so that
+   what it shows is something we have checked. Not decided yet: how it connects (for example
+   an owner-only app querying through the SQL warehouse, or a Databricks App) and who can use
+   it. This matters because of the rule that the warehouse is never queried from a public
+   serving path (CLAUDE.md) and the Free Edition limits (one 2X-Small warehouse, unpublished
+   quota, apps that stop after 24 hours and require a workspace login): a private tool for
+   the owner is consistent with the rule; a public one is not, and would need a different
+   design. Decide this when the tool is designed. A throwaway static prototype was built and
+   deleted on that date.
 
 ## Alternatives considered
 
