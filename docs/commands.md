@@ -601,6 +601,54 @@ npx wrangler rollback            # previous version
 npx wrangler delete              # removes the Worker and its cron
 ```
 
+## Static GTFS download (GitHub Actions)
+
+`.github/workflows/daily_gtfs_static.yml` downloads KCM's schedule zip daily (11:17 UTC),
+checks it is a real GTFS zip, and uploads it to
+`/Volumes/workspace/transit_landing/raw/gtfs_static/dt=<date>/google_transit.zip` only when
+its SHA-256 differs from `gtfs_static/latest.sha`. How it works: `docs/databricks_guide.md`.
+
+### One-time setup (you do this; it involves a credential)
+
+1. Create a **dedicated token**, separate from the Worker's, so you can revoke it alone. In
+   the Databricks UI: your user menu, Settings, Developer, Access tokens, Generate new
+   token. Comment `github-gtfs-static`, lifetime 90 days. Copy it once; it is not shown
+   again. (The CLI can also create tokens, but it prints the value to the terminal; avoid it.)
+2. Store it and the host as repo secrets. `gh secret set` prompts for the value and does not
+   echo it:
+
+```bash
+gh secret set DATABRICKS_TOKEN            # paste the token when prompted
+gh secret set DATABRICKS_HOST --body "https://<workspace-host>"
+gh secret list                            # names only, never values
+```
+
+3. Scheduled workflows only run from the default branch, so push the workflow to `main`.
+
+### Test it and check it
+
+```bash
+gh workflow run daily_gtfs_static.yml     # run now instead of waiting for the schedule
+gh run list --workflow daily_gtfs_static.yml --limit 5
+gh run view <run-id> --log                # every step's output
+databricks fs ls dbfs:/Volumes/workspace/transit_landing/raw/gtfs_static --profile enpu
+```
+
+A second run on the same day should log "Feed unchanged" and upload nothing. Expect a new
+`dt=` folder only after KCM publishes a new schedule version.
+
+### When it fails
+
+| Step that failed | Likely cause |
+|---|---|
+| Check secrets are configured | secret missing or misspelled |
+| Check Databricks access | token expired or revoked (90-day lifetime) or wrong host: make a new token, `gh secret set DATABRICKS_TOKEN` |
+| Download the feed | KCM unavailable; the next day's run retries |
+| Reject anything that is not a real GTFS zip | KCM returned an HTML page or a truncated file; nothing is uploaded |
+
+GitHub emails the repo owner when a scheduled run fails. Rotate the token before it expires
+and note the expiry date in `docs/runbook.md`.
+
 ## CI
 
 `.github/workflows/pr.yml` runs ruff, mypy, and pytest for Python and typecheck plus

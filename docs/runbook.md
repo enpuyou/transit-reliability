@@ -30,3 +30,9 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 |---|---|---|
 | 2026-10-14 | `transit_bronze.trip_updates` | 146 MB, 36.2M rows (DESCRIBE DETAIL) |
 | 2026-10-14 | raw files | about 1.8 GB/day (computed from file sizes, not measured on the volume) |
+
+## Credentials and expiry
+
+| Credential | Used by | Created | Expires | Notes |
+|---|---|---|---|---|
+| `DATABRICKS_TOKEN` (GitHub secret) | daily GTFS workflow | not created yet | 90 days after creation | dedicated token; record the date here when created |

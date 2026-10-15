@@ -1,0 +1,75 @@
+name: daily-gtfs-static
+
+# Download KCM's static GTFS schedule once a day and upload it to the Databricks landing
+# volume when it has changed. The silver schedule tables are built from these files.
+# Needs repo secrets DATABRICKS_HOST (https://<workspace-host>) and DATABRICKS_TOKEN
+# (a dedicated token for this workflow). See docs/commands.md, "Static GTFS download".
+
+on:
+  schedule:
+    - cron: "17 11 * * *" # 11:17 UTC daily; GitHub may delay scheduled runs by minutes
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-gtfs-static
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      GTFS_URL: https://metro.kingcounty.gov/GTFS/google_transit.zip
+      LANDING: dbfs:/Volumes/workspace/transit_landing/raw/gtfs_static
+    steps:
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+
+      - name: Check secrets are configured
+        run: |
+          test -n "$DATABRICKS_HOST" || { echo "DATABRICKS_HOST secret is missing"; exit 1; }
+          test -n "$DATABRICKS_TOKEN" || { echo "DATABRICKS_TOKEN secret is missing"; exit 1; }
+
+      - name: Check Databricks access
+        # fs ls fails on a bad or expired token. (fs cp of a missing file does not: it
+        # reports "does not exist" even when the real problem is authentication.)
+        run: databricks fs ls dbfs:/Volumes/workspace/transit_landing/raw > /dev/null
+
+      - name: Download the feed
+        run: curl -fsSL --retry 3 -o google_transit.zip "$GTFS_URL"
+
+      - name: Reject anything that is not a real GTFS zip
+        run: |
+          # An HTML error page can come back as HTTP 200, which curl -f does not catch.
+          test "$(stat -c %s google_transit.zip)" -gt 1000000
+          unzip -tq google_transit.zip
+          unzip -l google_transit.zip | grep -q stop_times.txt
+
+      - name: Skip if unchanged since the last upload
+        id: compare
+        run: |
+          sha256sum google_transit.zip | cut -d' ' -f1 > new.sha
+          # Access was verified above, so a failed copy here means no previous hash yet.
+          if databricks fs cp "$LANDING/latest.sha" old.sha --overwrite 2> /dev/null; then
+            if cmp -s new.sha old.sha; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "Feed unchanged ($(cat new.sha)); nothing to upload."
+              exit 0
+            fi
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the new schedule
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          DAY="$(date -u +%F)"
+          databricks fs cp google_transit.zip "$LANDING/dt=$DAY/google_transit.zip" --overwrite
+          # Written last: if the upload above failed, the next run tries again.
+          databricks fs cp new.sha "$LANDING/latest.sha" --overwrite
+          echo "Uploaded $LANDING/dt=$DAY/google_transit.zip ($(cat new.sha))"
