@@ -2,12 +2,12 @@
 
 | | |
 |---|---|
-| Status | **Planned** |
+| Status | **Observed** (profiled, not yet loaded) |
 | Phase | 3 |
 | Owner | King County Metro (`https://metro.kingcounty.gov/GTFS/google_transit.zip`, verified 2026-10-13, about 10.9 MB) |
 | Format | ZIP of CSV files |
 | Cadence | daily check, changes per service change |
-| Profiled | not yet |
+| Profiled | 2026-10-14 |
 | Target tables | silver schedule tables (routes, trips, stops, stop_times, shapes, calendar) |
 
 ## Executive summary
@@ -114,6 +114,32 @@ performance diverged from the plan.
 
 The report should be updated with real route names, stop names, mode counts, feed version,
 row counts, and a sample route map once the source is downloaded.
+
+## Observed behavior (profiled 2026-10-14)
+
+Downloaded `google_transit.zip` (10,862,777 bytes; `Last-Modified` 2026-09-28 11:55 UTC).
+
+| Item | Value |
+|---|---|
+| Feed version / validity | `FAL26-161.2`, 2026-09-28 to 2027-03-26 |
+| Agencies in the feed | 4: Metro Transit (1), City of Seattle streetcar (23), Sound Transit (40), Solid Ground EZ Loop (6289). All `America/Los_Angeles`. |
+| Routes / trips / service ids | 142 routes, 32,635 trips, 15 service ids in trips |
+| `stop_times.txt` | 1,126,734 rows (66 MB uncompressed), the largest table |
+| `shapes.txt` | 7.6 MB uncompressed |
+| After-midnight times | 39,424 stop times (3.5 percent) have an arrival hour of 24 or more; the maximum hour is 29 |
+| Service definition | `calendar.txt` has only 20 weekly patterns (many with every weekday off); `calendar_dates.txt` has 1,081 exceptions (620 added, 461 removed). Most real service is defined by exceptions. |
+
+**Match against our realtime data** (bronze vehicle positions, 2026-10-14):
+
+| Check | Result |
+|---|---|
+| Realtime `(trip_id, route_id)` pairs found in this feed | 12,556 of 12,556 trips; every route id also found (100 percent, 1.84M rows) |
+| Trips seen in realtime on a date that the schedule says run that date | 6,689 of 6,689 on 2026-10-13 and 8,749 of 8,749 on 2026-10-14 (100 percent) |
+| Scheduled trips seen in realtime | 51.7 percent on 10-13 (collection began mid-afternoon), 67.6 percent on 10-14 (day not finished); not a quality problem |
+
+Caveat: this is a single feed version. Collection began after 2026-09-28, so no version
+mismatch has been exercised yet; the first one will occur at the next service change, which
+is why the schedule tables are versioned by feed version and date.
 
 ## Related reports
 
