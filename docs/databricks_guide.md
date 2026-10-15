@@ -312,6 +312,16 @@ the first line naming the exception. If it is a streaming failure, the useful li
 | expired token reported as "file does not exist" | `fs cp` of a missing file hides the auth error | check access with `fs ls` on a folder that always exists before relying on `fs cp` |
 | first run took ~25 min with a long silent start | big backlog plus serverless startup/listing *(cause of the ~11 min delay not isolated)* | expect slow first run after a gap; measure before scheduling |
 
+### Not every mismatch is a bug
+
+On 2026-10-15 the daily check showed about 70 landed vehicle files that bronze did not
+list. The reflex was "ingest is dropping data". The investigation: they came in two
+contiguous blocks at the same clock time on consecutive days, they were 15 bytes each, and
+decoding one showed a valid feed with zero entities. The source publishes an empty feed
+for ~11 minutes nightly, and an empty file yields no rows. Method worth repeating: find
+exactly which items differ, look for a pattern (time, size, source), and inspect one by
+hand before concluding.
+
 ### Lessons that generalize
 
 - **Look at the data, not the status.** Two of the bugs reported success.

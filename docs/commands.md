@@ -389,6 +389,14 @@ within the last 30 minutes of landing (about 90 vehicle, 30 trip-update, 6 alert
 run that says `SUCCESS` with far fewer files than landed is wrong; see the shared-checkpoint
 case in the guide.
 
+**Not every landed file has bronze rows.** KCM publishes an empty vehicle-positions feed for
+about 11 minutes nightly (about 10:05 to 10:16 UTC; 15-byte files, zero entities), so about
+35 landed vehicle files per day legitimately never appear as a `source_file`. When counts
+differ, list the landed-but-absent files and look at their sizes: tiny files are the empty
+window, large ones are a real problem. Also expect one `*-smoke.pb` source file per source
+in prod bronze (the manual fixtures were ingested by the first backfill); silver must
+exclude them.
+
 ## Bronze verification (SQL)
 
 Run these in the Databricks SQL editor, or from the shell with the statement API. The

@@ -82,6 +82,15 @@ transmitting simply keeps its old timestamp or drops out of the feed. About 560 
 are in a given snapshot, but 729 distinct ones appeared across 12 pulls, so buses enter
 and leave the feed as they start and end service.
 
+**Does the feed ever go empty?** Yes, every night. Measured 2026-10-14 and 2026-10-15: for
+about 11 minutes starting near 10:05 UTC (03:05 Pacific) the vehicle-positions feed is a
+valid message with a current header and **zero entities** (a 15-byte file; checked by
+decoding one). Trip updates shrink to a few hundred bytes just before it. The Worker lands
+these files like any other, and the parser produces no rows from them, so bronze has no
+`source_file` for about 35 vehicle files per night. This is a source behavior, not data
+loss. Late-night service is also tiny (files of 2 to 3 KB versus a daytime median near
+35 to 48 KB).
+
 **What the feed does not provide.** In the bronze rows, `speed`, `bearing`,
 `trip_update_ts`, trip-update `vehicle_id`, and `start_time` are empty. Speed must be
 derived from consecutive positions.

@@ -11,6 +11,12 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 | 2026-10-14 | backfill with own checkpoint | 1,515 s | ~1.5 days of files; ~11 min before first table write |
 | 2026-10-14 22:00 | scheduled | 112 s | 30 minutes of new files |
 
+## Ingest run durations (prod, scheduled)
+
+| Period (UTC) | Runs | Duration (s) | Notes |
+|---|---|---|---|
+| 2026-10-14 22:00 to 2026-10-15 19:00 | 43, all SUCCESS | min 112, median 176, max 264 | the first scheduled run was 112 s; runs lengthen as tables grow; watch this |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.
@@ -20,7 +26,11 @@ Query: see "Databricks compute and storage" in `docs/commands.md`. The table lag
 | 2026-10-13 | jobs serverless compute | 0.457 DBU | dev setup and ingest attempts |
 | 2026-10-13 | serverless SQL compute | 2.226 DBU | manual checking queries, not the job |
 | 2026-10-13 | all-purpose serverless | 0.111 DBU | |
-| 2026-10-14 | jobs serverless compute | not yet reported | unverified; recheck 2026-10-15 |
+| 2026-10-14 | jobs serverless compute | 5.806 DBU | prod backfill and the first scheduled runs (from 20:30) |
+| 2026-10-14 | serverless SQL compute | 6.354 DBU | manual queries (checking, profiling); not the pipeline |
+| 2026-10-14 | all-purpose serverless | 0.114 DBU | |
+| 2026-10-15 (to ~19:30) | jobs serverless compute | 12.567 DBU | ~38 scheduled runs, about 0.33 DBU per run. Extrapolated to a full day: about 15 DBU (an estimate; runs are lengthening) |
+| 2026-10-15 (to ~19:30) | serverless SQL compute | 0.785 DBU | manual queries |
 
 Unit and meaning of the storage SKU (`DSU`) is not verified.
 
@@ -29,6 +39,10 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | Date (UTC) | Item | Value |
 |---|---|---|
 | 2026-10-14 | `transit_bronze.trip_updates` | 146 MB, 36.2M rows (DESCRIBE DETAIL) |
+| 2026-10-15 19:30 | `transit_bronze.trip_updates` | 262 MB, 67.1M rows |
+| 2026-10-15 19:30 | `transit_bronze.vehicle_positions` | 31 MB, 3.03M rows |
+| 2026-10-15 19:30 | `transit_bronze.alerts` | 0.27 MB, 44K rows |
+| 2026-10-15 19:30 | raw files landed | 8,004 vehicle, 2,759 trip-update, 552 alert files (incl. 1 smoke each); size in GB not measured |
 | 2026-10-14 | raw files | about 1.8 GB/day (computed from file sizes, not measured on the volume) |
 
 ## Static GTFS workflow runs
