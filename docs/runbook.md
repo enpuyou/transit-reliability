@@ -42,7 +42,8 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | 2026-10-15 19:30 | `transit_bronze.trip_updates` | 262 MB, 67.1M rows |
 | 2026-10-15 19:30 | `transit_bronze.vehicle_positions` | 31 MB, 3.03M rows |
 | 2026-10-15 19:30 | `transit_bronze.alerts` | 0.27 MB, 44K rows |
-| 2026-10-15 19:30 | raw files landed | 8,004 vehicle, 2,759 trip-update, 552 alert files (incl. 1 smoke each); size in GB not measured |
+| 2026-10-15 19:46 | raw files landed | 2.659 GB over about 46 hours of collection: trip updates 2.321 GB (2,774 files), vehicle positions 0.301 GB (8,048), alerts 0.026 GB (555), static GTFS 0.011 GB. About 1.4 GB/day measured, below the 1.8 GB/day estimate because overnight files are small |
+| 2026-10-15 19:30 | bronze tables total | about 0.29 GB |
 | 2026-10-14 | raw files | about 1.8 GB/day (computed from file sizes, not measured on the volume) |
 
 ## Static GTFS workflow runs
