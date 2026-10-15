@@ -59,3 +59,9 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | Credential | Used by | Created | Expires | Notes |
 |---|---|---|---|---|
 | `DATABRICKS_TOKEN` (GitHub secret) | daily GTFS workflow | 2026-10-15 (secret timestamp 19:21 UTC) | unverified: the setup steps said 90 days (about 2027-01-13), but the lifetime you chose was not checked | dedicated token; confirm the real expiry in the Databricks UI and correct this row |
+
+## Worker live tail (wrangler tail)
+
+| Window (UTC) | Runs | Outcome | CPU (ms) | Start delay vs scheduled | Notes |
+|---|---|---|---|---|---|
+| 2026-10-15 19:56 to 20:05 | 9 | 9 ok, 0 exceptions, every upload ok | 9 to 16 (median 11; 16 on the alerts minute) | 3 to 6 s; 19 s at 20:00 | spans the top-of-hour boundary; hour-boundary "gaps" in landed files are late runs, not lost ones |

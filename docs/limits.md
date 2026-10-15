@@ -9,7 +9,7 @@ something starts failing, because free-plan limits change.
 |---|---|---|---|
 | Cloudflare cron triggers | 5 per account | 1 | OK |
 | Cloudflare requests | 100,000 per day | about 1,440 cron runs per day | OK |
-| Cloudflare CPU per cron run | 10 ms | 6 to 10 ms over 11 runs after the 20-second change (was 4 to 5 ms); one run hit 10 ms | AT RISK, see decision 0003 |
+| Cloudflare CPU per cron run | 10 ms | 9 to 16 ms over 9 runs on 2026-10-15 (median 11; 16 on the minute that also fetched alerts); 6 to 10 ms on 2026-10-13. All 9 reported `ok`, no exceptions | AT RISK and over the stated limit without failing; enforcement is not strict per run. See decision 0003 |
 | Cloudflare subrequests | 50 per invocation | about 10 (fetch + upload per source, vehicle positions 3x) | OK |
 | Cloudflare memory | 128 MB | largest body is 1.2 MB | OK |
 | Cloudflare log events | 200,000 per day, 3 day retention | about 10,000 per day | OK |
@@ -32,7 +32,7 @@ something starts failing, because free-plan limits change.
   day (1.2 MB trip updates per minute plus 54 KB vehicle positions), roughly 54 GB per
   month, before bronze Delta tables. Do not assume this fits. Retention below is the
   mitigation.
-- **Cloudflare CPU is the tightest verified limit.** Measured 6 to 10 ms per run against a
+- **Cloudflare CPU is the tightest verified limit.** Measured 6 to 10 ms per run on 2026-10-13 and 9 to 16 ms on 2026-10-15 (9 runs, all `ok`), against a
   10 ms limit since vehicle positions moved to three fetches per run (4 to 5 ms before). A slower upload day or larger feed could exceed it. Runs at 10 to 13 ms
   were still reported `ok`, so enforcement is not strict per run, but a run that is
   terminated would lose that minute. The paid plan is not an option (project decision).

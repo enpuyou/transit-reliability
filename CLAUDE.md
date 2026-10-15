@@ -77,7 +77,7 @@ Run all of these before committing; CI runs the same.
   (collector files have numeric epoch names).
 - Each pull is a snapshot of one instant. Collection began 2026-10-13 about 21:43 UTC;
   there is no backfill.
-- Cloudflare free plan allows 10 ms CPU per cron run; we use 6 to 10 ms (at risk, decision
+- Cloudflare free plan allows 10 ms CPU per cron run; we use 9 to 16 ms and runs still report ok (at risk, decision
   0003). Check it (see `docs/commands.md`) after any change to the Worker.
 - Never move sources to a new Worker without first confirming the new cron fires. A new
   Worker's cron did not fire on 2026-10-13 and caused a gap.
