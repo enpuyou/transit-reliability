@@ -31,8 +31,16 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | 2026-10-14 | `transit_bronze.trip_updates` | 146 MB, 36.2M rows (DESCRIBE DETAIL) |
 | 2026-10-14 | raw files | about 1.8 GB/day (computed from file sizes, not measured on the volume) |
 
+## Static GTFS workflow runs
+
+| Date (UTC) | Result | Notes |
+|---|---|---|
+| 2026-10-15 | first run failed at upload | `fs cp` does not create the dated folder; fixed with `fs mkdir` |
+| 2026-10-15 | success, uploaded | 10,862,777 bytes, SHA-256 `d04d6b52...ad74e`, identical to the locally profiled copy |
+| 2026-10-15 | success, skipped | second run correctly logged "Feed unchanged" |
+
 ## Credentials and expiry
 
 | Credential | Used by | Created | Expires | Notes |
 |---|---|---|---|---|
-| `DATABRICKS_TOKEN` (GitHub secret) | daily GTFS workflow | not created yet | 90 days after creation | dedicated token; record the date here when created |
+| `DATABRICKS_TOKEN` (GitHub secret) | daily GTFS workflow | 2026-10-15 (secret timestamp 19:21 UTC) | unverified: the setup steps said 90 days (about 2027-01-13), but the lifetime you chose was not checked | dedicated token; confirm the real expiry in the Databricks UI and correct this row |

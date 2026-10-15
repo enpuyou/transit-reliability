@@ -308,6 +308,8 @@ the first line naming the exception. If it is a streaming failure, the useful li
 | optional ints become `NaN` floats | pandas default for missing ints | nullable `Int64` |
 | `Connection reset` from the Python worker on trip updates | first batch tried to parse the entire backlog in memory | `maxFilesPerTrigger` + yield one frame per file |
 | prod run `SUCCESS` but nearly empty tables, `alerts` table missing | prod and dev shared a checkpoint | per-prefix checkpoint path; drop tables; backfill |
+| GitHub workflow failed at upload: `no such directory` | `databricks fs cp` does not create missing folders | run `databricks fs mkdir` first (it creates parents and is idempotent) |
+| expired token reported as "file does not exist" | `fs cp` of a missing file hides the auth error | check access with `fs ls` on a folder that always exists before relying on `fs cp` |
 | first run took ~25 min with a long silent start | big backlog plus serverless startup/listing *(cause of the ~11 min delay not isolated)* | expect slow first run after a gap; measure before scheduling |
 
 ### Lessons that generalize

@@ -19,7 +19,9 @@ concurrency:
 
 jobs:
   fetch:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to a new image on 2026-10-19, and this job relies on
+    # unzip and GNU stat. Move the pin deliberately and re-run the workflow to confirm.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
