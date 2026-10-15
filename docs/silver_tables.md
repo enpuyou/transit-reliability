@@ -131,6 +131,17 @@ Sample question you can already answer: *"For route 100001 on 2026-10-14, how ma
 trips were running each hour?"* is one `GROUP BY` on `vehicle_positions`, with no filtering
 for duplicates or placeholder rows.
 
+## 3b. Data limits that shape which questions we can answer (measured 2026-10-15)
+
+| Limit | Evidence | Consequence |
+|---|---|---|
+| **A bus often enters the feed after its trip has started** (left-censoring) | Of 5,513 trips scheduled 01:00 to 12:30 PT on 2026-10-14 (dev silver): first fix before the scheduled departure for 2,682 (49%), after it for 2,622 (48%), never seen for 209 (4%) | On-time **departure** can be measured directly for about half of trips; for the rest we can only bound it or use the delay at the first stop we did observe. Trips we can see early may differ from those we cannot (selection bias). |
+| **`current_stop_sequence` is not literal** | Trip 562518701 is scheduled to start at stop 2010 (sequence 1) at 07:40:00; the bus was reported stopped at sequence 2 (stop 2020) from 07:24 | Infer arrivals and departures from position along the route shape plus status, not from the sequence field alone. |
+| **Sampling** | vehicle fixes about every 20 s of our time, trip updates about every 60 s | Observed times are intervals (the bracketing fixes), not exact instants; label the method and the width. |
+| **Short history** | collection began 2026-10-13 21:43 UTC | Day-of-week, seasonal, and model-training questions need weeks, not days. |
+| **Pre-operation predictions are the schedule** | 55% of (trip, snapshot) pairs on route 100001 on 2026-10-14 had every delay equal to zero | Prediction accuracy must be scored only after the bus is observed on the trip. |
+| **Trips announced vs seen** | 2026-10-14: 12,939 scheduled, 12,661 in trip updates, 12,552 with a bus fix; 109 announced but never seen; 278 scheduled but never announced | A candidate "service delivered" measure (about 97 percent had a fix), not yet a finding: the nightly empty feed window and quarantined rows are unexplained contributors. |
+
 ## 4. Design rules that apply to every silver table
 
 1. **State the grain in one sentence** ("one row is a distinct fix of one bus"). If you
