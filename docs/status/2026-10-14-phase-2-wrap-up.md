@@ -48,6 +48,28 @@ reported `ok` (single sample, unverified as typical).
   unused duplicate of `setup_schemas`; `ops.job_runs` from the design doc is not built.
 - Commits are local; nothing pushed.
 
+## Deferred to the next deploy pass (do these together, after Phase 3 or 4 work)
+
+Not urgent; batched so prod is deployed and tested once. Nothing here changes data we need.
+
+1. **Deploy the trimmed bundle sync to prod.** Already verified in dev (39 files removed, setup
+   job `SUCCESS`). Run `bundle validate -t prod` first, then `bundle deploy -t prod`, then
+   confirm the next scheduled prod ingest is `SUCCESS` and bronze file counts still match
+   what landed.
+2. **Drop the stale dev bronze tables:** `workspace.dev_transit_bronze.vehicle_positions`,
+   `.trip_updates`, `.alerts`. They stopped at 2026-10-14 20:30 and are missing 13 files.
+   Do not run the dev ingest job before dropping them: its checkpoint is new, so it would
+   re-read every landed file into these tables and create duplicates.
+3. **Delete the orphaned old checkpoints** under
+   `/Volumes/workspace/transit_ops/state/checkpoints/`: `bronze_alerts`,
+   `bronze_trip_updates`, `bronze_vehicle_positions` (the pre-fix shared names). Nothing
+   uses them now: prod uses `transit_bronze_<source>`, dev would use
+   `dev_transit_bronze_<source>`. List the folder first and confirm only those three
+   remain beside the prefixed ones.
+4. Remove the unused `sql/setup.sql` (duplicate of `setup_schemas`).
+
+Destructive steps (2 and 3) need a listing of exactly what will go before running them.
+
 ## Next: Phase 3 (static GTFS and silver)
 
 1. Daily GTFS zip download and versioned load of schedule tables, including service-date
