@@ -582,7 +582,12 @@ A run killed for exceeding the 10 ms CPU limit, a failed deploy, or any outage l
 hole in the landed files. This checks the files themselves, so it works for any cause and
 needs no Cloudflare analytics. It lists every gap over 90 s in trip updates and over 50 s
 in vehicle positions (a deliberately skipped duplicate feed version leaves a ~40 s gap, so
-smaller gaps are normal), and estimates how many runs or fetches were lost.
+smaller gaps are normal). For trip updates it then separates **lost** runs (minutes with no
+file at all) from **delayed** runs (a gap of 90 to 100 s where every minute still has a
+file). Cloudflare fires the cron up to about 40 s late at many hour and half-hour
+boundaries, so a delayed run is normal and loses nothing; only empty minutes are lost data.
+Vehicle-position gaps at those same boundaries are 50 to 70 s of missed sampling, not a
+failed upload.
 
 ```bash
 uv run python scripts/collection_health.py                 # today (UTC)
@@ -599,7 +604,8 @@ grep -c '"outcome": "ok"' /tmp/tail.json; grep '"outcome"' /tmp/tail.json | grep
 ```
 
 Known gaps: 2026-10-13 23:30 to 23:32 UTC (3 trip-update runs lost during a rolled-back
-split-Worker attempt). A Worker deploy during a run's 40 s wait also cancels that run, so
+split-Worker attempt); 2026-10-14 02:45 to 02:51 and 2026-10-15 17:01 to 17:06 UTC (about 5
+minutes each, whole Worker; cause not found); 2026-10-14 08:00 and 14:00 UTC (1 minute each). A Worker deploy during a run's 40 s wait also cancels that run, so
 expect a single short gap at each deploy.
 
 ### Roll back or stop collection

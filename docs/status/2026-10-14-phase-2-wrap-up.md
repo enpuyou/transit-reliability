@@ -43,7 +43,9 @@ reported `ok` (single sample, unverified as typical).
 
 - Verify the 24-hour exit criterion on 2026-10-15 and record DBU in `docs/runbook.md`.
 - Explain the ~11 minute delay before the first table write in the backfill run.
-- Longer `wrangler tail` CPU sample; investigate the 02:45 outage.
+- Longer `wrangler tail` CPU sample; investigate the two ~5 minute whole-Worker outages
+  (2026-10-14 02:45 UTC and 2026-10-15 17:01 UTC). The earlier hour-boundary "gaps" are
+  delayed cron runs, not lost data (script corrected 2026-10-15).
 - Dev tables are stale; drop `dev_transit_*` when no longer needed. `sql/setup.sql` is an
   unused duplicate of `setup_schemas`; `ops.job_runs` from the design doc is not built.
 - Commits are local; nothing pushed.

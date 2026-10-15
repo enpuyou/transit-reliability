@@ -11,6 +11,11 @@ Cloudflare analytics:
 A gap in trip updates with vehicle positions still arriving means the run partly worked
 (for example the trip fetch failed); a gap in both means the whole run was lost.
 
+A long gap is not always a lost run. Cloudflare fires the cron up to about 40 s late at some
+hour and half-hour boundaries, which leaves a 90 to 100 s gap although every minute still has
+exactly one file. So trip-update gaps are classified by empty minutes: a gap with no empty
+minute is a *delayed* run (nothing lost); empty minutes are *lost* runs.
+
 Usage: uv run python scripts/collection_health.py [YYYY-MM-DD ...]   (default: today, UTC)
 Needs the Databricks CLI profile `enpu`.
 """
@@ -47,6 +52,13 @@ def _gaps(times: list[float], limit: int, since: float) -> list[tuple[float, flo
     return [(a, b) for a, b in zip(times, times[1:], strict=False) if a >= since and b - a > limit]
 
 
+def _empty_minutes(times: list[float], a: float, b: float) -> int:
+    """Whole minutes strictly between two files that contain no file at all."""
+
+    present = {int(t // 60) for t in times if a <= t <= b}
+    return sum(1 for minute in range(int(a // 60) + 1, int(b // 60)) if minute not in present)
+
+
 def report(day: str) -> None:
     trips = _epochs("trip_updates", day)
     vehicles = _epochs("vehicle_positions", day)
@@ -55,14 +67,17 @@ def report(day: str) -> None:
     vehicle_gaps = _gaps(vehicles, VEHICLE_GAP_SECONDS, since3)
     print(f"== {day} UTC")
     print(f"trip_updates files: {len(trips)}, vehicle_positions files: {len(vehicles)}")
-    missed_runs = sum(round((b - a) / 60) - 1 for a, b in trip_gaps)
     missed_fetches = sum(round((b - a) / 20) - 1 for a, b in vehicle_gaps)
+    lost = {(a, b): _empty_minutes(trips, a, b) for a, b in trip_gaps}
+    lost_runs = sum(lost.values())
+    delayed = sum(1 for n in lost.values() if n == 0)
     print(
         f"trip-update gaps over {TRIP_GAP_SECONDS}s: {len(trip_gaps)} "
-        f"(about {missed_runs} runs lost)"
+        f"({lost_runs} runs lost, {delayed} gaps were only delayed runs)"
     )
-    for a, b in trip_gaps:
-        print(f"  {_clock(a)} -> {_clock(b)}  ({round(b - a)} s)")
+    for (a, b), n in lost.items():
+        verdict = f"{n} minute(s) with no file" if n else "delayed run, nothing lost"
+        print(f"  {_clock(a)} -> {_clock(b)}  ({round(b - a)} s)  {verdict}")
     print(
         f"vehicle gaps over {VEHICLE_GAP_SECONDS}s: {len(vehicle_gaps)} "
         f"(about {missed_fetches} fetches lost)"
