@@ -301,6 +301,17 @@ with King County Metro's GTFS data".
 - Stop-level `SKIPPED`: 1.35 percent of 2026-10-14 trip-update rows.
 - `trip_update_ts` and `vehicle_id` on trip updates: present when a bus is assigned.
 
+**Field semantics, measured (2026-10-16): `current_stop_sequence` and `stop_id` in vehicle positions
+are the NEXT stop to be served, also when `current_status` is STOPPED_AT.** 99.3 percent of
+STOPPED_AT fixes sit at the stop before the one named; a bus waiting at the trip's first stop
+reports the second. Do not read them as "the stop the bus is at". The pointer advancing past stop
+k lands a median 4 seconds after the bus reaches k (geometric estimate), so it is a good signal for
+"k has been passed". `shape_dist_traveled` in GTFS is in feet for this feed.
+
+**Source degradation seen:** 2026-10-14 17:03 to 17:30 UTC the vehicle feed reported about 25
+vehicles instead of about 600 (landed file sizes fell from about 52 KB to 27 KB). Every file was
+collected; the source was thin.
+
 **Cancellations, measured in prod silver (2026-10-16):** distinct canceled trips per service
 date were 13 on 2026-10-13 (collection began mid-afternoon), 46 on 2026-10-14 (about 0.36
 percent of 12,939 scheduled trips) and 40 on 2026-10-15 (to about midnight UTC); 99 in total.

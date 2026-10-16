@@ -352,6 +352,17 @@ for 4K earlier). That is consistent with listing time growing with file count; i
 hang. Raw volume small-file counts (about 12K files a day here) are therefore a real cost of
 a rebuild, and a reason to keep the checkpoint when you can.
 
+### Check what a field means before building on it
+
+For stop arrivals the plan was to read `STOPPED_AT` plus `stop_id` as "the bus is at this stop". The
+first real-data run showed estimates out of order and a 90-second disagreement with the geometry.
+Looking at one trip fix by fix showed a bus sitting at the first stop for 25 minutes while its
+`stop_id` named the *second*. The field is the next stop. Habits that caught it: (1) compare two
+independent signals (position geometry against the feed's own stop pointer), (2) when they
+disagree, print raw records for one trip before changing code, (3) measure rather than assume
+(a unit check showed distances are in feet; 99.3 percent of stopped fixes sit at the previous
+stop). A field name is a hypothesis about meaning; the data is the test.
+
 ### Lessons that generalize
 
 - **Look at the data, not the status.** Two of the bugs reported success.

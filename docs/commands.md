@@ -479,6 +479,31 @@ databricks bundle run silver_job -t prod --only trip_updates     # about 19 minu
 
 Verify against independent SQL that applies the same rules before unpausing.
 
+Stop visits (decision 0011). The task `stop_visits` runs after vehicle positions and the stop-level
+schedule; the last two service dates are rebuilt each run, older ones once:
+
+```bash
+databricks bundle run silver_job -t prod --only stop_visits      # about 5 minutes for 3 dates
+```
+```sql
+-- one row per scheduled stop: these two counts must be equal for each service date
+SELECT service_date, count(*) FROM workspace.transit_silver.stop_visits GROUP BY 1 ORDER BY 1;
+SELECT service_date, count(*) FROM workspace.transit_silver.scheduled_stop_times GROUP BY 1 ORDER BY 1;
+-- method split (coverage)
+SELECT arr_method, count(*), round(100 * count(*) / sum(count(*)) OVER (), 1)
+FROM workspace.transit_silver.stop_visits WHERE service_date = DATE'2026-10-14' GROUP BY 1 ORDER BY 2 DESC;
+-- invariants (all three must be 0)
+WITH v AS (SELECT *, lag(arr_est) OVER (PARTITION BY trip_id ORDER BY stop_sequence) AS prev_arr
+           FROM workspace.transit_silver.stop_visits WHERE service_date = DATE'2026-10-14')
+SELECT sum(CASE WHEN arr_est < arr_lo OR arr_est > arr_hi THEN 1 ELSE 0 END),
+       sum(CASE WHEN dep_est < arr_est THEN 1 ELSE 0 END),
+       sum(CASE WHEN arr_est < prev_arr THEN 1 ELSE 0 END) FROM v;
+-- one trip's visits
+SELECT stop_sequence, stop_id, sched_arr, arr_est, arr_lo, arr_hi, arr_method, arr_delay_s, dep_est
+FROM workspace.transit_silver.stop_visits WHERE service_date = DATE'2026-10-14' AND trip_id = '562518701'
+ORDER BY stop_sequence;
+```
+
 To rebuild silver vehicle positions from bronze, pause the job, drop `vehicle_positions` and
 `quarantine_vehicle_positions` in that schema together (the watermark comes from them), and
 rerun. Rebuild a feed or date: the loader deletes and re-inserts by `feed_version` (tables) or

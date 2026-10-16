@@ -59,6 +59,17 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: stop_visits
+          depends_on:
+            - task_key: vehicle_positions
+            - task_key: expand_schedule
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_silver_stop_visits
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
       environments:
         - environment_key: default
           spec:

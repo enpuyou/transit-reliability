@@ -107,3 +107,15 @@ def build_silver_trip_updates() -> None:
     from transit_reliability.gtfs_static.silver_trip_updates import build_trip_update_snapshots
 
     build_trip_update_snapshots(_spark_session(), args.schema_prefix, until_ts=args.until_ts)
+
+
+def build_silver_stop_visits() -> None:
+    """Infer when each bus reached and left each scheduled stop, per service date."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.silver_stop_visits import build_stop_visits
+
+    build_stop_visits(_spark_session(), args.schema_prefix)

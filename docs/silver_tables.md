@@ -138,6 +138,29 @@ make joins and scans cheaper, but **not the table smaller in bytes**: it is 348 
 313 MB for bronze, because Parquet's columnar compression already absorbs repeated values
 and silver adds timestamp columns. Do not count on this step to save storage.
 
+### `stop_visits` (built) — when each bus reached and left each stop
+
+**One row =** one *scheduled* stop of one trip on one service date (about 449K a weekday),
+whether or not a bus was seen. Columns: `sched_arr`, `sched_dep`; `arr_est`, `arr_lo`, `arr_hi`,
+`arr_method` and the same for departure; `arr_delay_s`, `dep_delay_s` (estimate minus schedule,
+early is negative); evidence `advance_ts`, `dwell_first`, `dwell_last`; `n_fixes`.
+
+**Why every scheduled stop, and why intervals:** a stop nobody observed is still a fact (the
+planner cares whether service ran), so it keeps a row with a method saying why there is no time
+(`no_fixes`, `not_reached`, `before_first_fix`). And a time we infer from fixes 20 seconds apart is
+not an instant, so each estimate carries the interval between the fixes that bracket it.
+
+**How it is inferred, in one paragraph:** each GPS fix is placed on the route as a distance along
+it; the arrival is when that distance passes the stop point (interpolated between two fixes) and
+the departure when it passes 60 ft beyond. The feed's own "next stop" field and its stopped
+reports are used as supporting evidence, not as the answer. Details: decision 0011.
+
+**Full-day coverage (prod, 2026-10-14):** 86.0 percent of scheduled stop visits have an arrival
+estimate; 8.6 percent were never reached in the data (mostly trip ends), 4.0 percent were passed
+before the bus was first seen, 1.4 percent are trips with no fixes.
+
+**Not yet validated against ground truth.** The ride test (`docs/ride_test.md`) decides that.
+
 ### `alert_versions` (still to build)
 
 One row per version of an alert (alerts repeat every pull). The enhanced alert feed carries

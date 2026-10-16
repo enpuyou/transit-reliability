@@ -77,6 +77,9 @@ Run all of these before committing; CI runs the same.
   (`workspace.transit_ops.state/checkpoints/<schema_prefix>_bronze_<source>`) together.
 - `*-smoke.pb` files in the landing volume are manual tests, not collector output
   (collector files have numeric epoch names).
+- In vehicle positions, `current_stop_sequence` and `stop_id` are the NEXT stop to be served, even
+  with status STOPPED_AT. `shape_dist_traveled` is in feet. Check field semantics against the data
+  before building on a field (decision 0011).
 - Each pull is a snapshot of one instant. Collection began 2026-10-13 about 21:43 UTC;
   there is no backfill.
 - Cloudflare free plan allows 10 ms CPU per cron run; we use 9 to 16 ms and runs still report ok (at risk, decision

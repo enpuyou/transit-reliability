@@ -32,6 +32,9 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 | 2026-10-15 23:35 | prod silver_job, first run (5 tasks) | 358 s | trip_updates 355 s for 76M bronze rows; load_feeds 98 s |
 | 2026-10-16 00:17 | prod trip-update snapshots rebuilt (silence rule) | 1,116 s | |
 
+| 2026-10-16 01:36 | dev stop_visits, 2 service dates | about 4 min | 449K rows each; output equals the pure code on all 6,896 stop visits of 200 trips |
+| 2026-10-16 01:41 | prod stop_visits, 3 service dates | 319 s | |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.
