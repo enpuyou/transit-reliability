@@ -37,10 +37,15 @@ why, and what to change. The evidence supports the first and the benchmark part 
    - Low (do not headline): causal "why"; rider-weighted impact without real ridership;
      any claim that KCM would change service.
 3. **Gates** (a gate that fails changes the plan; it does not get argued away):
-   - **G1, arrival validation (end of Phase 5):** a ride test of 5 or more stops. Median
-     absolute error under 60 s and coverage above 85 percent of scheduled stop visits for
-     the routes we report. If it fails: report coverage and prediction metrics only; drop
-     retiming recommendations.
+   - **G1, arrival validation (end of Phase 5):** originally a ride test of 5 or more stops
+     (median absolute error under 60 s, coverage above 85 percent of scheduled stop visits).
+     **Revised 2026-10-16 at the owner's request: the ride test is optional, not required.**
+     Instead the error budget is measured from the data (sampling interval width; sensitivity of
+     the arrival rule; where dwelling buses sit relative to the stop point; see decision 0011) and
+     the claim is limited accordingly: times are *estimates from GPS with an interval*, never
+     presented as ground truth. Coverage stays a reported number. A ride test would remove the one
+     unmeasurable term (GPS clock offset, door opening versus reaching the stop point) and remains
+     welcome. If an independent source of true times appears, use it.
    - **G2, ridership spike (before Phase 6):** confirm a ridership source exists with route or
      stop granularity and a usable license. If not, drop rider-minutes lost as the headline
      and use delay and trips affected.

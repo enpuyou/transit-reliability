@@ -56,7 +56,8 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
   outages (2026-10-14 02:45 and 2026-10-15 17:01 UTC): check the Cloudflare dashboard logs for
   `exceededCpu`.
 - Token for the GTFS workflow: confirm its real expiry (`docs/runbook.md`).
-- Gates from decision 0008: G3 partly done (terms read); G1 (arrival ride test) is next.
+- Gates from decision 0008: G3 partly done (terms read). G1 revised: the ride test is optional; accuracy
+  is bounded by an error budget measured from data (decision 0011).
 
 ## Next
 

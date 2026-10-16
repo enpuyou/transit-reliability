@@ -1,4 +1,9 @@
-# Ride test: validating inferred stop times (gate G1)
+# Ride test (optional): validating inferred stop times
+
+> **Status 2026-10-16: optional.** The owner chose not to do this. Accuracy is instead bounded by an
+> error budget measured from the data (decision 0011). This protocol is kept in case someone wants
+> the one measurement the data cannot give: a clock offset in the vehicle units and the gap between
+> reaching the stop point and the doors opening.
 
 The inferred arrival and departure times in `stop_visits` are consistent with two other signals
 (the feed's stop pointer and when Metro drops a stop's prediction), but that is not accuracy. The

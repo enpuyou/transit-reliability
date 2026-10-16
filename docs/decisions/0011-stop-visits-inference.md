@@ -1,7 +1,7 @@
 # 0011: Infer stop arrivals and departures from route geometry; use the feed's stop pointer as evidence
 
 Date: 2026-10-16
-Status: accepted for building; accuracy is NOT yet validated against ground truth (gate G1)
+Status: accepted; accuracy bounded by an error budget measured from the data, not validated against ground truth (ride test waived by the owner, see below)
 
 ## Context
 
@@ -65,15 +65,32 @@ from about 52 KB to 27 KB. Coverage for that Pacific hour was 58.8 percent again
 percent elsewhere. Not a pipeline defect, and a good case for a feed-health check against the
 schedule.
 
+## Error budget without ground truth (2026-10-16)
+
+The owner chose not to do the ride test, so the error is bounded from the data instead.
+- Sampling: the true time lies between the two bracketing fixes; interval width median 24 s,
+  p90 45 s. The midpoint is typically within about 12 s.
+- Sensitivity of the arrival rule (200 trips, 5,350 arrivals): changing the "arrived" distance
+  from 40 ft to 0 / 20 / 80 / 150 / 300 ft moves arrival times by a median of 1.8 / 0.9 / 1.7 /
+  4.7 / 11.2 s (90th percentile 15 / 3.7 / 6.2 / 17 / 35 s).
+- Stop positions: for 4,560 reports of a bus dwelling at a stop, its position relative to that
+  stop point has median 0 ft (25th to 75th percentile -24 to 0 ft; 85 percent within 60 ft short to
+  100 ft past), so the stop locations and the 40 ft rule are consistent with where buses stop.
+- GPS position error (about 30 ft, roughly 1 s) is small against the interval.
+- Not measurable from data: a clock offset in the vehicle units, and the gap between reaching the
+  stop point and the doors opening.
+Stated claim: *estimated from GPS, typically within about 15 seconds, always with an interval.*
+This replaces "validated by a ride test"; the gap is documented, not hidden.
+
 ## Consequences and open items
 
-- Gate G1 is open. The ride test (`docs/ride_test.md`) is the validation; until it is done these
-  times must not be presented as accurate, only as consistent with two other signals.
+- Gate G1 is revised (decision 0008): no ride test required. These times are presented as
+  estimates with intervals and the error budget above, never as ground truth.
 - Preliminary figures exist (timepoint arrivals median 107 s late, 69 percent within the
   -1/+5 minute window; first-stop departures median 60 s late, 85 percent within the window) and
   carry selection bias (74 percent measurable) and the caveats above. They are sanity checks that
   the results are believable, not findings.
-- The arrival threshold (40 ft short of the stop point) and tolerances are tunable constants;
-  they should be tuned against the ride test, not by eye.
+- The arrival threshold (40 ft short of the stop point) and tolerances are tunable constants; the
+  sensitivity table shows they matter little, and dwell positions support the 40 ft choice.
 - Not handled: a vehicle swap mid-trip (all fixes of a trip are pooled), routes with
   genuinely overlapping shapes beyond the out-and-back handling, and departures at trip ends.

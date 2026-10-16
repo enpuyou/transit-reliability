@@ -159,7 +159,9 @@ reports are used as supporting evidence, not as the answer. Details: decision 00
 estimate; 8.6 percent were never reached in the data (mostly trip ends), 4.0 percent were passed
 before the bus was first seen, 1.4 percent are trips with no fixes.
 
-**Not yet validated against ground truth.** The ride test (`docs/ride_test.md`) decides that.
+**Accuracy:** estimated from GPS, typically within about 15 seconds, always with an interval; not validated
+against ground truth. The error budget is in decision 0011 (interval width, sensitivity of the arrival rule,
+where dwelling buses sit relative to the stop).
 
 ### `alert_versions` (still to build)
 
