@@ -504,6 +504,22 @@ FROM workspace.transit_silver.stop_visits WHERE service_date = DATE'2026-10-14' 
 ORDER BY stop_sequence;
 ```
 
+Trip performance, the per-trip reliability table (decisions 0011 and 0012; reference: `docs/gold_tables.md`):
+
+```bash
+databricks bundle run silver_job -t prod --only trip_performance     # about 1 minute for 3 dates
+```
+```sql
+-- one row per trip: compare with scheduled trips (counts must match per date)
+SELECT service_date, count(*) FROM workspace.transit_gold.trip_performance GROUP BY 1 ORDER BY 1;
+SELECT service_date, count(*) FROM workspace.transit_silver.scheduled_trips GROUP BY 1 ORDER BY 1;
+-- the four categories add up to the timepoints that have an interval (difference must be 0 for every lens)
+SELECT sum(n_common_early + n_common_on_time + n_common_late + n_common_uncertain) AS categorized
+FROM workspace.transit_gold.trip_performance WHERE service_date = DATE'2026-10-14';
+-- trip status
+SELECT service_date, trip_status, count(*) FROM workspace.transit_gold.trip_performance GROUP BY 1, 2 ORDER BY 1, 3 DESC;
+```
+
 To rebuild silver vehicle positions from bronze, pause the job, drop `vehicle_positions` and
 `quarantine_vehicle_positions` in that schema together (the watermark comes from them), and
 rerun. Rebuild a feed or date: the loader deletes and re-inserts by `feed_version` (tables) or

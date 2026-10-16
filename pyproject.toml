@@ -22,6 +22,7 @@ build_silver_vehicle_positions = "transit_reliability.entrypoints.jobs:build_sil
 expand_trips = "transit_reliability.entrypoints.jobs:expand_trips"
 build_silver_trip_updates = "transit_reliability.entrypoints.jobs:build_silver_trip_updates"
 build_silver_stop_visits = "transit_reliability.entrypoints.jobs:build_silver_stop_visits"
+build_gold_trip_performance = "transit_reliability.entrypoints.jobs:build_gold_trip_performance"
 
 [dependency-groups]
 dev = [

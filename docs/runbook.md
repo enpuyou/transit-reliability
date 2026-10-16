@@ -35,6 +35,8 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 | 2026-10-16 01:36 | dev stop_visits, 2 service dates | about 4 min | 449K rows each; output equals the pure code on all 6,896 stop visits of 200 trips |
 | 2026-10-16 01:41 | prod stop_visits, 3 service dates | 319 s | |
 
+| 2026-10-16 | prod trip_performance, 3 service dates | 57 s | 294-trip sandbox build took 41 s; output equals a Python reference on 6,174 values |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.

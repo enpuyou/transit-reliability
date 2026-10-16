@@ -119,3 +119,15 @@ def build_silver_stop_visits() -> None:
     from transit_reliability.gtfs_static.silver_stop_visits import build_stop_visits
 
     build_stop_visits(_spark_session(), args.schema_prefix)
+
+
+def build_gold_trip_performance() -> None:
+    """Summarize each trip's punctuality from silver stop visits."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_trip_performance import build_trip_performance
+
+    build_trip_performance(_spark_session(), args.schema_prefix)

@@ -59,6 +59,14 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
 - Gates from decision 0008: G3 partly done (terms read). G1 revised: the ride test is optional; accuracy
   is bounded by an error budget measured from data (decision 0011).
 
+## Added after this note was first written (2026-10-16)
+
+- `stop_visits` (silver) and `trip_performance` (gold) are in prod; see decisions 0011 and 0012 and
+  `docs/gold_tables.md`. Accuracy of stop times is bounded by an error budget measured from data
+  (the ride test was waived). On-time is judged under three lenses with intervals; the owner chooses
+  which to headline.
+- Open question for the owner: which lens (strict / common / metro_like) to headline.
+
 ## Next
 
 1. Stop visits: join observed positions to the schedule and infer arrival times as intervals
