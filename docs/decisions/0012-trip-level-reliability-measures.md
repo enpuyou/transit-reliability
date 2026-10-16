@@ -24,8 +24,8 @@ more than the timetable.
   summaries are computed from these rows when needed, so the trip-level view is the base.
 - **Several lenses, side by side** (`reliability/lenses.py`), not one hard-coded window:
   `strict` (-60 s to +180 s), `common` (-60 s to +300 s), `metro_like` (-90 s to +330 s, marked
-  unverified). Adding or tuning a lens is a one-line change. Which lens to headline is left to the
-  owner.
+  unverified). Adding or tuning a lens is a one-line change. **Headline lens: `common`**, chosen by
+  the owner on 2026-10-16 (`HEADLINE_LENS` in `lenses.py`); the others are shown alongside.
 - **Intervals, not points.** Each timepoint arrival has an interval [lo, hi] relative to the
   schedule. It counts as `on_time` only if the whole interval is inside the window, `early` or
   `late` only if the whole interval is outside on that side, and otherwise `uncertain`. The four

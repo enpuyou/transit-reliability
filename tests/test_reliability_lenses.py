@@ -36,6 +36,13 @@ def test_a_stricter_lens_calls_the_same_visit_late() -> None:
     assert classify(200.0, 220.0, strict) == "late"
 
 
+def test_the_headline_lens_is_the_common_window() -> None:
+    from transit_reliability.reliability.lenses import headline
+
+    lens = headline()
+    assert (lens.name, lens.early_s, lens.late_s) == ("common", -60.0, 300.0)
+
+
 def test_lenses_are_ordered_from_strict_to_lenient_and_named_uniquely() -> None:
     names = [lens.name for lens in LENSES]
     assert len(names) == len(set(names))

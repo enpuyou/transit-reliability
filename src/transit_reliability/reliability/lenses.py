@@ -27,6 +27,16 @@ LENSES: tuple[Lens, ...] = (
 )
 
 
+# The lens used for headline figures. The others stay available for comparison. Chosen by the owner
+# on 2026-10-16: the widely used 1 minute early to 5 minutes late window, which also makes figures
+# comparable with other agencies. Tighter and looser windows are shown alongside, never instead.
+HEADLINE_LENS = "common"
+
+
+def headline() -> Lens:
+    return next(lens for lens in LENSES if lens.name == HEADLINE_LENS)
+
+
 def classify(delay_lo: float | None, delay_hi: float | None, lens: Lens) -> str | None:
     """early, on_time, late, or uncertain for a delay known to lie in [delay_lo, delay_hi]."""
 

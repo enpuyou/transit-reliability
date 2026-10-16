@@ -20,6 +20,9 @@ Design and verification: decision 0012.
 | Early departures | `n_tp_departures_measured`, `n_tp_left_early` | timepoints where the bus definitely left more than 1 minute early |
 | Lenses | `n_<lens>_early`, `_on_time`, `_late`, `_uncertain` for `strict`, `common`, `metro_like` | timepoint arrivals by category; the four add up to the timepoints that have an interval |
 
+**Headline lens: `common`** (1 minute early to 5 minutes late), chosen 2026-10-16; `strict` and
+`metro_like` are shown alongside, never instead.
+
 **Reading it.** Delays are estimates from GPS (typically within about 15 s). A timepoint is counted
 on time only if its whole interval fits the window, so the `uncertain` count is the honest slice we
 cannot call. An on-time share is best given as a range: `on_time / total` to `(on_time + uncertain) /

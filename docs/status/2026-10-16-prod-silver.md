@@ -65,7 +65,7 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
   `docs/gold_tables.md`. Accuracy of stop times is bounded by an error budget measured from data
   (the ride test was waived). On-time is judged under three lenses with intervals; the owner chooses
   which to headline.
-- Open question for the owner: which lens (strict / common / metro_like) to headline.
+- Headline lens chosen by the owner: `common` (1 minute early to 5 minutes late).
 
 ## Next
 
