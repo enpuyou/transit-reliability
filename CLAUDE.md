@@ -61,8 +61,8 @@ Run all of these before committing; CI runs the same.
 - Never filter or dedupe in the collector or bronze. The feeds are not recoverable;
   reduce volume in silver (decision 0002).
 - Never deploy the `prod` bundle target casually: it is unpaused and spends compute
-  immediately. Prod ingest has run every 30 min since 2026-10-14; dev
-  ingest is paused (its tables are stale).
+  immediately. Prod ingest runs every 30 min and the prod silver job daily at
+  11:45 UTC (since 2026-10-16); dev jobs are paused and its tables are stale.
 - Never commit `.env`, print token values, or put secrets in docs or `wrangler.toml`.
 - Never query the Databricks warehouse from a public/serving path.
 

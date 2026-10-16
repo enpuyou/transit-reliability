@@ -27,6 +27,11 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 
 | 2026-10-15 | silver_job, 5 tasks, first full run | 204 s | trip_updates 200 s for 34M bronze rows (8 three-hour chunks); expand_trips 52 s; vehicle_positions 44 s; load_feeds 32 s; expand_schedule 28 s |
 
+| 2026-10-15 22:43 | prod bronze rebuild from raw (3 sources, ~3 days of files) | 2,903 s (48 min) | first table appeared after about 25 minutes; vehicle positions (8.5K files) finished about 31 min in, trip updates (3K files) about 9 min later |
+| 2026-10-15 23:32 | prod catch-up ingest after the rebuild | 96 s | |
+| 2026-10-15 23:35 | prod silver_job, first run (5 tasks) | 358 s | trip_updates 355 s for 76M bronze rows; load_feeds 98 s |
+| 2026-10-16 00:17 | prod trip-update snapshots rebuilt (silence rule) | 1,116 s | |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.
@@ -41,6 +46,9 @@ Query: see "Databricks compute and storage" in `docs/commands.md`. The table lag
 | 2026-10-14 | all-purpose serverless | 0.114 DBU | |
 | 2026-10-15 (to ~19:30) | jobs serverless compute | 12.567 DBU | ~38 scheduled runs, about 0.33 DBU per run. Extrapolated to a full day: about 15 DBU (an estimate; runs are lengthening) |
 | 2026-10-15 (to ~19:30) | serverless SQL compute | 0.785 DBU | manual queries |
+| 2026-10-15 (full day) | jobs serverless compute | 21.52 DBU | 48 scheduled ingests, the 48 minute bronze rebuild, the first prod silver run, dev silver runs, sandbox tests |
+| 2026-10-15 (full day) | serverless SQL compute | 10.74 DBU | **my verification queries** (window functions over tens of millions of rows); more than the pipeline's own SQL use, so heavy verification has a real cost |
+| 2026-10-15 (full day) | all-purpose serverless | 0.16 DBU | |
 
 Unit and meaning of the storage SKU (`DSU`) is not verified.
 
@@ -49,6 +57,9 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | Date (UTC) | Item | Value |
 |---|---|---|
 | 2026-10-14 | `transit_bronze.trip_updates` | 146 MB, 36.2M rows (DESCRIBE DETAIL) |
+| 2026-10-16 00:50 | `transit_bronze.trip_updates` | 313 MB, 76.1M rows |
+| 2026-10-16 00:50 | `transit_silver.trip_update_snapshots` | 348 MB, 25.6M rows: fewer rows but **more bytes** than bronze (compression already handled repeats) |
+| 2026-10-16 00:50 | `transit_silver.vehicle_positions` | 33 MB, 2.97M rows |
 | 2026-10-15 19:30 | `transit_bronze.trip_updates` | 262 MB, 67.1M rows |
 | 2026-10-15 19:30 | `transit_bronze.vehicle_positions` | 31 MB, 3.03M rows |
 | 2026-10-15 19:30 | `transit_bronze.alerts` | 0.27 MB, 44K rows |

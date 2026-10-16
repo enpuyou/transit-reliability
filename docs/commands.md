@@ -307,6 +307,10 @@ run id. Pipe to `head -c 4000` if the output is large.
 
 ### Pause or unpause the schedule
 
+Each job has its own switch in `databricks.yml`: `ingest_pause_status` (bronze) and
+`silver_pause_status` (silver), set per target. Holding one while the other runs is normal, for
+example holding silver during a rebuild.
+
 Change `ingest_pause_status` (`PAUSED` or `UNPAUSED`) for the target in `databricks.yml`,
 redeploy, and confirm the job's state:
 
@@ -461,6 +465,19 @@ To test the incremental path without touching real tables, copy a slice of bronz
 sandbox prefix and run the build in two stages: `build_silver_trip_updates --schema-prefix
 <sandbox> --until-ts <midpoint epoch>`, then again without `--until-ts`; the result must
 equal a single pass (use `EXCEPT` both ways). Procedure: "Test a bronze change in a sandbox".
+
+To rebuild only the trip-update snapshots (needed when their rules change; done 2026-10-16):
+pause the silver schedule (`silver_pause_status: PAUSED`, deploy), drop the table, then run just
+that task. There is no checkpoint, because silver is not a streaming job:
+
+```sql
+DROP TABLE IF EXISTS workspace.transit_silver.trip_update_snapshots;
+```
+```bash
+databricks bundle run silver_job -t prod --only trip_updates     # about 19 minutes for 3 days of data
+```
+
+Verify against independent SQL that applies the same rules before unpausing.
 
 To rebuild silver vehicle positions from bronze, pause the job, drop `vehicle_positions` and
 `quarantine_vehicle_positions` in that schema together (the watermark comes from them), and

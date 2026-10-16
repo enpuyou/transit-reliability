@@ -334,6 +334,24 @@ bronze change in a sandbox". The same run also taught something the tests could 
 unset protobuf fields arrive as NULL, not as the spec's default, so NULL has to be read as the
 default (here SCHEDULED).
 
+### When your check and your pipeline disagree by one
+
+On the first prod silver run the independent SQL count differed from the pipeline by a single
+run in 11.8 million. Neither was exactly wrong: the SQL had no notion of a long silence, and the
+pipeline's handling of one depended on how the work was batched. Chasing the one key (trip
+87668894, silent for 86 minutes) exposed a design flaw: a result must not depend on batching.
+The fix was to write the rule down (a run ends after an hour of silence), put it in the tested
+reference, and make both sides apply it. Lessons: (1) do not dismiss a small mismatch; (2) an
+independent check is only as good as its definition, so settle the definition first; (3) ask
+whether a result would change if you reran in different-sized pieces.
+
+Also seen in the prod rebuild: the first write after a fresh Auto Loader checkpoint can be
+silent for 20 minutes or more, because the stream first lists every file in the landing folder
+(about 25 minutes before the first table appeared for 8.5K vehicle files, against 11 minutes
+for 4K earlier). That is consistent with listing time growing with file count; it is not a
+hang. Raw volume small-file counts (about 12K files a day here) are therefore a real cost of
+a rebuild, and a reason to keep the checkpoint when you can.
+
 ### Lessons that generalize
 
 - **Look at the data, not the status.** Two of the bugs reported success.

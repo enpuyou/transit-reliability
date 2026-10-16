@@ -46,4 +46,7 @@ A spot check showed no values shifted between columns. Vehicle positions: 584 ro
 - In the cancellation case every stop is also marked SKIPPED at stop level: of 455 SKIPPED
   stops in the snapshot, 70 came from the two canceled trips. A stop-level SKIPPED count must
   exclude canceled trips to measure genuinely skipped stops.
-- The next prod deploy will add the column on its first run and populate it going forward.
+- Deployed to prod on 2026-10-15. Prod bronze was then rebuilt from raw so the column covers
+  all history: the rebuilt tables matched the pre-rebuild totals exactly up to the same
+  timestamp (3,370,310 / 74,433,798 / 47,661 rows) and added the column (decision 0004's
+  pairing rule applied: tables and checkpoints dropped together).

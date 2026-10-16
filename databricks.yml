@@ -58,5 +58,4 @@ targets:
     variables:
       schema_prefix: transit
       ingest_pause_status: UNPAUSED
-      # Held until the trip-update snapshots are rebuilt with the silence rule (decision 0010).
-      silver_pause_status: PAUSED
+      silver_pause_status: UNPAUSED

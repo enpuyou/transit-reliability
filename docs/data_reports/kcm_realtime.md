@@ -301,6 +301,13 @@ with King County Metro's GTFS data".
 - Stop-level `SKIPPED`: 1.35 percent of 2026-10-14 trip-update rows.
 - `trip_update_ts` and `vehicle_id` on trip updates: present when a bus is assigned.
 
+**Cancellations, measured in prod silver (2026-10-16):** distinct canceled trips per service
+date were 13 on 2026-10-13 (collection began mid-afternoon), 46 on 2026-10-14 (about 0.36
+percent of 12,939 scheduled trips) and 40 on 2026-10-15 (to about midnight UTC); 99 in total.
+Of the 135 trips announced but never seen on 2026-10-14, 20 are canceled; 26 of the 46 canceled
+trips *did* have a bus position at some point, so a cancellation is not always before the
+trip starts (not investigated).
+
 **Coverage:** the live feeds are not Metro-only. In the snapshot, vehicles by agency: Metro
 Transit 558, Sound Transit (Express buses) 23, City of Seattle (streetcar) 3. Metro's static
 schedule also lists 2 Metro routes of type 4 (water taxi) with no live vehicle seen.

@@ -76,6 +76,15 @@ The lesson: an independent check is only as good as its definition. The disagree
 the definition of "the same run", not in a bug of either side, and writing it down made the
 behavior deterministic.
 
+## Final prod verification (2026-10-16)
+
+After the silence rule and a rebuild of the prod table (1,116 s for the trip-update task): for
+service date 2026-10-14, silver has 11,794,057 runs and 36,264,650 snapshots, equal to an
+independent plain-SQL computation that applies the same rule (11,794,057 and 36,264,650).
+Without the rule the independent count was 11,794,030, so 27 runs in that one day depend on it.
+Whole table: 25,635,246 runs, all distinct on (key, first_seen). Vehicle positions: 2,973,255
+fixes and 55,176 quarantined rows, equal to independent SQL; 100 percent matched, none unknown.
+
 ## Alternatives considered
 
 - Recompute runs from bronze for every affected trip each time: simpler, but re-reads a day of

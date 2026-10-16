@@ -130,9 +130,13 @@ first_seen  last_seen  predicted  delay  snapshots  vehicle
 07:43:12    07:43:12   07:55:46   29     1          4353
 ```
 
-Why runs and not snapshots: the table is a third of the size, and nothing is lost, because a
-run still says exactly what Metro was saying and during which stretch. Only consecutive repeats
-collapse: a value that returns later is a new run.
+Why runs and not snapshots: **a third of the rows** (25.6M against 76.6M in prod, 2026-10-16),
+and nothing is lost, because a run still says exactly what Metro was saying and during which
+stretch. Only consecutive repeats collapse: a value that returns later is a new run, and a
+prediction not seen for more than an hour also starts a new run (decision 0010). Fewer rows
+make joins and scans cheaper, but **not the table smaller in bytes**: it is 348 MB against
+313 MB for bronze, because Parquet's columnar compression already absorbs repeated values
+and silver adds timestamp columns. Do not count on this step to save storage.
 
 ### `alert_versions` (still to build)
 
@@ -168,7 +172,7 @@ for duplicates or placeholder rows.
 | **Sampling** | vehicle fixes about every 20 s of our time, trip updates about every 60 s | Observed times are intervals (the bracketing fixes), not exact instants; label the method and the width. |
 | **Short history** | collection began 2026-10-13 21:43 UTC | Day-of-week, seasonal, and model-training questions need weeks, not days. |
 | **Pre-operation predictions are the schedule** | 55% of (trip, snapshot) pairs on route 100001 on 2026-10-14 had every delay equal to zero | Prediction accuracy must be scored only after the bus is observed on the trip. |
-| **Trips announced vs seen** | 2026-10-14: 12,939 scheduled, 12,661 in trip updates, 12,552 with a bus fix; 109 announced but never seen; 278 scheduled but never announced | A candidate "service delivered" measure (about 97 percent had a fix), not yet a finding: the nightly empty feed window and quarantined rows are unexplained contributors. |
+| **Trips announced vs seen** | 2026-10-14: 12,939 scheduled, 12,661 in trip updates, 12,552 with a bus fix; 109 announced but never seen (135 when seen is counted from silver, which drops quarantined rows); 278 scheduled but never announced. Only 20 of the 135 are marked canceled. | A candidate "service delivered" measure (about 97 percent had a fix), not yet a finding. Cancellation explains only a small part of the unseen trips; the rest (115) are unexplained: untracked buses, quarantined fixes, the nightly empty window, or missed trips. |
 
 ## 4. Design rules that apply to every silver table
 
