@@ -48,4 +48,28 @@ ORDER BY scheduled_start;
 minutes early; left early at 5). Worth checking trip assignment before reading the last as early
 service.
 
-**Not built yet:** spacing and bunching, running time against the timetable, prediction accuracy.
+## `prediction_errors` (built)
+
+**One row =** one observed stop visit and one horizon (5, 15, or 30 minutes) where the agency's
+prediction, the schedule baseline, and the persistence baseline are all available. Table:
+`transit_gold.prediction_errors`; rules, verification, and first results: decision 0014.
+
+| Column | Meaning |
+|---|---|
+| `service_date`, `trip_id`, `route_id`, `stop_sequence`, `timepoint` | which stop visit |
+| `horizon_min`, `as_of` | the horizon and the moment the prediction is taken from (actual arrival minus horizon) |
+| `actual_arrival`, `width_s` | the inferred arrival and our uncertainty about it (filter `width_s <= 60` for tight ones) |
+| `kcm_error_s`, `sched_error_s`, `persistence_error_s` | predicted minus actual, seconds; positive is too late |
+
+```sql
+-- accuracy by horizon for a day: median error (bias), median and 90th percentile of absolute error
+SELECT horizon_min, count(*) AS n,
+       round(percentile(kcm_error_s, 0.5)) AS kcm_bias, round(percentile(abs(kcm_error_s), 0.5)) AS kcm_mae,
+       round(percentile(abs(kcm_error_s), 0.9)) AS kcm_p90,
+       round(percentile(abs(persistence_error_s), 0.5)) AS persistence_mae,
+       round(percentile(abs(sched_error_s), 0.5)) AS schedule_mae
+FROM workspace.transit_gold.prediction_errors
+WHERE service_date = DATE'2026-10-14' AND width_s <= 60 GROUP BY 1 ORDER BY 1;
+```
+
+**Not built yet:** spacing and bunching, running time against the timetable.

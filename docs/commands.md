@@ -597,6 +597,13 @@ DESCRIBE DETAIL workspace.transit_bronze.trip_updates;
 
 ### Run SQL from the shell
 
+**Large results come back in pages.** The statement API returns the first page inline and the
+rest through `next_chunk_index`; a script that reads only `result.data_array` silently gets a
+fraction of the rows (one verification here read 114,599 of 295,554 and looked like a pipeline bug).
+Compare the rows you got with `manifest.total_row_count`, and follow
+`GET /api/2.0/sql/statements/<id>/result/chunks/<n>` until no `next_chunk_index` remains.
+
+
 ```bash
 WAREHOUSE_ID="$(databricks warehouses list -o json --profile enpu \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["id"])')"

@@ -363,6 +363,14 @@ disagree, print raw records for one trip before changing code, (3) measure rathe
 (a unit check showed distances are in feet; 99.3 percent of stopped fixes sit at the previous
 stop). A field name is a hypothesis about meaning; the data is the test.
 
+### Check your check: a mismatch can be your own pull
+
+A verification compared Spark's 15,576 rows with a Python reference that produced only 6,020. The
+cause was in the check: the SQL API returns large results in pages, and the script read only the
+first page (114,599 of 295,554 input rows), so the reference was starved. Before debugging the
+pipeline, confirm the comparison's inputs are complete (compare the row count you received with
+`manifest.total_row_count`). The helper now follows every page and asserts the count.
+
 ### Lessons that generalize
 
 - **Look at the data, not the status.** Two of the bugs reported success.

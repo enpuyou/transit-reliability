@@ -131,3 +131,15 @@ def build_gold_trip_performance() -> None:
     from transit_reliability.gtfs_static.gold_trip_performance import build_trip_performance
 
     build_trip_performance(_spark_session(), args.schema_prefix)
+
+
+def build_gold_prediction_errors() -> None:
+    """Score the agency's arrival predictions against inferred arrivals, with baselines."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_prediction_errors import build_prediction_errors
+
+    build_prediction_errors(_spark_session(), args.schema_prefix)

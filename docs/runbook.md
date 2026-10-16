@@ -37,6 +37,8 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 
 | 2026-10-16 | prod trip_performance, 3 service dates | 57 s | 294-trip sandbox build took 41 s; output equals a Python reference on 6,174 values |
 
+| 2026-10-16 | prod prediction_errors, 3 service dates | 79 s | 300-trip sandbox build 84 s; output equals the Python reference on 15,576 rows |
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.

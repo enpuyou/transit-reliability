@@ -82,6 +82,17 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: prediction_errors
+          depends_on:
+            - task_key: stop_visits
+            - task_key: trip_updates
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_prediction_errors
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
       environments:
         - environment_key: default
           spec:

@@ -67,6 +67,10 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
   which to headline.
 - Headline lens chosen by the owner: `common` (1 minute early to 5 minutes late).
 
+- `prediction_errors` (gold) is in prod (decision 0014). First result, one day: the agency's
+  predictions are far better than the schedule but no better than "the bus's current delay carries
+  on" at 15 and 30 minutes. Caveat: the comparison favors persistence somewhat (shared inference).
+
 ## Next
 
 1. Stop visits: join observed positions to the schedule and infer arrival times as intervals
