@@ -143,3 +143,27 @@ def build_gold_prediction_errors() -> None:
     from transit_reliability.gtfs_static.gold_prediction_errors import build_prediction_errors
 
     build_prediction_errors(_spark_session(), args.schema_prefix)
+
+
+def build_gold_route_performance() -> None:
+    """Roll trip performance up to route, direction, and start hour."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_rollups import build_route_performance
+
+    build_route_performance(_spark_session(), args.schema_prefix)
+
+
+def build_gold_prediction_accuracy() -> None:
+    """Summarize prediction errors by route, hour, and horizon."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_rollups import build_prediction_accuracy
+
+    build_prediction_accuracy(_spark_session(), args.schema_prefix)

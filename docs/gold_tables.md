@@ -72,4 +72,27 @@ FROM workspace.transit_gold.prediction_errors
 WHERE service_date = DATE'2026-10-14' AND width_s <= 60 GROUP BY 1 ORDER BY 1;
 ```
 
+## `route_performance` (built)
+
+**One row =** one route, direction, and Pacific start hour of the trip, on one service date. Table
+`transit_gold.route_performance`. It **sums the per-trip counts** of `trip_performance` (never averages
+percentages), so any share is recomputed as `sum(n_common_on_time) / sum(n_common_early + n_common_on_time
++ n_common_late + n_common_uncertain)` and always comes with that denominator. Columns: `n_trips`,
+`n_observed`, `n_canceled`, `n_not_observed`; `n_timepoints`, `n_timepoints_measured`; the twelve lens
+counts; early-departure counts; `median_of_trip_median_delays_s` (a median of trip medians, not a pooled
+median); first-stop departure median and count. A trip is attributed to the hour it is scheduled to
+start. Checked by conservation: trips, on-time counts, and measured timepoints equal the per-trip totals
+for every date.
+
+**A share is a range.** Report `on_time / n` (definite) to `(on_time + uncertain) / n`, with `n`, and
+do not compare routes until `n` is large (`docs/findings.md`, finding 4).
+
+## `prediction_accuracy` (built)
+
+**One row =** one route, Pacific hour of the actual arrival, and horizon (5, 15, 30 min) on one service
+date: `n` and, for each of the agency, the schedule, and persistence, the median error, median and 90th
+percentile absolute error, and the number within 60 s. Only rows whose actual arrival is known within
+60 s. Table `transit_gold.prediction_accuracy`. Medians of medians are not valid, so for system-level
+numbers query `prediction_errors` directly. Checked by conservation against `prediction_errors`.
+
 **Not built yet:** spacing and bunching, running time against the timetable.

@@ -93,6 +93,26 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: route_performance
+          depends_on:
+            - task_key: trip_performance
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_route_performance
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: prediction_accuracy
+          depends_on:
+            - task_key: prediction_errors
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_prediction_accuracy
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
       environments:
         - environment_key: default
           spec:

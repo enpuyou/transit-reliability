@@ -71,6 +71,10 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
   predictions are far better than the schedule but no better than "the bus's current delay carries
   on" at 15 and 30 minutes. Caveat: the comparison favors persistence somewhat (shared inference).
 
+- `route_performance` and `prediction_accuracy` roll-ups are in prod, and `docs/findings.md` is the
+  dated log of claims with evidence and caveats. The silver job has 10 tasks; the first scheduled
+  (unattended) run is 2026-10-16 11:45 UTC.
+
 ## Next
 
 1. Stop visits: join observed positions to the schedule and infer arrival times as intervals
