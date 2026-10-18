@@ -10,6 +10,27 @@ and is unaffected by the incident in decision 0015 (silver vehicle positions dro
 2026-10-15 on, since repaired). Dates 2026-10-15 to 2026-10-17 are now complete (arrival coverage 86.1,
 86.9, 85.2 percent) and should be used to re-check each finding.
 
+## 2026-10-18 re-check on more days (Wed to Fri pooled, plus Saturday)
+
+- **Finding 1 holds.** Prediction accuracy at 15 minutes ahead is nearly identical on each weekday:
+  agency median absolute error 96 s on 10-14, 10-15, and 10-16 (91 s on Saturday 10-17), persistence
+  94 s each weekday (89 s Saturday), schedule 156 to 162 s; share within one minute 33 percent for the
+  agency and 33 to 35 for persistence. Pooled over the three weekdays (n = 875,850 / 614,223 / 279,074
+  arrivals at 5 / 15 / 30 minutes): agency 62 / 96 / 133 s, persistence 56 / 94 / 134 s, schedule 144 /
+  158 / 176 s; 90th percentile of absolute error agency 170 / 259 / 355 s, persistence 152 / 250 / 365 s.
+  So persistence is about 6 s better at 5 minutes and tied at 15 and 30.
+- **Finding 3 holds.** Three weekdays pooled, definitely on time by trip start hour: 72.4 percent (5 AM),
+  68.5 (6 AM), about 61 (7 AM to noon), then falling to 54.7 to 56.4 percent from 3 PM to 6 PM, with 20 to
+  22 percent late in the afternoon peak (4 PM: 22.3 percent late); early arrivals 9 to 17 percent. Counts
+  are 3,700 to 11,000 arrivals per hour. Saturday has the same shape, gentler: 67.6 percent before 9 AM,
+  60.2 midday, 58.9 afternoon and evening (late 9.5, 15.0, 18.2 percent).
+- **Finding 4 relaxes slightly.** With three weekdays pooled, 67 of 280 route-directions have at least
+  1,000 measured arrivals, 115 have 600 or more, 168 have 300 or more. Route comparisons become
+  reasonable for the 67; keep the rule of showing the count and the uncertain slice with every figure and
+  prefer about two weeks before naming routes.
+- Caveats unchanged: GPS-inferred times (typically within about 15 s), the comparison with persistence
+  shares our inference, and early arrivals at timepoints are not necessarily a problem (buses may wait).
+
 ## 2026-10-16
 
 ### 1. Metro's arrival predictions are no better than "the bus's current delay carries on"
