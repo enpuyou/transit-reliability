@@ -6,6 +6,10 @@ resources:
       # the schedule (trips through tomorrow, stop times for realtime dates), then build the silver
       # realtime tables. Trip-update snapshots do not depend on the schedule and run alongside.
       # A run with nothing new is cheap; every step skips work it has already done.
+      # Mail the deploying user when a run fails (nothing else; successes stay silent).
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
       schedule:
         quartz_cron_expression: 0 45 11 * * ?
         timezone_id: UTC

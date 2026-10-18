@@ -55,5 +55,6 @@ proves little about an incremental build.
   `reliability/health.py`. A missing value fails.
 - The staged incremental test (new data between runs, compared with an independent count) is now the
   standard check for incremental builds (`docs/commands.md`).
-- Still open: a failure email. Without it a failed task only shows in the Jobs page; adding it needs
-  the owner's address in the job configuration.
+- Failure email added 2026-10-18: the prod ingest and silver jobs have `email_notifications.on_failure`
+  set to `${workspace.current_user.userName}` (the deploying user), so the address is not written
+  into the repo. Successes send nothing. Not yet tested with a real failure.

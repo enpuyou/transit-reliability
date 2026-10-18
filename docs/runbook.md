@@ -105,3 +105,11 @@ Unit and meaning of the storage SKU (`DSU`) is not verified.
 | Window (UTC) | Runs | Outcome | CPU (ms) | Start delay vs scheduled | Notes |
 |---|---|---|---|---|---|
 | 2026-10-15 19:56 to 20:05 | 9 | 9 ok, 0 exceptions, every upload ok | 9 to 16 (median 11; 16 on the alerts minute) | 3 to 6 s; 19 s at 20:00 | spans the top-of-hour boundary; hour-boundary "gaps" in landed files are late runs, not lost ones |
+
+## Failure email
+
+The prod ingest and silver jobs email the deploying user when a run fails
+(`email_notifications.on_failure` in `resources/*.yml`). Check it is set:
+`databricks jobs get <job_id> --profile enpu -o json` and look at `settings.email_notifications`.
+Delivery has not been tested with a real failure (unverified); a failed health check fails the
+silver job, so it also sends mail.
