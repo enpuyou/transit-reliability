@@ -176,7 +176,7 @@ def _build_day(spark: Any, prefix: str, day: dt.date) -> int:
     return int(spark.table(target).where(F.col("service_date") == stamp).count())
 
 
-def build_stop_visits(spark: Any, prefix: str) -> None:
+def build_stop_visits(spark: Any, prefix: str, rebuild_from: dt.date | None = None) -> None:
     """Build stop visits for service dates that have fixes and an expanded schedule."""
 
     silver = f"workspace.{prefix}_silver"
@@ -203,7 +203,7 @@ def build_stop_visits(spark: Any, prefix: str) -> None:
     today = dt.datetime.now(dt.UTC).date()
     recent = today - dt.timedelta(days=RECOMPUTE_DAYS)
     for day in sorted(with_fixes & scheduled):
-        if day in done and day < recent:
+        if day in done and day < recent and (rebuild_from is None or day < rebuild_from):
             continue
         rows = _build_day(spark, prefix, day)
         print(f"stop visits {day}: {rows} rows")

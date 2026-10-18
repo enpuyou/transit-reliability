@@ -61,7 +61,7 @@ def prediction_errors_sql(silver: str, day: dt.date) -> str:
     JOIN pers p ON p.trip_id = t.trip_id AND p.stop_sequence = t.stop_sequence AND p.horizon_min = t.horizon_min"""
 
 
-def build_prediction_errors(spark: Any, prefix: str) -> None:
+def build_prediction_errors(spark: Any, prefix: str, rebuild_from: dt.date | None = None) -> None:
     from pyspark.sql import functions as F
 
     silver = f"workspace.{prefix}_silver"
@@ -77,7 +77,7 @@ def build_prediction_errors(spark: Any, prefix: str) -> None:
     )
     recent = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=RECOMPUTE_DAYS)
     for day in sorted(available):
-        if day in done and day < recent:
+        if day in done and day < recent and (rebuild_from is None or day < rebuild_from):
             continue
         frame = spark.sql(prediction_errors_sql(silver, day))
         if spark.catalog.tableExists(target):

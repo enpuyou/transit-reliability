@@ -59,7 +59,14 @@ def prediction_accuracy_sql(gold: str, day: dt.date) -> str:
     GROUP BY service_date, route_id, hour(from_utc_timestamp(actual_arrival, 'America/Los_Angeles')), horizon_min"""
 
 
-def _rebuild(spark: Any, source: str, target: str, sql_for: Any, prefix_label: str) -> None:
+def _rebuild(
+    spark: Any,
+    source: str,
+    target: str,
+    sql_for: Any,
+    prefix_label: str,
+    rebuild_from: dt.date | None = None,
+) -> None:
     from pyspark.sql import functions as F
 
     available = {
@@ -72,7 +79,7 @@ def _rebuild(spark: Any, source: str, target: str, sql_for: Any, prefix_label: s
     )
     recent = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=RECOMPUTE_DAYS)
     for day in sorted(available):
-        if day in done and day < recent:
+        if day in done and day < recent and (rebuild_from is None or day < rebuild_from):
             continue
         frame = spark.sql(sql_for(day))
         if spark.catalog.tableExists(target):
@@ -86,7 +93,7 @@ def _rebuild(spark: Any, source: str, target: str, sql_for: Any, prefix_label: s
         print(f"{prefix_label} {day}: {rows} rows")
 
 
-def build_route_performance(spark: Any, prefix: str) -> None:
+def build_route_performance(spark: Any, prefix: str, rebuild_from: dt.date | None = None) -> None:
     gold = f"workspace.{prefix}_gold"
     _rebuild(
         spark,
@@ -94,10 +101,11 @@ def build_route_performance(spark: Any, prefix: str) -> None:
         f"{gold}.{ROUTE_TABLE}",
         lambda day: route_performance_sql(gold, day),
         "route performance",
+        rebuild_from,
     )
 
 
-def build_prediction_accuracy(spark: Any, prefix: str) -> None:
+def build_prediction_accuracy(spark: Any, prefix: str, rebuild_from: dt.date | None = None) -> None:
     gold = f"workspace.{prefix}_gold"
     _rebuild(
         spark,
@@ -105,4 +113,5 @@ def build_prediction_accuracy(spark: Any, prefix: str) -> None:
         f"{gold}.{ACCURACY_TABLE}",
         lambda day: prediction_accuracy_sql(gold, day),
         "prediction accuracy",
+        rebuild_from,
     )

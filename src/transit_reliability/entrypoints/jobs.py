@@ -1,6 +1,7 @@
 """Command-line entrypoints used by Databricks bundle jobs."""
 
 import argparse
+import datetime as dt
 from typing import Any
 
 
@@ -77,11 +78,14 @@ def build_silver_vehicle_positions() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--since", help="re-read bronze rows ingested after this timestamp (backfill)"
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.silver_realtime import build_vehicle_positions
 
-    build_vehicle_positions(_spark_session(), args.schema_prefix)
+    build_vehicle_positions(_spark_session(), args.schema_prefix, since=args.since)
 
 
 def expand_trips() -> None:
@@ -114,11 +118,16 @@ def build_silver_stop_visits() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.silver_stop_visits import build_stop_visits
 
-    build_stop_visits(_spark_session(), args.schema_prefix)
+    build_stop_visits(_spark_session(), args.schema_prefix, args.rebuild_from)
 
 
 def build_gold_trip_performance() -> None:
@@ -126,11 +135,16 @@ def build_gold_trip_performance() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.gold_trip_performance import build_trip_performance
 
-    build_trip_performance(_spark_session(), args.schema_prefix)
+    build_trip_performance(_spark_session(), args.schema_prefix, args.rebuild_from)
 
 
 def build_gold_prediction_errors() -> None:
@@ -138,11 +152,16 @@ def build_gold_prediction_errors() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.gold_prediction_errors import build_prediction_errors
 
-    build_prediction_errors(_spark_session(), args.schema_prefix)
+    build_prediction_errors(_spark_session(), args.schema_prefix, args.rebuild_from)
 
 
 def build_gold_route_performance() -> None:
@@ -150,11 +169,16 @@ def build_gold_route_performance() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.gold_rollups import build_route_performance
 
-    build_route_performance(_spark_session(), args.schema_prefix)
+    build_route_performance(_spark_session(), args.schema_prefix, args.rebuild_from)
 
 
 def build_gold_prediction_accuracy() -> None:
@@ -162,8 +186,13 @@ def build_gold_prediction_accuracy() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
     args = parser.parse_args()
 
     from transit_reliability.gtfs_static.gold_rollups import build_prediction_accuracy
 
-    build_prediction_accuracy(_spark_session(), args.schema_prefix)
+    build_prediction_accuracy(_spark_session(), args.schema_prefix, args.rebuild_from)

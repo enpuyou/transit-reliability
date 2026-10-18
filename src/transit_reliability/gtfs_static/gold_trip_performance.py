@@ -83,7 +83,7 @@ def trip_performance_sql(silver: str, day: dt.date) -> str:
     LEFT JOIN canceled c ON c.trip_id = a.trip_id"""
 
 
-def build_trip_performance(spark: Any, prefix: str) -> None:
+def build_trip_performance(spark: Any, prefix: str, rebuild_from: dt.date | None = None) -> None:
     from pyspark.sql import functions as F
 
     silver = f"workspace.{prefix}_silver"
@@ -100,7 +100,7 @@ def build_trip_performance(spark: Any, prefix: str) -> None:
     )
     recent = dt.datetime.now(dt.UTC).date() - dt.timedelta(days=RECOMPUTE_DAYS)
     for day in sorted(available):
-        if day in done and day < recent:
+        if day in done and day < recent and (rebuild_from is None or day < rebuild_from):
             continue
         frame = spark.sql(trip_performance_sql(silver, day))
         if spark.catalog.tableExists(target):

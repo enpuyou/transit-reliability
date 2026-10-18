@@ -82,7 +82,25 @@ def _repair_unknown_matches(spark: Any, silver: str, scheduled: str) -> None:
     )
 
 
-def build_vehicle_positions(spark: Any, prefix: str) -> None:
+def _cutoff(spark: Any, silver: str, quarantine: str, since: str | None) -> str | None:
+    """Timestamp text: bronze rows ingested after it are read. None means read everything."""
+
+    if since is not None:
+        return since
+    if not (_exists(spark, silver) and _exists(spark, quarantine)):
+        return None
+    row = spark.sql(
+        f"SELECT date_format(max(t) - {LOOKBACK}, 'yyyy-MM-dd HH:mm:ss.SSSSSS') AS c FROM ("
+        f"SELECT max(bronze_ingested_at) t FROM {silver} "
+        f"UNION ALL SELECT max(bronze_ingested_at) FROM {quarantine})"
+    ).collect()[0]
+    return None if row["c"] is None else str(row["c"])
+
+
+def build_vehicle_positions(spark: Any, prefix: str, since: str | None = None) -> None:
+    """Build silver vehicle positions. `since` (a timestamp text) forces re-reading bronze from
+    then; the MERGE only inserts what is missing, so a backfill is safe to repeat."""
+
     from pyspark.sql import Window
     from pyspark.sql import functions as F
 
@@ -94,14 +112,12 @@ def build_vehicle_positions(spark: Any, prefix: str) -> None:
     _repair_unknown_matches(spark, silver, scheduled)
 
     rows = spark.table(bronze).where(~F.col("source_file").contains("smoke"))
-    if _exists(spark, silver) and _exists(spark, quarantine):
-        rows = rows.where(
-            F.expr(
-                f"ingested_at > (SELECT coalesce(max(t), TIMESTAMP'1970-01-01') - {LOOKBACK} "
-                f"FROM (SELECT max(bronze_ingested_at) t FROM {silver} "
-                f"UNION ALL SELECT max(bronze_ingested_at) FROM {quarantine}))"
-            )
-        )
+    # Computed ONCE, now, before anything is written. A scalar subquery inside the filter is
+    # evaluated lazily when each write runs, so after the quarantine write had advanced the
+    # watermark the silver write read only the last hour (the bug of 2026-10-16 to 18).
+    cutoff = _cutoff(spark, silver, quarantine, since)
+    if cutoff is not None:
+        rows = rows.where(F.expr(f"ingested_at > TIMESTAMP'{cutoff}'"))
     rows = rows.withColumn("reason", reason_column())
 
     bad = rows.where(F.col("reason").isNotNull()).select(
@@ -180,6 +196,16 @@ def build_vehicle_positions(spark: Any, prefix: str) -> None:
 
     _merge(spark, bad, quarantine, ("row_key",))
     _merge(spark, fixes, silver, ("vehicle_id", "vehicle_ts"))
+    # Integrity: everything this run meant to write must now be there. Fail loudly otherwise.
+    missing_fixes = fixes.join(
+        spark.table(silver), ["vehicle_id", "vehicle_ts"], "left_anti"
+    ).count()
+    missing_bad = bad.join(spark.table(quarantine), ["row_key"], "left_anti").count()
+    if missing_fixes or missing_bad:
+        raise RuntimeError(
+            "silver is missing rows it should have written: "
+            f"{missing_fixes} fixes, {missing_bad} quarantined"
+        )
     total = spark.table(silver).count()
     bad_total = spark.table(quarantine).count()
     print(f"silver vehicle_positions: {total} rows; quarantine: {bad_total} rows")
