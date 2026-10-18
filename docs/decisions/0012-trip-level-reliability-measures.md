@@ -52,6 +52,9 @@ dates (57 s).
 
 ## Consequences and caveats
 
+- **Correction (2026-10-18):** the many `not_observed` trips on 2026-10-15 onward were not just an
+  unfinished day; silver vehicle positions was dropping most fixes (decision 0015) and has been
+  repaired. Only 2026-10-13 (collection began mid-afternoon) and the current day are genuinely partial.
 - A trip with `trip_status = 'not_observed'` has no punctuality data; counting them is service
   delivery. 2026-10-13 and 2026-10-15 show many because collection started mid-afternoon on the
   13th and the 15th had not finished when it was built; the last two service dates are rebuilt each

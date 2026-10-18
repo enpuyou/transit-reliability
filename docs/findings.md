@@ -4,6 +4,12 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-18 data-quality note
+Findings below were computed from service date 2026-10-14 only, which was built by the first full run
+and is unaffected by the incident in decision 0015 (silver vehicle positions dropped most fixes from
+2026-10-15 on, since repaired). Dates 2026-10-15 to 2026-10-17 are now complete (arrival coverage 86.1,
+86.9, 85.2 percent) and should be used to re-check each finding.
+
 ## 2026-10-16
 
 ### 1. Metro's arrival predictions are no better than "the bus's current delay carries on"

@@ -75,6 +75,13 @@ Silver tables in prod: `gtfs_*` (7), `gtfs_feeds`, `scheduled_trips` (through to
   dated log of claims with evidence and caveats. The silver job has 10 tasks; the first scheduled
   (unattended) run is 2026-10-16 11:45 UTC.
 
+## 2026-10-18 update
+
+The first unattended silver runs (10-16 to 10-18) succeeded but silently kept only the last hour of
+vehicle positions; found by checking per-date coverage, fixed, repaired in prod, and guarded by a
+`health_checks` task (decision 0015). The silver job now has 11 tasks. Bronze ingest had 96 of 96
+successful runs in 48 hours. Complete days 2026-10-14 to 10-17 have 85 to 87 percent arrival coverage.
+
 ## Next
 
 1. Stop visits: join observed positions to the schedule and infer arrival times as intervals

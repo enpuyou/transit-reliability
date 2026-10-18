@@ -595,6 +595,25 @@ DESCRIBE HISTORY workspace.transit_bronze.vehicle_positions;
 DESCRIBE DETAIL workspace.transit_bronze.trip_updates;
 ```
 
+### Test an incremental build with new data arriving between runs
+
+Rerunning on identical data cannot expose a bug in an incremental build (decision 0015). Test it the
+way it runs: build a sandbox copy of the *input* with only the first half of a time range, run the
+build, append the second half to the input, run it again, and compare the output with an independent
+plain-SQL count over the whole input. They must be equal. The sandbox recipe is the same as in "Test a
+bronze change in a sandbox" (throwaway `evo_transit_*` schemas, `databricks jobs submit` with the dev
+wheel); finish by dropping the sandbox schemas.
+
+### Backfill and rebuild options
+
+Silver vehicle positions: `build_silver_vehicle_positions --since '2026-10-13 00:00:00'` re-reads
+bronze rows ingested after that time; the MERGE inserts only what is missing, so it is safe to repeat.
+Downstream builders (`build_silver_stop_visits`, `build_gold_trip_performance`,
+`build_gold_prediction_errors`, `build_gold_route_performance`, `build_gold_prediction_accuracy`) take
+`--rebuild-from YYYY-MM-DD` to recompute service dates from that day on. A one-off run with these
+parameters can be submitted as a multi-task `databricks jobs submit` run (see the 2026-10-18 repair in
+decision 0015). The daily job ends with a `health_checks` task that fails when the output looks wrong.
+
 ### Run SQL from the shell
 
 **Large results come back in pages.** The statement API returns the first page inline and the

@@ -41,6 +41,16 @@ measure; do not overwrite old rows. Procedures live in `docs/commands.md`.
 
 | 2026-10-16 | prod route_performance and prediction_accuracy (both), 3 service dates | 57 s | conservation checks equal to the detail tables |
 
+| 2026-10-16 11:45 | silver_job, first unattended run | 595 s | reported SUCCESS but silver vehicle positions kept only the last hour (decision 0015) |
+| 2026-10-17 11:45 | silver_job, scheduled | 458 s | same fault |
+| 2026-10-18 11:45 | silver_job, scheduled | 421 s | same fault |
+| 2026-10-18 21:00 | repair: vehicle positions backfill plus downstream rebuild from 10-15 (one submitted run) | 650 s | silver now equals an independent count of bronze |
+
+Observed 2026-10-16 to 18: bronze ingest 96 of 96 runs succeeded in 48 hours (113 to 204 s, median 174 s,
+no gaps). The scheduled GTFS download ran 3 to 4 hours after its 11:17 UTC schedule (14:13, 14:38, 15:23);
+harmless with a daily silver build (the new schedule is loaded at the next run, and trips are matched at
+build time), but a reason not to assume the download precedes the 11:45 silver run.
+
 ## Compute (system.billing.usage)
 
 Query: see "Databricks compute and storage" in `docs/commands.md`. The table lags by hours.

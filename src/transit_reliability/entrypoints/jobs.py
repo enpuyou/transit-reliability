@@ -196,3 +196,15 @@ def build_gold_prediction_accuracy() -> None:
     from transit_reliability.gtfs_static.gold_rollups import build_prediction_accuracy
 
     build_prediction_accuracy(_spark_session(), args.schema_prefix, args.rebuild_from)
+
+
+def run_health_checks() -> None:
+    """Fail the task when the output looks wrong (stale silver, collapsed coverage, ...)."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.ops_health import run_health_checks as run
+
+    run(_spark_session(), args.schema_prefix)
