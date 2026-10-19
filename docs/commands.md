@@ -1024,3 +1024,37 @@ with `databricks warehouses start <id> --profile enpu`. Seen 2026-10-19: the sta
 30 min) kept succeeding, so the cause is on the warehouse side, not the jobs. Cause not yet known
 (unverified; a Free Edition capacity or quota limit is one possibility). Retry later, or start it
 from the Databricks UI (SQL Warehouses) to read the full message.
+
+## Test an inference change on one real day in a sandbox (used 2026-10-19, decision 0016 pending)
+
+Goal: rebuild `stop_visits` for one service date with changed code and compare it with prod
+without touching prod. The warehouse must be running (see "SQL warehouse will not start").
+
+```sql
+-- copy only what the build reads; one date of the big tables keeps it quick
+CREATE SCHEMA IF NOT EXISTS workspace.evo_transit_silver;
+CREATE OR REPLACE TABLE workspace.evo_transit_silver.gtfs_stop_times AS SELECT * FROM workspace.transit_silver.gtfs_stop_times;
+-- same for gtfs_trips and gtfs_shapes, then the two date-partitioned inputs:
+CREATE OR REPLACE TABLE workspace.evo_transit_silver.vehicle_positions AS
+  SELECT * FROM workspace.transit_silver.vehicle_positions WHERE service_date = DATE'2026-10-16';
+CREATE OR REPLACE TABLE workspace.evo_transit_silver.scheduled_stop_times AS
+  SELECT * FROM workspace.transit_silver.scheduled_stop_times WHERE service_date = DATE'2026-10-16';
+```
+```bash
+databricks bundle deploy -t dev --profile enpu     # uploads the wheel with your change (dev jobs stay paused)
+# submit the real entry point once against the sandbox (JSON as in "Test a bronze change in a sandbox",
+# entry_point build_silver_stop_visits, parameters ["--schema-prefix", "evo_transit"]); ~3.5 minutes
+```
+Compare `workspace.transit_silver.stop_visits` with `workspace.evo_transit_silver.stop_visits` on the same
+date: interpolated arrivals with an interval over 180 s, number of rows by `arr_method`, median delay,
+and a known trip row by row. Drop the `evo_transit_silver` schema afterwards.
+
+## Two traps when checking collection by hand
+
+- `databricks fs ls -l` prints each file's time in your LOCAL timezone but labels it `Z` (UTC). On
+  2026-10-19 this made current files look seven hours old. File NAMES are epoch milliseconds and are
+  reliable; convert them, or compare with `date -u`.
+- A scheduled job that never starts leaves no run, so no failure email. On 2026-10-19 the prod ingest
+  had no runs between 17:30 and 22:30 UTC, at the same time the SQL warehouse would not start (cause
+  unverified). Look at the gap in `databricks jobs list-runs --job-id <id>`, not only at run results.
+  `scripts/collection_health.py` also only sees gaps between landed files, not after the last one.
