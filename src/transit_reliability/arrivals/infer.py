@@ -201,12 +201,41 @@ def enforce_order(visits: Sequence[StopVisit]) -> list[StopVisit]:
     return out
 
 
+def drop_stale_pointers(ordered: Sequence[Fix]) -> list[Fix]:
+    """Blank the next-stop pointer on leading fixes that still carry the previous trip's value.
+
+    Within a trip the pointer only moves forward. When a bus switches trips its first fix(es) can
+    still name the old trip's next stop (measured 2026-10-16: seq 97 on a 77-stop trip), which
+    would read as "every stop already served" and cap every arrival at that first fix. A leading
+    fix whose pointer is greater than a later fix's pointer is therefore stale; its position is
+    still used, only the pointer is dropped. Fixes after the first consistent one are untouched.
+    """
+
+    later_min: list[int | None] = [None] * len(ordered)
+    low: int | None = None
+    for i in range(len(ordered) - 1, -1, -1):
+        later_min[i] = low
+        p = ordered[i].next_seq
+        if p is not None:
+            low = p if low is None else min(low, p)
+    out = list(ordered)
+    for i, f in enumerate(ordered):
+        p, m = f.next_seq, later_min[i]
+        if p is None:
+            continue
+        if m is not None and p > m:
+            out[i] = replace(f, next_seq=None)
+        else:
+            break
+    return out
+
+
 def infer_stop_visits(
     shape: Shape, fixes: Sequence[Fix], stops: Sequence[StopTarget]
 ) -> list[StopVisit]:
     """One StopVisit per stop, in the order given. Fixes need not be sorted."""
 
-    ordered = sorted({f.ts: f for f in fixes}.values(), key=lambda f: f.ts)
+    ordered = drop_stale_pointers(sorted({f.ts: f for f in fixes}.values(), key=lambda f: f.ts))
     if not ordered:
         return [
             StopVisit(

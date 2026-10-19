@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 from transit_reliability.arrivals.infer import (
     ARRIVE_TOL_FT,
@@ -266,3 +267,24 @@ def test_missing_estimates_do_not_break_the_ordering_pass() -> None:
 
     out = enforce_order([_visit(1, 100.0), _visit(2, None), _visit(3, 120.0)])
     assert [v.arr_est for v in out] == [100.0, None, 120.0]
+
+
+def test_a_stale_pointer_on_the_first_fix_does_not_cap_every_arrival() -> None:
+    # the bus has just switched trips: its first fix still carries the previous trip's pointer
+    fixes = drive(pointer=True)
+    stale = [replace(fixes[0], next_seq=97), *fixes[1:]]
+    clean = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))
+    result = by_seq(infer_stop_visits(line_shape(), stale, STOPS))
+    for stop in STOPS:
+        v = result[stop.stop_sequence]
+        assert v.arr_method == "interpolated"
+        assert v.arr_hi is not None and v.arr_lo is not None and v.arr_hi - v.arr_lo <= 20.0
+        assert abs(arr(v) - arr(clean[stop.stop_sequence])) < 0.05
+        assert v.advance_ts == clean[stop.stop_sequence].advance_ts
+
+
+def test_a_pointer_that_only_ever_moves_forward_is_left_alone() -> None:
+    fixes = drive(pointer=True)
+    assert infer_stop_visits(line_shape(), fixes, STOPS) == infer_stop_visits(
+        line_shape(), [replace(f) for f in fixes], STOPS
+    )
