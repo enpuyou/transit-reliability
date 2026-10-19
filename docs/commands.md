@@ -1014,3 +1014,13 @@ Keep future manual procedures in this document under a focused heading. Planned 
 - feed outage recovery
 - data-quality and freshness checks
 - production deployment and rollback
+
+## SQL warehouse will not start ("The request could not be processed by the warehouse")
+
+The SQL statement API (`databricks api post /api/2.0/sql/statements`) does not wake a stopped
+warehouse. Check `databricks warehouses get <id> --profile enpu -o json` (field `state`) and start it
+with `databricks warehouses start <id> --profile enpu`. Seen 2026-10-19: the start itself failed with
+"Cannot create the resource, please try again later" while serverless job runs (prod ingest every
+30 min) kept succeeding, so the cause is on the warehouse side, not the jobs. Cause not yet known
+(unverified; a Free Edition capacity or quota limit is one possibility). Retry later, or start it
+from the Databricks UI (SQL Warehouses) to read the full message.
