@@ -4,6 +4,32 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-20 running time against the timetable (first look; 3 weekdays, 2026-10-14 to 10-16)
+
+Segment = consecutive timepoints of a trip; observed running time = arrival at the next timepoint minus
+departure from this one (our estimates, each with an interval; the two intervals add to a median 53 s of
+uncertainty per segment); scheduled = scheduled arrival at the next minus scheduled departure here.
+
+- 160,819 segment trips. Scheduled median 420 s, observed 391 s: buses run a median 21 s FASTER than the
+  timetable; 39 percent of segments take longer than scheduled; observed/scheduled ratio 0.69 / 0.95 /
+  1.23 at the 10th / 50th / 90th percentile. The weakest padding is the morning peak (median 12 to 15 s
+  under schedule, 43 percent over) and the evening peak; midday is the loosest (25 to 28 s under).
+- Of 991 segments with at least 30 trips, 63 (6 percent) run at least 60 s over schedule at the median and
+  175 (18 percent) at least 60 s under (padded).
+- Largest overruns: route 77, e.g. Roosevelt Station Bay 3 to NE 125th St and 28th Ave NE, scheduled 540 s,
+  observed median 1,130 s (PM peak, 46 trips, all over); NE 130th St and 5th Ave NE to NE 125th St and 30th
+  Ave NE, scheduled 240 s, observed 617 s. Then routes 164, 150 and 240 near Kent and Eastgate (170 to 270 s
+  over).
+- Route 77 is real and explained by the agency's own alerts: it was rerouted off NE 130th and NE 125th
+  between 1st and 15th Ave NE for construction (2026-10-09 to 10-19) and, separately, off 30th Ave NE
+  between NE 125th and Lake City Way from 2026-08-29 through 2027-03-27. The timetable is not adjusted for
+  the longer path. Cross-check: for six PM trips the agency's own last predicted delay at the next
+  timepoint was 278 to 749 s, ours 430 to 967 s; both say 10 to 15 minutes late through the segment.
+- Caveat: on a detour the bus leaves the route shape, so arrival estimates around it rest on fewer usable
+  fixes; segment findings should be flagged when an active detour alert covers the route.
+- Not yet built (decision 0022 proposed): per-trip segment table, trailing-window summary by time band
+  and day type, and a flag from active alerts.
+
 ## 2026-10-20 the headline on-time measure is now the rider rule (decision 0021)
 
 Owner decision: judge EARLY on the departure (a bus that leaves early is a missed bus; arriving early and
