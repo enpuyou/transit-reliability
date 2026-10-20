@@ -76,3 +76,11 @@ def test_billing_is_grouped_into_a_few_readable_categories() -> None:
     sql = heavy_queries("transit")["billing_daily"]
     labels = set(re.findall(r"THEN '([^']+)'", sql)) | set(re.findall(r"ELSE '([^']+)'", sql))
     assert len(labels) == 6  # three prod jobs, one-off runs, the SQL warehouse, everything else
+
+
+def test_day_buckets_are_seattle_days_and_the_pointer_lead_is_published() -> None:
+    heavy = heavy_queries("transit")
+    for name in ("daily_metrics", "check_trend", "billing_daily"):
+        assert "America/Los_Angeles" in heavy[name], name
+    assert "pointer_lead_feet" in heavy["distributions"]
+    assert "pointer_lead_ft IS NOT NULL" in heavy["distributions"]

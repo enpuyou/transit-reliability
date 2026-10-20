@@ -9,12 +9,21 @@ import datetime as dt
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from zoneinfo import ZoneInfo
 
 MAX_LANDING_AGE_MIN = {"vehicle_positions": 10.0, "trip_updates": 10.0, "alerts": 15.0}
 MAX_INGEST_RUN_AGE_MIN = 75.0  # runs start every 30 min
 MAX_MONITOR_RUN_AGE_MIN = 90.0  # runs start every 60 min
 SILVER_DUE_UTC = dt.time(13, 30)  # the daily silver job starts 11:45 UTC and takes about 10 min
 _DONE = "TERMINATED"
+PACIFIC = ZoneInfo("America/Los_Angeles")
+SILVER_STARTS_UTC = dt.time(11, 45)  # the daily job's cron
+
+
+def pacific(moment: dt.datetime) -> str:
+    """Wall-clock time in Seattle with the zone that applies on that date (PDT or PST)."""
+
+    return moment.astimezone(PACIFIC).strftime("%H:%M %Z")
 
 
 @dataclass(frozen=True)
@@ -63,7 +72,7 @@ def job_finding(
     if not finished:
         return Finding(name, False, "no finished run yet")
     result = finished[0]["state"].get("result_state")
-    when = _started(finished[0]).strftime("%H:%M UTC")
+    when = pacific(_started(finished[0]))
     if result != "SUCCESS":
         return Finding(name, False, f"latest finished run ({when}) ended {result}")
     detail = f"latest finished run ({when}) SUCCESS; newest started {age:.0f} min ago"
@@ -78,13 +87,14 @@ def silver_finding(runs: Sequence[Mapping[str, Any]], now: dt.datetime) -> Findi
         return job_finding(name, runs, now, max_age_min=36 * 60.0)
     today = [r for r in runs if _started(r).date() == now.date()]
     if not today:
-        return Finding(name, False, f"no run started today ({now.date()}); due since 11:45 UTC")
+        due = pacific(dt.datetime.combine(now.date(), SILVER_STARTS_UTC, dt.UTC))
+        return Finding(name, False, f"no run has started yet today; it is due at {due}")
     return job_finding(name, today, now, max_age_min=24 * 60.0)
 
 
 def summary_markdown(findings: Sequence[Finding], now: dt.datetime) -> str:
     lines = [
-        f"## Watchdog {now.strftime('%Y-%m-%d %H:%M UTC')}",
+        f"## Watchdog {now.astimezone(PACIFIC).strftime('%Y-%m-%d %H:%M %Z')}",
         "",
         "| | check | detail |",
         "|---|---|---|",

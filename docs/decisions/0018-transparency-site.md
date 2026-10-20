@@ -47,6 +47,17 @@ CLAUDE.md rule forbids querying the warehouse from a public path.
   long time series, PNG download, and a "show the numbers" table under every chart. The lineage graph
   highlights what a hovered table reads and what reads it.
 
+## Time zone (added 2026-10-20)
+
+Every time on the public page is Seattle wall-clock time (the browser's tz database gives PDT in summer,
+PST in winter): axes, ages' absolute stamps, job-run tooltips, sample-row timestamps, "newest data" and
+the watchdog probe details (Python `zoneinfo`). Day buckets (files per day, fixes per day, check trend,
+DBU per day) are Seattle calendar days (`pacific_date()` in `public/queries.py`); a service date stays
+the agency's operating day. Machine fields in `site.json` / `status.json` stay UTC ISO strings and are
+converted only for display. The one remaining word "UTC" on the page is a check's explanation of how
+stored schedule times are validated. The first and latest Pacific days are partial. Around the autumn
+clock change an hourly series has a repeated local hour; accepted.
+
 ## Consequences
 
 - One data layer feeds the page; a Databricks dashboard can be added later on the same tables.

@@ -59,7 +59,29 @@
     return (sec / 86400).toFixed(1) + " days";
   }
   function ago(date, now) { return date ? dur((now - date) / 1000) + " ago" : "–"; }
-  function stamp(d) { return d ? d.toISOString().slice(0, 16).replace("T", " ") + " UTC" : "–"; }
+  /* every time shown on the page is Seattle wall-clock time (PDT in summer, PST in winter) */
+  var PT_FMT = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+  var PT_ZONE = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "short" });
+  function ptParts(d) { var o = {}; PT_FMT.formatToParts(d).forEach(function (p) { o[p.type] = p.value; }); return o; }
+  function ptZone(d) { var z = PT_ZONE.formatToParts(d).filter(function (p) { return p.type === "timeZoneName"; })[0]; return z ? z.value : "PT"; }
+  function ptNaive(d) { var p = ptParts(d); return p.year + "-" + p.month + "-" + p.day + " " + p.hour + ":" + p.minute + ":" + p.second; }
+  function stamp(d) { if (!d) return "–"; var p = ptParts(d); return p.year + "-" + p.month + "-" + p.day + " " + p.hour + ":" + p.minute + " " + ptZone(d); }
+  function stampSec(d) { return ptNaive(d) + " " + ptZone(d); }
+  function whenText(value) {  /* a date stays a date; a timestamp becomes Seattle time */
+    if (value === null || value === undefined) return "–";
+    var t = String(value);
+    if (/^\d{4}-\d\d-\d\d$/.test(t)) return t;
+    var d = utc(t);
+    return d ? stamp(d) : t;
+  }
+  var ISO_TS = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)?$/;
+  function localize(value, key) {  /* timestamps inside a sample row, shown in Seattle time */
+    if (typeof value === "string" && ISO_TS.test(value)) { var d = utc(value); return d ? stampSec(d) : value; }
+    if (typeof value === "number" && /(_ts|_time)$/.test(key || "") && value > 1e9 && value < 3e9) return stampSec(new Date(value * 1000));
+    if (Array.isArray(value)) return value.map(function (v) { return localize(v, key); });
+    if (value && typeof value === "object") { var o = {}; Object.keys(value).forEach(function (k) { o[k] = localize(value[k], k); }); return o; }
+    return value;
+  }
   function group(rows, key) {
     var out = {};
     rows.forEach(function (r) { (out[r[key]] = out[r[key]] || []).push(r); });
@@ -145,12 +167,13 @@
   function lineChart(o) {
     var traces = o.series.map(function (s, k) {
       var pts = s.points.filter(function (p) { return p.x && p.y !== null && p.y !== undefined; }).sort(function (a, b) { return a.x - b.x; });
-      return { type: "scatter", mode: "lines", name: s.name, x: pts.map(function (p) { return p.x.toISOString(); }), y: pts.map(function (p) { return p.y; }), line: { color: color(s.color, k), width: 2 }, hovertemplate: s.name + ": %{y:,.1f}<extra></extra>" };
+      return { type: "scatter", mode: "lines", name: s.name, x: pts.map(function (p) { return ptNaive(p.x); }), y: pts.map(function (p) { return p.y; }), line: { color: color(s.color, k), width: 2 }, hovertemplate: s.name + ": %{y:,.1f}<extra></extra>" };
     });
     var n = traces.reduce(function (a, t) { return Math.max(a, t.x.length); }, 0);
     var layout = baseLayout({
-      showlegend: o.series.length > 1, hovermode: "x unified", height: n > 40 ? 360 : 300,
-      xaxis: { type: "date", rangeslider: n > 40 ? { visible: true, thickness: 0.1 } : { visible: false } },
+      showlegend: o.series.length > 1, hovermode: "x unified", height: n > 40 ? 380 : 320,
+      legend: { orientation: "h", x: 0, y: 1.0, yanchor: "bottom" }, margin: { t: 34 },
+      xaxis: { type: "date", title: { text: "Seattle time (" + ptZone(new Date()) + ")" }, hoverformat: "%b %d, %H:%M", rangeslider: n > 40 ? { visible: true, thickness: 0.1 } : { visible: false } },
       yaxis: { rangemode: "tozero", range: o.yMax ? [0, o.yMax] : undefined }
     });
     var rows = [];
@@ -179,13 +202,13 @@
     if (!rows.length) return null;
     return el("div", { "class": "cards" }, rows.map(function (r) {
       var sample = samples[layer + "." + r.name], pretty = null;
-      if (sample) { try { pretty = JSON.stringify(JSON.parse(sample), null, 1); } catch (e) { pretty = sample; } }
+      if (sample) { try { pretty = JSON.stringify(localize(JSON.parse(sample)), null, 1); } catch (e) { pretty = sample; } }
       return el("div", { "class": "card" }, [
         el("h4", { text: layer + "." + r.name }),
         el("p", { text: r.purpose }),
         el("p", { "class": "meta" }, [el("b", { text: "One row is: " }), r.grain]),
         el("p", { "class": "meta" }, [el("b", { text: "Built by: " }), r.built_by]),
-        el("p", { "class": "meta" }, [el("b", { text: "Rows now: " }), num(r.row_count), "  ", el("b", { text: "Newest data: " }), r.newest ? String(r.newest).slice(0, 19) : "–"]),
+        el("p", { "class": "meta" }, [el("b", { text: "Rows now: " }), num(r.row_count), "  ", el("b", { text: "Newest data: " }), whenText(r.newest)]),
         pretty ? el("details", {}, [el("summary", { text: "Show one example row (masked)" }), el("pre", { text: pretty })]) : null
       ]);
     }));
@@ -205,7 +228,7 @@
       var full = (data.tables.hourly_snapshots || []).filter(function (r) { return utc(r.hour) < thisHour; });
       var by = group(full, "source");
       var series = Object.keys(by).sort().map(function (s) { return { name: s.replace("_", " "), points: by[s].map(function (r) { return { x: utc(r.hour), y: r.snapshots }; }) }; });
-      return [lineChart({ title: "Files landed per hour (last 48 hours)", caption: "Hover for exact values; drag to zoom, double-click to reset, or use the slider below. Each point is one full hour (the current, partial hour is left out). Each file is one download. Expected: about 180 vehicle downloads, 60 trip-update downloads and 12 alert downloads per hour. Dips in the vehicle line around 10:05–10:16 UTC are the agency's nightly period when buses are not reporting.", series: series })];
+      return [lineChart({ title: "Files landed per hour (last 48 hours)", caption: "Hover for exact values; drag to zoom, double-click to reset, or use the slider below. Each point is one full hour (the current, partial hour is left out). Each file is one download. Expected: about 180 vehicle downloads, 60 trip-update downloads and 12 alert downloads per hour. Dips in the vehicle line around 3:05–3:16 am Seattle time are the agency's nightly period when buses are not reporting.", series: series })];
     },
     bronze: function (data) {
       var out = [];
@@ -227,6 +250,8 @@
       if (w.length) out.push(barChart({ title: "How precisely arrivals are known: interval width (" + distDay(w) + ")", caption: "The interval is the time between the last GPS fix before the bus reached the stop and the first one after. Narrow is better.", categories: w.map(function (r) { return r.bucket; }), series: [{ name: "stops", values: w.map(function (r) { return r.value; }) }], xLabel: "seconds" }));
       var cov = dist(data, "coverage_by_pacific_hour");
       if (cov.length) out.push(barChart({ title: "Share of stops with a measured arrival, by hour of day (Pacific, " + distDay(cov) + ")", caption: "Late-night coverage is lower because fewer buses run and the agency's feed is quiet.", categories: cov.map(function (r) { return r.bucket; }), series: [{ name: "share measured", values: cov.map(function (r) { return r.value; }) }], pct: true, yMax: 1, xLabel: "hour (Pacific)" }));
+      var pl = dist(data, "pointer_lead_feet");
+      if (pl.length) out.push(barChart({ title: "How far short of the stop was the bus when the agency's next-stop pointer moved? (" + distDay(pl) + ")", caption: "The feed's next-stop pointer is supposed to say which stop is next. It usually moves a little before the bus reaches the stop: this counts the arrivals where it moved while the bus was still short of the stop (median about 75 feet). When that conflicts with the GPS we keep the GPS interval and record the gap, rather than trusting the pointer.", categories: pl.map(function (r) { return r.bucket; }), series: [{ name: "stops", values: pl.map(function (r) { return r.value; }) }], xLabel: "feet short of the stop" }));
       var fx = dist(data, "fixes_per_trip");
       if (fx.length) out.push(barChart({ title: "GPS fixes per trip (" + distDay(fx) + ")", caption: "A typical trip has around 100 fixes (one about every 20 seconds). Trips with none were never seen.", categories: fx.map(function (r) { return r.bucket; }), series: [{ name: "trips", values: fx.map(function (r) { return r.value; }) }], xLabel: "fixes" }));
       return out;
@@ -405,7 +430,7 @@
     var rows = data.tables.billing_daily || [], host = document.getElementById("billing");
     if (!rows.length) { host.appendChild(el("p", { text: "No usage data yet." })); return; }
     var dates = Object.keys(group(rows, "usage_date")).sort(), labels = Object.keys(group(rows, "label")).sort();
-    host.appendChild(barChart({ title: "DBU used per day, by what used it (last 14 days)", caption: "Usage data arrives about a day late, so the latest bar is partial. Click a legend entry to hide or isolate a series.", categories: dates.map(function (d) { return d.slice(5); }), mode: "stack", series: labels.map(function (l) { return { name: l, values: dates.map(function (d) { var r = rows.filter(function (x) { return x.usage_date === d && x.label === l; })[0]; return r ? Number(r.dbu) : 0; }) }; }) }));
+    host.appendChild(barChart({ title: "DBU used per day, by what used it (last 14 days)", caption: "Days are Seattle calendar days. Usage data arrives about a day late, so the latest bar is partial. Click a legend entry to hide or isolate a series.", categories: dates.map(function (d) { return d.slice(5); }), mode: "stack", series: labels.map(function (l) { return { name: l, values: dates.map(function (d) { var r = rows.filter(function (x) { return x.usage_date === d && x.label === l; })[0]; return r ? Number(r.dbu) : 0; }) }; }) }));
   }
 
   function renderLineage(data) {

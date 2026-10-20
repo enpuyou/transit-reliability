@@ -15,10 +15,17 @@ from collections.abc import Callable
 PACIFIC_TODAY = "to_date(from_utc_timestamp(current_timestamp(), 'America/Los_Angeles'))"
 COMPLETE_DAY = f"date_sub({PACIFIC_TODAY}, 2)"  # a service date is complete two days later
 BRONZE_SOURCES = ("vehicle_positions", "trip_updates", "alerts")
+PACIFIC_ZONE = "'America/Los_Angeles'"
 PROD_JOB_NAMES = "j.job_name LIKE 'transit-reliability-prod-%'"
 JOB_NAMES = (
     "SELECT job_id, max_by(name, change_time) AS job_name FROM system.lakeflow.jobs GROUP BY job_id"
 )
+
+
+def pacific_date(expr: str) -> str:
+    """The calendar day in Seattle of a UTC timestamp expression (day buckets match what a rider sees)."""
+
+    return f"to_date(from_utc_timestamp({expr}, {PACIFIC_ZONE}))"
 
 
 def public_schema(prefix: str) -> str:
@@ -71,7 +78,7 @@ def _daily_metric_parts(prefix: str) -> list[str]:
     )
     since = "feed_header_ts >= unix_timestamp(current_timestamp() - INTERVAL 8 DAYS)"
     recent = f"service_date >= date_sub({PACIFIC_TODAY}, 8)"
-    day = "to_date(timestamp_seconds(feed_header_ts))"
+    day = pacific_date("timestamp_seconds(feed_header_ts)")
     parts = []
     for s in BRONZE_SOURCES:
         parts.append(
@@ -80,8 +87,8 @@ def _daily_metric_parts(prefix: str) -> list[str]:
             f"UNION ALL SELECT {day}, 'bronze.{s}', 'rows', CAST(count(*) AS DOUBLE) FROM {bronze(s)} WHERE {since} GROUP BY 1"
         )
     parts += [
-        f"SELECT to_date(vehicle_ts) AS day, 'silver.vehicle_positions' AS stage, 'distinct fixes' AS metric, CAST(count(*) AS DOUBLE) AS value FROM {silver('vehicle_positions')} WHERE vehicle_ts >= current_timestamp() - INTERVAL 8 DAYS GROUP BY 1",
-        f"SELECT to_date(bronze_ingested_at), 'silver.quarantine_vehicle_positions', 'rejected rows', CAST(count(*) AS DOUBLE) FROM {silver('quarantine_vehicle_positions')} WHERE bronze_ingested_at >= current_timestamp() - INTERVAL 8 DAYS GROUP BY 1",
+        f"SELECT {pacific_date('vehicle_ts')} AS day, 'silver.vehicle_positions' AS stage, 'distinct fixes' AS metric, CAST(count(*) AS DOUBLE) AS value FROM {silver('vehicle_positions')} WHERE vehicle_ts >= current_timestamp() - INTERVAL 8 DAYS GROUP BY 1",
+        f"SELECT {pacific_date('bronze_ingested_at')}, 'silver.quarantine_vehicle_positions', 'rejected rows', CAST(count(*) AS DOUBLE) FROM {silver('quarantine_vehicle_positions')} WHERE bronze_ingested_at >= current_timestamp() - INTERVAL 8 DAYS GROUP BY 1",
         f"SELECT service_date, 'silver.scheduled_trips', 'scheduled trips', CAST(count(*) AS DOUBLE) FROM {silver('scheduled_trips')} WHERE {recent} GROUP BY 1",
         f"SELECT service_date, 'silver.stop_visits', 'scheduled stops', CAST(count(*) AS DOUBLE) FROM {silver('stop_visits')} WHERE {recent} GROUP BY 1",
         f"SELECT service_date, 'silver.stop_visits', 'stops with a measured arrival', CAST(count(arr_est) AS DOUBLE) FROM {silver('stop_visits')} WHERE {recent} GROUP BY 1",
@@ -106,6 +113,14 @@ def _distribution_parts(prefix: str) -> list[str]:
         f"SELECT 'fixes_per_trip', {COMPLETE_DAY}, CASE WHEN n = 0 THEN 'none' WHEN n <= 20 THEN '1-20' WHEN n <= 60 THEN '21-60' WHEN n <= 120 THEN '61-120' WHEN n <= 240 THEN '121-240' ELSE 'over 240' END, "
         f"CASE WHEN n = 0 THEN 0 WHEN n <= 20 THEN 1 WHEN n <= 60 THEN 2 WHEN n <= 120 THEN 3 WHEN n <= 240 THEN 4 ELSE 5 END, CAST(count(*) AS DOUBLE) FROM (SELECT max(n_fixes) AS n FROM {sv} WHERE {cd} GROUP BY trip_id) GROUP BY 3, 4",
     ]
+    lead = (
+        "CASE WHEN pointer_lead_ft <= 100 THEN 0 WHEN pointer_lead_ft <= 200 THEN 1 WHEN pointer_lead_ft <= 500 THEN 2 "
+        "WHEN pointer_lead_ft <= 1000 THEN 3 WHEN pointer_lead_ft <= 2000 THEN 4 ELSE 5 END"
+    )
+    parts.append(
+        f"SELECT 'pointer_lead_feet', {COMPLETE_DAY}, CASE b WHEN 0 THEN '0-100' WHEN 1 THEN '101-200' WHEN 2 THEN '201-500' WHEN 3 THEN '501-1000' WHEN 4 THEN '1001-2000' ELSE 'over 2000' END, b, CAST(count(*) AS DOUBLE) "
+        f"FROM (SELECT {lead} AS b FROM {sv} WHERE {cd} AND pointer_lead_ft IS NOT NULL) GROUP BY 3, 4"
+    )
     for outcome in ("early", "on_time", "late", "uncertain"):
         parts.append(
             f"SELECT 'on_time_by_day_common_lens', service_date, '{outcome}', 0, CAST(sum(n_common_{outcome}) AS DOUBLE) FROM {tp} WHERE service_date BETWEEN date_sub({COMPLETE_DAY}, 6) AND {COMPLETE_DAY} GROUP BY 2"
@@ -129,7 +144,7 @@ def heavy_queries(prefix: str) -> dict[str, str]:
     return {
         "daily_metrics": " UNION ALL ".join(_daily_metric_parts(prefix)),
         "check_trend": (
-            "SELECT to_date(run_ts) AS day, suite, check_name, count(*) AS runs, count_if(status = 'fail') AS failures, count_if(status = 'warn') AS warnings, min(value) AS min_value, max(value) AS max_value "
+            f"SELECT {pacific_date('run_ts')} AS day, suite, check_name, count(*) AS runs, count_if(status = 'fail') AS failures, count_if(status = 'warn') AS warnings, min(value) AS min_value, max(value) AS max_value "
             f"FROM {ops('check_results')} WHERE run_ts >= current_timestamp() - INTERVAL 14 DAYS GROUP BY 1, 2, 3"
         ),
         "lineage_edges": (
@@ -137,7 +152,7 @@ def heavy_queries(prefix: str) -> dict[str, str]:
             f"WHERE event_date >= date_sub(current_date(), 30) AND {owned} AND {not_public} AND source_table_full_name <> target_table_full_name"
         ),
         "billing_daily": (
-            f"WITH j AS ({JOB_NAMES}) SELECT u.usage_date, CASE "
+            f"WITH j AS ({JOB_NAMES}) SELECT {pacific_date('u.usage_start_time')} AS usage_date, CASE "
             "WHEN j.job_name LIKE 'transit-reliability-prod-ingest' THEN 'ingest job (every 30 min)' "
             "WHEN j.job_name LIKE 'transit-reliability-prod-silver' THEN 'silver job (daily)' "
             "WHEN j.job_name LIKE 'transit-reliability-prod-monitor' THEN 'monitor job (hourly)' "

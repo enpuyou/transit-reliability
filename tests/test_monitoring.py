@@ -121,3 +121,15 @@ def test_the_status_file_carries_when_it_was_checked_and_what_each_probe_found()
         {"name": "a", "ok": True, "detail": "fine"},
         {"name": "b", "ok": False, "detail": "bad"},
     ]
+
+
+def test_details_a_visitor_reads_use_pacific_time() -> None:
+    from transit_reliability.monitoring.watchdog import pacific
+
+    assert pacific(dt.datetime(2026, 10, 20, 12, 30, tzinfo=dt.UTC)) == "05:30 PDT"
+    assert pacific(dt.datetime(2026, 12, 20, 12, 30, tzinfo=dt.UTC)) == "04:30 PST"
+    finding = job_finding("ingest", [run(10)], NOW, 75)  # NOW is 23:10 UTC, 16:10 PDT
+    assert "UTC" not in finding.detail and "PDT" in finding.detail
+    late = dt.datetime(2026, 10, 19, 14, 0, tzinfo=dt.UTC)
+    missing = silver_finding([run(22 * 60, base=late)], late)
+    assert "UTC" not in missing.detail and "04:45 PDT" in missing.detail

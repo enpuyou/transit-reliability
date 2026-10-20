@@ -1146,6 +1146,7 @@ One-time setup: repository Settings -> Pages -> Source: "GitHub Actions" (or
 `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`). The page then lives at
 `https://<owner>.github.io/<repo>/` (here: https://enpuyou.github.io/transit-reliability/, live since 2026-10-20).
 
+Time zone: the page shows Seattle time everywhere (see decision 0018); raw JSON fields are UTC.
 Freshness: `data/site.json` is rebuilt hourly and `data/status.json` every 15 minutes (workflow
 `publish_site.yml`, via `scripts/watchdog.py --json-out`). Run the probes yourself, locally:
 `uv run python scripts/watchdog.py --profile enpu --json-out site/data/status.json`. To see the page's

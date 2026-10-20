@@ -29,7 +29,7 @@
     <h2>The pipeline at a glance</h2>
     <p>Data flows left to right. Each box shows the headline number for that stage. Select a box to jump to its explanation.</p>
     <div id="pipeline-map" class="pipemap"></div>
-    <p class="note">Times on this page are UTC unless a label says Pacific. Counts come from the pipeline's own tables.</p>
+    <p class="note">Every time on this page is Seattle local time (PDT in summer, PST in winter), and a "day" is a Seattle calendar day, except a <em>service date</em>, which is the agency's operating day (a trip that runs past midnight still belongs to the earlier service date). Counts come from the pipeline's own tables.</p>
   </section>
 
   <div id="layers"></div>
@@ -61,7 +61,7 @@
       <li><strong>Not every stop is measured.</strong> About two thirds of timepoints (stops with a published time) have a measured arrival. The first stop of a trip is almost never measured, because the bus is often first seen after it has left; the last stop only occasionally. Percentages describe the middle of trips.</li>
       <li><strong>"Early" is judged on arrival.</strong> Buses are supposed to wait at timepoints until the scheduled time, so arriving early is normal; leaving early is the real problem.</li>
       <li><strong>The feed's "next stop" pointer moves early, and we do not trust it over the GPS.</strong> About one arrival in ten, the agency advances its pointer a little before the bus reaches the stop (typically around 75 feet short). When that conflicts with the GPS position we keep the GPS interval and record how short of the stop the bus was. Until 2026-10-20 such arrivals were wrongly shown as exact to the second; that was found by the independent review process described below and fixed.</li>
-      <li><strong>Partial days.</strong> Collection began on 2026-10-13 about 21:43 UTC and the first and latest days are incomplete; their missing trips are missing data, not missed service.</li>
+      <li><strong>Partial days.</strong> Collection began on 2026-10-13 at about 2:43 pm Seattle time and the first and latest days are incomplete; their missing trips are missing data, not missed service.</li>
       <li><strong>Independent review.</strong> A separate reviewer with no knowledge of how the pipeline was built audited the code and the data on 2026-10-19 and found a real bug, which was fixed and the data rebuilt.</li>
     </ul>
   </section>
