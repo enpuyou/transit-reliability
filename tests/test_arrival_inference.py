@@ -288,3 +288,39 @@ def test_a_pointer_that_only_ever_moves_forward_is_left_alone() -> None:
     assert infer_stop_visits(line_shape(), fixes, STOPS) == infer_stop_visits(
         line_shape(), [replace(f) for f in fixes], STOPS
     )
+
+
+def _pointer_moves_at(fixes: list[Fix], x_ft: float) -> list[Fix]:
+    """Fixes whose next-stop pointer names stop 3 once the bus is past `x_ft` (x = SPEED * t);
+    earlier fixes keep the pointer at stop 2 (B, at 3000 ft, is the stop under test)."""
+
+    return [replace(f, next_seq=3 if SPEED * f.ts >= x_ft else 2, stopped=False) for f in fixes]
+
+
+def test_a_pointer_that_runs_far_ahead_of_the_bus_is_ignored_and_the_conflict_recorded() -> None:
+    # the pointer says "stop B served" when the bus is still 1,200 ft short of B (x=1800 at t=60)
+    fixes = _pointer_moves_at(drive(every=20.0, end_t=200), 1500.0)
+    b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
+    assert b.advance_ts == 60.0  # the pointer's own time is still reported
+    assert b.arr_method == "interpolated"
+    assert b.arr_lo == 80.0 and b.arr_hi == 100.0  # the GPS bracket, not collapsed to t=60
+    assert abs(arr(b) - arrival_truth(3000.0)) < 0.05
+    assert b.pointer_lead_ft is not None and abs(b.pointer_lead_ft - 1200.0) < 0.01
+
+
+def test_a_pointer_that_moves_slightly_early_is_still_believed() -> None:
+    # fixes every 2 s (60 ft); the pointer moves when the bus is 180 ft short of B, inside the
+    # 200 ft tolerance of a stop that is simply being approached, so it still caps the arrival
+    fixes = _pointer_moves_at(drive(every=2.0, end_t=120), 3000.0 - 180.0)
+    b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
+    assert b.pointer_lead_ft is None
+    assert b.arr_hi == b.advance_ts == 94.0
+
+
+def test_a_consistent_pointer_is_unchanged_by_the_conflict_rule() -> None:
+    fixes = drive(pointer=True)
+    result = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))
+    assert all(v.pointer_lead_ft is None for v in result.values())
+    assert (
+        result[2].advance_ts == 100.0 and result[2].arr_hi is not None and result[2].arr_hi <= 100.0
+    )

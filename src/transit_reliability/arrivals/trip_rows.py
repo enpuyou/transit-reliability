@@ -60,6 +60,7 @@ def stop_visit_rows(
                 "dwell_first": v.dwell_first,
                 "dwell_last": v.dwell_last,
                 "n_fixes": len(fixes),
+                "pointer_lead_ft": v.pointer_lead_ft,
             }
         )
     return rows

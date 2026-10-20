@@ -24,7 +24,7 @@ OUT_DDL = (
     "arr_lo double, arr_hi double, arr_est double, arr_method string, "
     "dep_lo double, dep_hi double, dep_est double, dep_method string, "
     "arr_delay_s double, dep_delay_s double, advance_ts double, dwell_first double, "
-    "dwell_last double, n_fixes long"
+    "dwell_last double, n_fixes long, pointer_lead_ft double"
 )
 INT_COLUMNS = ("direction_id", "stop_sequence", "timepoint", "n_fixes")
 
@@ -167,12 +167,14 @@ def _build_day(spark: Any, prefix: str, day: dt.date) -> int:
         _ts("arr_lo"), _ts("arr_hi"), _ts("arr_est"), "arr_method",
         _ts("dep_lo"), _ts("dep_hi"), _ts("dep_est"), "dep_method",
         "arr_delay_s", "dep_delay_s",
-        _ts("advance_ts"), _ts("dwell_first"), _ts("dwell_last"), "n_fixes",
+        _ts("advance_ts"), _ts("dwell_first"), _ts("dwell_last"), "n_fixes", "pointer_lead_ft",
     )  # fmt: skip
     target = f"{silver}.{TABLE}"
     if spark.catalog.tableExists(target):
         spark.sql(f"DELETE FROM {target} WHERE service_date = DATE'{day.isoformat()}'")
-    final.write.format("delta").mode("append").saveAsTable(target)
+    # mergeSchema: a column added to the output (pointer_lead_ft, 2026-10-20) must not break appends
+    # to a table built before it existed; older rows simply have NULL until rebuilt
+    final.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(target)
     return int(spark.table(target).where(F.col("service_date") == stamp).count())
 
 

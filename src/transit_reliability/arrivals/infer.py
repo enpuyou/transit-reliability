@@ -37,6 +37,9 @@ TIE_FT = 60.0  # candidates this close to the best are treated as equally near (
 SMALL_BACK_FT = 100.0  # a candidate more than this behind the previous position is implausible
 DWELL_BEHIND_FT = 200.0  # a stopped fix counts as dwell at a stop if within this short of it...
 DWELL_AHEAD_FT = 150.0  # ...or this far past it
+POINTER_LEAD_TOL_FT = (
+    200.0  # a pointer that moves when the bus is this short of the stop is believed
+)
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,9 @@ class StopVisit:
     dwell_first: float | None  # first STOPPED_AT fix near this stop (next stop = the following one)
     dwell_last: float | None  # last such fix
     geo_arr_est: float | None = None  # the geometric arrival estimate before evidence adjustments
+    # feet short of this stop the bus still was when the feed's next-stop pointer already named a
+    # later stop and the pointer was therefore IGNORED (None when it was used or did not conflict)
+    pointer_lead_ft: float | None = None
 
 
 class Shape:
@@ -291,8 +297,24 @@ def infer_stop_visits(
             a_method = d_method = "no_geometry"
         geo_arr_est = a_est
 
-        # Arrival: the pointer or a dwell report shows the bus had reached the stop by then.
-        cap = min((t for t in (advance, dwell_first) if t is not None), default=None)
+        # Arrival: the pointer or a dwell report shows the bus had reached the stop by then, UNLESS
+        # the GPS says the pointer ran ahead of the bus: the pointer moved before the geometric
+        # arrival interval, with the bus demonstrably far short of the stop (2026-10-17: 9 percent
+        # of arrivals were collapsed to the pointer's time this way). GPS position is a physical
+        # measurement, so it wins; the conflict is kept in `pointer_lead_ft` so it can be measured.
+        pointer = advance
+        pointer_lead_ft = None
+        if (
+            advance is not None
+            and a_method in ("interpolated", "wide_gap")
+            and a_lo is not None
+            and advance < a_lo
+        ):
+            at_pointer = dist_at.get(advance)
+            if at_pointer is not None and stop.dist - at_pointer > POINTER_LEAD_TOL_FT:
+                pointer_lead_ft = stop.dist - at_pointer
+                pointer = None
+        cap = min((t for t in (pointer, dwell_first) if t is not None), default=None)
         if (
             a_method in ("interpolated", "wide_gap", "before_first_fix")
             and cap is not None
@@ -332,6 +354,7 @@ def infer_stop_visits(
                 dwell_first,
                 dwell_last,
                 geo_arr_est,
+                pointer_lead_ft,
             )  # fmt: skip
         )
     return enforce_order(visits)
