@@ -1,7 +1,7 @@
 # 0021: First and last stop coverage; judging on-time by departure (proposed)
 
 Date: 2026-10-20
-Status: partly decided. The owner decided on 2026-10-20 that the LAST stop is left out of on-time shares (and the page says so). Departure as the headline: pending the owner's go-ahead.
+Status: partly decided. The owner decided on 2026-10-20 that the LAST stop is left out of on-time shares (and the page says so). The owner also wants BOTH arrival and departure kept, each used where it matters: late is judged on arrival, early on departure (rule below). Implementation: pending the owner's go-ahead.
 
 ## Question
 
@@ -44,3 +44,23 @@ be judged on arrival or departure?
 New departure-based lenses and `n_*` columns in `trip_performance`/`route_performance`, a rebuild, a
 change to the headline and to the public page text ("early" currently counts arrivals), and the daily
 coverage checks would measure departure coverage. Arrival-based shares stay available alongside.
+
+## Owner's refinement (2026-10-20): late by arrival, early by departure
+
+"Arriving late means more than departing late; departing early means more than arriving early." So, per
+timepoint, last stop excluded, using the existing 'common' window (1 minute early to 5 minutes late) and
+the interval of each estimate:
+
+- early: the departure interval is entirely earlier than 1 minute early;
+- late: the arrival interval is entirely later than 5 minutes late (first stop: the departure, because
+  the bus is parked there and its arrival is not measurable);
+- on time: certainly not early AND certainly not late. Departure cannot be before arrival, so a lower
+  bound of either one is a lower bound of the departure, and an upper bound of either is an upper bound
+  of the arrival; whichever was measured can certify;
+- uncertain: otherwise. A timepoint with no estimate at all is not counted.
+
+Measured on three days with this rule: 2026-10-16 early 7.2, on time 72.2, late 15.3, uncertain 5.3
+percent (n = 66,153); 10-14: 6.7 / 71.9 / 15.0 / 6.4 (64,882); 10-18: 6.7 / 74.8 / 12.9 / 5.5 (46,536).
+Compare the current arrival-only rule on 10-16: 12.5 / 64.2 / 16.3 / 7.1 (56,953) and departure-only:
+7.2 / 68.6 / 18.1 / 6.1 (65,690). The higher on-time share comes from the definition (each side is judged
+only where it matters), not from better service, and the page must say so.
