@@ -4,6 +4,32 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-19 correction after an independent audit (read this first)
+
+An independent reviewer (a separate agent with no knowledge of how the pipeline was built) audited the
+code and the live data; see decision 0016. Everything below was computed BEFORE the fix it found.
+
+- **Bug found and fixed:** when a bus switched trips, its first GPS fix could still carry the previous
+  trip's next-stop pointer, and the inference read it as "every stop already served". It affected about
+  7.7 percent of interpolated arrivals (about 1,000 trips a day) with intervals up to 6,688 s, an early
+  bias of about 50 s on those rows. After the fix (prod rebuilt 2026-10-19 from 2026-10-13) that share
+  is 0.09 percent (measured on 2026-10-16).
+- **What changed on 2026-10-16 (common lens, all trips):** early 7,887 -> 7,186, uncertain 5,975 ->
+  3,394 (-43 percent), on time 34,363 -> 36,960. Median trip delay about 102 s -> 106 s.
+- **Prediction accuracy (Finding 1) survives.** Pooled over 10-14 to 10-16, median absolute error,
+  agency / persistence / schedule: 5 min 62 / 56 / 144 s, 15 min 96 / 94 / 159 s, 30 min 132 / 133 /
+  176 s (n = 947,819 / 661,297 / 300,950 scored arrivals, up from 875,850 / 614,223 / 279,074 because
+  fewer arrivals now have wide intervals). 90th percentile of absolute error: agency 170 / 258 / 354 s.
+- **Read all on-time shares with these limits (found by the audit, not fixed):** the first timepoint of
+  a trip is almost never measured and the last is measured 4.4 percent of the time, so only about 66
+  percent of scheduled timepoints have an interval; shares describe the middle of trips. "Early" is
+  judged on ARRIVAL, which is normal (buses hold for the scheduled departure); the departure-based
+  figure `n_tp_left_early` is the meaningful one. Dates 2026-10-13 and 2026-10-18 are partial and show
+  thousands of "not observed" trips that are missing data, not missed service. About 100 prediction
+  errors a day are about a day off (the same trip id on the next day).
+- The per-day numbers in the older sections below that depend on arrival times (early and uncertain
+  counts, delay percentiles) are stale until re-run; the prediction medians above replace theirs.
+
 ## 2026-10-18 data-quality note
 Findings below were computed from service date 2026-10-14 only, which was built by the first full run
 and is unaffected by the incident in decision 0015 (silver vehicle positions dropped most fixes from

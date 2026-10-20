@@ -1058,3 +1058,23 @@ and a known trip row by row. Drop the `evo_transit_silver` schema afterwards.
   had no runs between 17:30 and 22:30 UTC, at the same time the SQL warehouse would not start (cause
   unverified). Look at the gap in `databricks jobs list-runs --job-id <id>`, not only at run results.
   `scripts/collection_health.py` also only sees gaps between landed files, not after the last one.
+
+## Independent audit (read-only checks on prod)
+
+Run the auditor's 28 SQL checks for one complete service date (at least 2 days old):
+
+```bash
+uv run --group dev python -m transit_reliability.audit.runners --profile enpu --day 2026-10-16
+```
+Each line is pass or FAIL with the measured value and the rule; the SQL for each check is in
+`src/transit_reliability/audit/catalog.py` so you can paste it into the SQL editor and rerun it. The
+warehouse must be running. After the 2026-10-19 rebuild: 24 pass, 4 fail (known, decision 0016).
+
+## Rebuild stop visits and gold tables from a date (after an inference change)
+
+Deploy the prod bundle first (the jobs run the deployed wheel), then submit one multi-task run: `build_silver_stop_visits`
+`--rebuild-from D`, then `build_gold_trip_performance` and `build_gold_prediction_errors` (both after it),
+then `build_gold_route_performance` (after trips) and `build_gold_prediction_accuracy` (after errors), each with
+`--schema-prefix transit --rebuild-from D`, then `run_health_checks`. 2026-10-19 timings from 10-13: 770 s,
+103, 156, 81, 83 s. `run_health_checks` fails with `silver_lag_hours` if silver vehicle positions are older
+than 3 hours; rerun `build_silver_vehicle_positions` first (it is not part of this rebuild).
