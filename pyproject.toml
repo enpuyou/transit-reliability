@@ -24,6 +24,7 @@ build_silver_trip_updates = "transit_reliability.entrypoints.jobs:build_silver_t
 build_silver_stop_visits = "transit_reliability.entrypoints.jobs:build_silver_stop_visits"
 run_monitor = "transit_reliability.entrypoints.jobs:run_monitor"
 publish_site = "transit_reliability.entrypoints.jobs:publish_site"
+fail_job = "transit_reliability.entrypoints.jobs:fail_job"
 build_gold_trip_performance = "transit_reliability.entrypoints.jobs:build_gold_trip_performance"
 build_gold_prediction_errors = "transit_reliability.entrypoints.jobs:build_gold_prediction_errors"
 build_gold_route_performance = "transit_reliability.entrypoints.jobs:build_gold_route_performance"

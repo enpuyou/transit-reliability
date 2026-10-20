@@ -127,3 +127,14 @@ If the watchdog says "could not check", suspect the Databricks token (rotate: `d
 "Token rotation"; the GitHub secret `DATABRICKS_TOKEN` is separate from the Worker's). GitHub disables
 scheduled workflows after 60 days without repository activity (unverified for this repository): push
 or run any workflow by hand to keep it alive. Compute cost of the monitor job: not yet measured.
+
+
+## Dispatcher token and GitHub schedule (2026-10-20; decision 0020)
+
+The Worker `transit-dispatcher` triggers the site/probe workflow every 15 minutes and the watchdog hourly
+using a fine-grained GitHub token (secret `GITHUB_TOKEN` in Cloudflare; Actions read and write on this
+repository only). Token expiry date: not yet set (record it here when created). When the token is missing
+or expired the probes stop and the public page turns red with "Cannot confirm the pipeline is alive".
+GitHub's own schedule is only a fallback. Databricks CLI login (`databricks auth login --profile enpu`)
+also expires; on 2026-10-20 both CLI profiles were invalid ("Refresh token is invalid") and had to be
+renewed in a browser; scheduled jobs and the GitHub workflows (which use their own token) were unaffected.

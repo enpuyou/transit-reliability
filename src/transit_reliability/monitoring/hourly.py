@@ -87,10 +87,10 @@ def hourly_checks(prefix: str) -> list[CheckSpec]:
             minimum=MIN_TRIPS_PER_DAY,
         ),
         CheckSpec(
-            "scheduled_trips_tomorrow",
-            f"SELECT count(*) FROM {silver}.scheduled_trips WHERE service_date = date_add({PACIFIC_DATE}, 1)",
-            "the daily job expands the schedule through tomorrow so the new day starts matched",
-            minimum=MIN_TRIPS_PER_DAY,
+            "schedule_expanded_days_ahead_of_today",
+            f"SELECT datediff(max(service_date), {PACIFIC_DATE}) FROM {silver}.scheduled_trips",
+            "the daily job expands trips through the day after its run, so the newest expanded date must never be behind today in Seattle (0 = through today, 1 = through tomorrow); a negative value means the daily job missed a run",
+            minimum=0,
         ),
         CheckSpec(
             "days_of_schedule_left",

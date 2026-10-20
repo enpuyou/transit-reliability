@@ -40,6 +40,19 @@ resources:
               - --parts
               - live
           environment_key: default
+        - task_key: fail_if_checks_failed
+          # runs only when hourly_checks failed: ends the whole run as FAILED so the failure email
+          # is sent (publish_live above still ran, so the page shows the failing check)
+          depends_on:
+            - task_key: hourly_checks
+          run_if: AT_LEAST_ONE_FAILED
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: fail_job
+            parameters:
+              - --reason
+              - hourly checks failed
+          environment_key: default
       environments:
         - environment_key: default
           spec:

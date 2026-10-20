@@ -71,6 +71,9 @@ def test_hourly_checks_are_single_statements_with_a_rule_and_unique_names() -> N
         assert c.minimum is not None or c.maximum is not None
         assert "workspace.transit_" in c.sql
     assert {"days_of_schedule_left", "scheduled_trips_today"} <= set(names)
+    assert (
+        "scheduled_trips_tomorrow" not in names
+    )  # false alarm 00:00 to 04:45 Seattle (2026-10-20)
 
 
 def test_drift_checks_use_only_the_given_day_and_the_days_before() -> None:

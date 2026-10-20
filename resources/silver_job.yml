@@ -143,8 +143,8 @@ resources:
         - task_key: publish_all
           depends_on:
             - task_key: daily_checks
-          # run even when a check failed: the page must show the failure, not go stale
-          run_if: ALL_DONE
+          # default run_if (all upstream succeeded): if any build or check failed the job fails and
+          # emails; the hourly monitor job keeps the page's live sections current meanwhile
           python_wheel_task:
             package_name: transit_reliability
             entry_point: publish_site

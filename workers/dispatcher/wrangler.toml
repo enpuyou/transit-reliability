@@ -1,0 +1,25 @@
+name = "transit-dispatcher"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# An alarm clock for GitHub Actions. GitHub's own `schedule` trigger is best-effort and, measured on
+# this repository on 2026-10-20, started 2 of about 64 expected 15-minute runs and ran a daily job
+# 3 to 6 hours late. A Cloudflare cron fires on time (the collector relies on it every minute), and
+# asking GitHub to run a workflow through the API starts it at once. All the work stays in the GitHub
+# workflows; this Worker only sends the request. Keep the crons in sync with SCHEDULE in src/dispatch.ts.
+[triggers]
+crons = ["*/15 * * * *", "5 * * * *"]
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
+
+[vars]
+GITHUB_REPO = "enpuyou/transit-reliability"
+
+# Secrets (set with `wrangler secret put <NAME>`, never in this file):
+#   GITHUB_TOKEN   a fine-grained token limited to this repository with "Actions: read and write"

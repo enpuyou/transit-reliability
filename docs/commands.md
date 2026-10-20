@@ -1158,3 +1158,30 @@ If a section on the page says it is unavailable, `errors` in `site.json` names t
 query from `src/transit_reliability/public/queries.py` in the SQL editor. If the workflow goes red with
 "site data is N h old", the monitor job is not running: see "Monitoring" in `docs/runbook.md`.
 To see the public tables themselves: `SHOW TABLES IN workspace.transit_public`.
+
+
+## Dispatcher Worker (alarm clock for GitHub workflows; decision 0020)
+
+GitHub's own `schedule` trigger is unreliable here (measured 2026-10-20: 2 of about 64 expected
+15-minute runs, the daily job 3 to 6 hours late). The Worker `workers/dispatcher` asks GitHub to run
+`publish_site.yml` every 15 minutes and `watchdog.yml` hourly at :05; the work itself stays in GitHub.
+
+**One-time setup (the owner does the token steps; never paste the token into chat or a file):**
+1. github.com -> Settings -> Developer settings -> Personal access tokens -> Fine-grained tokens ->
+   Generate. Repository access: Only select repositories -> this repository. Permissions -> Repository
+   permissions -> **Actions: Read and write** (Metadata read is added automatically). Expiry: the longest
+   offered; put the date in `docs/runbook.md`.
+2. `cd workers/dispatcher && npm install && npx wrangler secret put GITHUB_TOKEN` and paste the token at
+   the prompt (wrangler uses the Cloudflare login already used for the collector).
+3. `npm run deploy`.
+
+**Check that it fires (do this before trusting it):**
+```bash
+gh run list --workflow publish_site.yml --event workflow_dispatch --limit 6   # a run at each :00 :15 :30 :45
+gh run list --workflow watchdog.yml --event workflow_dispatch --limit 3        # one at :05 each hour
+cd workers/dispatcher && npx wrangler tail transit-dispatcher                  # live log lines (status 204 = accepted)
+```
+Cloudflare dashboard: Workers & Pages -> transit-dispatcher -> Logs. A failed dispatch (status 401/403:
+token missing, expired or without Actions permission; 404: wrong workflow file name or repo) throws, so
+the invocation is shown as failed. Rotate the token with `npx wrangler secret put GITHUB_TOKEN`.
+`npm run typecheck && npm test` in `workers/dispatcher` run in CI with the other checks.

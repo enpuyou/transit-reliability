@@ -239,3 +239,18 @@ def publish_site() -> None:
     from transit_reliability.public.build import publish_site as run
 
     run(_spark_session(), args.schema_prefix, args.state_volume, args.parts)
+
+
+def fail_job() -> None:
+    """Fail on purpose. Used by a task that runs only when an upstream task failed.
+
+    The monitor job publishes the site even when a check fails (the page must show the failure),
+    which would otherwise end the run as SUCCESS_WITH_FAILURES and send no failure email.
+    """
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reason", default="an upstream task failed")
+    args = parser.parse_args()
+    raise RuntimeError(
+        f"{args.reason}; see workspace.transit_ops.check_results and the failed task"
+    )
