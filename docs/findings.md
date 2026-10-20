@@ -4,6 +4,26 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-20 second correction: arrivals are no longer collapsed to a single instant (decision 0019)
+
+The proof report found that about 9.5 percent of measured arrivals had a zero-width interval. Cause:
+the feed's next-stop pointer (and dwell reports) usually arrive slightly BEFORE the bus reaches the stop
+(median 76 to 79 ft short, about 10 percent of arrivals every day, 2026-10-13 to 10-20), and the code
+capped the arrival at that instant, then set the lower bound to the same instant. Fixed and prod rebuilt
+from 2026-10-13 on 2026-10-20: zero-width share is now about 0.01 percent on every day; the pointer is
+ignored when it moves at or before the GPS bound, and `stop_visits.pointer_lead_ft` records how short of
+the stop the bus was.
+
+- Common lens, all trips, per day (early / on time / late / uncertain): 10-14: 6,540 / 35,571 / 8,901 /
+  4,771; 10-15: 6,258 / 35,872 / 9,912 / 4,273; 10-16: 7,094 / 36,543 / 9,277 / 4,039. For 10-16 that is
+  uncertain 3,394 -> 4,039 and on time 36,960 -> 36,543 compared with the first correction (uncertain
+  was 5,975 before any fix). Uncertainty rose because it is no longer hidden.
+- Prediction accuracy (Finding 1) is unchanged. Pooled 10-14 to 10-16, median absolute error agency /
+  persistence / schedule: 5 min 62 / 57 / 144 s, 15 min 96 / 94 / 159 s, 30 min 132 / 132 / 177 s
+  (n = 947,152 / 659,535 / 298,634).
+- Independent audit after the rebuild (2026-10-17): 25 passed, 0 failed, 3 warnings (the coverage
+  limits listed in the entry below).
+
 ## 2026-10-19 correction after an independent audit (read this first)
 
 An independent reviewer (a separate agent with no knowledge of how the pipeline was built) audited the

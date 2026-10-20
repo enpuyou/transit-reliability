@@ -1,7 +1,7 @@
 # 0019: GPS geometry wins over the next-stop pointer; evidence never collapses an interval
 
 Date: 2026-10-20
-Status: accepted (code and sandbox verified on 2026-10-17; prod rebuild pending the owner's approval)
+Status: accepted and applied (sandbox verified on 2026-10-17; prod deployed and rebuilt from 2026-10-13 on 2026-10-20)
 
 ## Context
 
@@ -44,3 +44,11 @@ uncertain 2,902 to 3,332. Uncertainty rises because it is no longer hidden.
   zero-width share from 9.47 to 9.15 percent; only measuring the remaining rows found the real cause.
 - Two evidence sources that usually coincide (dwell report and pointer advance) hide each other's
   effects when attributing a cause by "which value equals the result".
+
+## Prod result (2026-10-20)
+
+Zero-width arrivals about 0.01 percent on every rebuilt day (was 9.5 percent); the pointer is ignored on
+about 10 percent of arrivals every day with a median lead of 76 to 79 ft, so the agency advances its
+pointer as the bus approaches the stop; independent audit 25 passed, 0 failed, 3 warnings; health checks
+and the enforced zero-width check passed. Rebuild timings: stop visits 865 s, trip performance 101 s,
+prediction errors 161 s, route performance 75 s, prediction accuracy 75 s.
