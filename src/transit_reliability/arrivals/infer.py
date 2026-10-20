@@ -297,23 +297,21 @@ def infer_stop_visits(
             a_method = d_method = "no_geometry"
         geo_arr_est = a_est
 
-        # Arrival: the pointer or a dwell report shows the bus had reached the stop by then, UNLESS
-        # the GPS says the pointer ran ahead of the bus: the pointer moved before the geometric
-        # arrival interval, with the bus demonstrably far short of the stop (2026-10-17: 9 percent
-        # of arrivals were collapsed to the pointer's time this way). GPS position is a physical
-        # measurement, so it wins; the conflict is kept in `pointer_lead_ft` so it can be measured.
+        # Arrival: the pointer or a dwell report shows the bus had reached the stop by then. The
+        # pointer may NARROW the GPS interval but never contradict it: when it moved at or before
+        # the GPS lower bound (the bus was still short of the stop, typically 40 to 200 ft,
+        # sometimes thousands) it is ignored for the cap, otherwise the interval collapsed to a
+        # single instant (2026-10-17: 9 percent of arrivals). GPS position is a physical
+        # measurement, so it wins; how far short the bus was is kept in `pointer_lead_ft`, so the
+        # feed's behaviour can be measured.
         pointer = advance
         pointer_lead_ft = None
-        if (
-            advance is not None
-            and a_method in ("interpolated", "wide_gap")
-            and a_lo is not None
-            and advance < a_lo
-        ):
-            at_pointer = dist_at.get(advance)
-            if at_pointer is not None and stop.dist - at_pointer > POINTER_LEAD_TOL_FT:
-                pointer_lead_ft = stop.dist - at_pointer
+        if advance is not None and a_method in ("interpolated", "wide_gap") and a_lo is not None:
+            if advance <= a_lo:
                 pointer = None
+                at_pointer = dist_at.get(advance)
+                if at_pointer is not None:
+                    pointer_lead_ft = max(stop.dist - at_pointer, 0.0)
         cap = min((t for t in (pointer, dwell_first) if t is not None), default=None)
         if (
             a_method in ("interpolated", "wide_gap", "before_first_fix")
@@ -321,9 +319,15 @@ def infer_stop_visits(
             and a_hi is not None
         ):
             a_hi = min(a_hi, cap)
-            if a_lo is not None:
-                a_lo = min(a_lo, a_hi)
-            if a_est is not None:
+            if a_lo is not None and a_lo >= a_hi:
+                # The evidence (a dwell report) puts the arrival at or before the GPS lower bound,
+                # so that bound says nothing. The arrival lies between the fix before the evidence
+                # and the evidence itself; collapsing to the evidence's instant would claim the
+                # time to the second (2026-10-17: 8 percent of arrivals).
+                earlier = [f.ts for f in ordered if f.ts < a_hi]
+                a_lo = earlier[-1] if earlier else a_hi
+                a_est = (a_lo + a_hi) / 2
+            elif a_est is not None:
                 a_est = min(a_est, a_hi) if a_lo is None else min(max(a_est, a_lo), a_hi)
         elif a_method in ("no_geometry", "not_reached") and advance is not None:
             earlier = [f.ts for f in ordered if f.ts < advance]

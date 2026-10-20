@@ -308,13 +308,31 @@ def test_a_pointer_that_runs_far_ahead_of_the_bus_is_ignored_and_the_conflict_re
     assert b.pointer_lead_ft is not None and abs(b.pointer_lead_ft - 1200.0) < 0.01
 
 
-def test_a_pointer_that_moves_slightly_early_is_still_believed() -> None:
-    # fixes every 2 s (60 ft); the pointer moves when the bus is 180 ft short of B, inside the
-    # 200 ft tolerance of a stop that is simply being approached, so it still caps the arrival
+def test_a_pointer_at_the_gps_lower_bound_does_not_collapse_the_interval_to_a_point() -> None:
+    # fixes every 20 s; the pointer moves at t=80 (x=2400), the very fix that is the lower bound of
+    # B's GPS bracket [80, 100]. Capping at 80 would give a zero-width interval; it must not.
+    fixes = _pointer_moves_at(drive(every=20.0, end_t=200), 2400.0)
+    b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
+    assert b.advance_ts == 80.0
+    assert b.arr_lo == 80.0 and b.arr_hi == 100.0
+    assert b.pointer_lead_ft is not None and abs(b.pointer_lead_ft - 600.0) < 0.01
+
+
+def test_a_pointer_that_moves_just_short_of_the_stop_is_recorded_not_trusted() -> None:
+    # fixes every 2 s (60 ft); the pointer moves when the bus is 180 ft short of B
     fixes = _pointer_moves_at(drive(every=2.0, end_t=120), 3000.0 - 180.0)
     b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
-    assert b.pointer_lead_ft is None
-    assert b.arr_hi == b.advance_ts == 94.0
+    assert b.advance_ts == 94.0
+    assert b.arr_lo == 98.0 and b.arr_hi == 100.0  # the GPS bracket
+    assert b.pointer_lead_ft is not None and abs(b.pointer_lead_ft - 180.0) < 0.01
+
+
+def test_a_pointer_inside_the_gps_interval_still_narrows_it() -> None:
+    # fixes every 20 s; the pointer moves at t=100 (x=3000), after B's lower bound 80: the bus is at
+    # the stop point by then, so the arrival cannot be later than 100 and the interval is [80, 100]
+    fixes = _pointer_moves_at(drive(every=20.0, end_t=200), 3000.0)
+    b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
+    assert b.arr_lo == 80.0 and b.arr_hi == 100.0 and b.pointer_lead_ft is None
 
 
 def test_a_consistent_pointer_is_unchanged_by_the_conflict_rule() -> None:
@@ -324,3 +342,15 @@ def test_a_consistent_pointer_is_unchanged_by_the_conflict_rule() -> None:
     assert (
         result[2].advance_ts == 100.0 and result[2].arr_hi is not None and result[2].arr_hi <= 100.0
     )
+
+
+def test_a_dwell_report_before_the_gps_bound_widens_the_interval_back_to_the_previous_fix() -> None:
+    # the bus parks 150 ft short of B from t=80 to t=220, reported STOPPED_AT with the pointer
+    # already on the next stop (dwell evidence at B). The GPS bracket for B is [220, 240], long
+    # after the first dwell report, so the arrival lies between the fix before it (t=60) and it
+    base = drive(every=20.0, end_t=300, hold=(2850.0, 80.0, 220.0))
+    fixes = [replace(f, next_seq=3 if f.ts >= 80.0 else 2) for f in base]
+    b = by_seq(infer_stop_visits(line_shape(), fixes, STOPS))[2]
+    assert b.dwell_first == 80.0
+    assert (b.arr_lo, b.arr_hi) == (60.0, 80.0)
+    assert b.arr_est == 70.0

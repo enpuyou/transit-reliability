@@ -46,9 +46,8 @@ def drift_checks(prefix: str, day: str) -> list[CheckSpec]:
         CheckSpec(
             "zero_width_arrival_interval_share",
             f"SELECT avg(CASE WHEN arr_lo = arr_hi THEN 1.0 ELSE 0.0 END) FROM {sv} WHERE service_date = DATE'{day}' AND arr_est IS NOT NULL",
-            "an arrival 'known' to the second is suspicious: found 2026-10-19 (9.5 percent on 10-17) where the feed's next-stop pointer ran ahead of the bus and the code trusted it over the GPS geometry",
+            "an arrival 'known' to the second is suspicious: before the fix of decision 0019 about 9 percent of arrivals were collapsed to one instant by the feed's next-stop pointer or a dwell report arriving before the GPS bound",
             maximum=MAX_ZERO_WIDTH_SHARE,
-            severity="warn",
         ),
         CheckSpec(
             "observed_trip_share",

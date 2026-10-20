@@ -210,3 +210,9 @@ for duplicates or placeholder rows.
 5. **Unknown is not false.** Use NULL when something has not been computed yet.
 6. **Keep lineage** (`source_file`, `bronze_ingested_at`) so any row can be traced to a raw file.
 7. **Verify against an independent computation**, not just "the job succeeded".
+
+### `stop_visits.pointer_lead_ft` (added 2026-10-20, decision 0019)
+Feet short of this stop that the bus still was when the feed's next-stop pointer first named a later
+stop AND the pointer was ignored because it moved at or before the GPS lower bound of the arrival.
+NULL when the pointer was used or was not in conflict. Rows built before 2026-10-20 have NULL until
+rebuilt. Typical value 76 ft (median, 2026-10-17); a few thousand feet means the pointer ran far ahead.
