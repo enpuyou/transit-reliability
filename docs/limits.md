@@ -76,3 +76,19 @@ dashboard logs for those windows.
 - Databricks Free Edition limitations: https://docs.databricks.com/aws/en/getting-started/free-edition-limitations
 - Cloudflare Workers limits: https://developers.cloudflare.com/workers/platform/limits/
 - Cloudflare Workers Logs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+
+## Monitoring compute (added 2026-10-19; decision 0017)
+
+- Measured runtimes 2026-10-19/20: hourly suite 99 s (15 checks), daily suite 105 s (32 checks), both
+  serverless job runs. The daily suite runs inside the silver job (adds about 105 s to its 588 s).
+- ESTIMATED cost, not yet billed data (system.billing.usage lags about a day): ingest runs of about
+  4 to 7 min cost about 0.34 DBU each on 2026-10-19 (12.0 DBU over 70 usage rows), so one 99 s monitor
+  run is about 0.1 DBU, 24 runs a day about 2.5 DBU, plus about 0.2 DBU for the daily suite. Against
+  the 21 to 26 DBU/day of jobs compute seen 2026-10-16 to 18 that is roughly +10 percent. Quota is
+  unpublished, so no headroom can be stated.
+- Re-check once a full day has billed (first full day: 2026-10-21): 
+  `SELECT usage_date, usage_metadata.job_id, round(sum(usage_quantity),2) AS dbu FROM system.billing.usage WHERE usage_date >= '2026-10-20' AND usage_metadata.job_id IS NOT NULL GROUP BY ALL ORDER BY 1, 3 DESC`
+  The monitor job id is 997733005982178. If it exceeds about 4 DBU/day, change its cron to every
+  2 hours (`0 12 0/2 * * ?`) in `resources/monitor_job.yml` and redeploy.
+- The watchdog and the proof report use no Databricks compute (jobs API and file listing only) except
+  the SQL warehouse for the proof report.
