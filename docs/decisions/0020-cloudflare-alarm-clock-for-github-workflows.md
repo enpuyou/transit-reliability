@@ -1,7 +1,7 @@
 # 0020: A Cloudflare Worker as the alarm clock for GitHub workflows
 
 Date: 2026-10-20
-Status: accepted (code written and tested; deployment waits for the owner's GitHub token)
+Status: accepted and verified (deployed 2026-10-20; dispatched runs arrived at 19:30:26 and 19:45:26 UTC, 26 seconds after the quarter hour, and completed)
 
 ## Context
 
@@ -47,3 +47,12 @@ was fine, and the "GitHub emails you" safety net was much weaker than claimed.
 The collector's lesson applies (a new Worker's cron did not fire on 2026-10-13): after `npm run deploy`
 confirm that `gh run list --workflow publish_site.yml --event workflow_dispatch` shows a run at each
 quarter hour before relying on it.
+
+## Deployment notes (2026-10-20)
+
+- First attempt put the token on the WRONG Worker: `wrangler secret put` picks the Worker from the
+  `wrangler.toml` of the current folder, so it landed on `transit-collector`. Found with
+  `wrangler secret list --name <worker>` (names only; secret values cannot be read back), removed from
+  the collector, set on the dispatcher. Always pass `--name transit-dispatcher` (commands.md).
+- A first commit accidentally included 295 MB of `node_modules` (the ignore rule covered only the
+  collector's folder); undone before pushing and `node_modules/` is now ignored repository-wide.

@@ -1171,8 +1171,11 @@ GitHub's own `schedule` trigger is unreliable here (measured 2026-10-20: 2 of ab
    Generate. Repository access: Only select repositories -> this repository. Permissions -> Repository
    permissions -> **Actions: Read and write** (Metadata read is added automatically). Expiry: the longest
    offered; put the date in `docs/runbook.md`.
-2. `cd workers/dispatcher && npm install && npx wrangler secret put GITHUB_TOKEN` and paste the token at
-   the prompt (wrangler uses the Cloudflare login already used for the collector).
+2. `cd workers/dispatcher && npm install && npx wrangler secret put GITHUB_TOKEN --name transit-dispatcher`
+   and paste the token at the prompt (wrangler uses the Cloudflare login already used for the collector).
+   Always give `--name`: without it wrangler picks the Worker from the current folder's wrangler.toml, and
+   a token put from the wrong folder lands on another Worker (happened 2026-10-20). Check where a secret
+   is with `npx wrangler secret list --name <worker>` (names only).
 3. `npm run deploy`.
 
 **Check that it fires (do this before trusting it):**
@@ -1183,5 +1186,5 @@ cd workers/dispatcher && npx wrangler tail transit-dispatcher                  #
 ```
 Cloudflare dashboard: Workers & Pages -> transit-dispatcher -> Logs. A failed dispatch (status 401/403:
 token missing, expired or without Actions permission; 404: wrong workflow file name or repo) throws, so
-the invocation is shown as failed. Rotate the token with `npx wrangler secret put GITHUB_TOKEN`.
+the invocation is shown as failed. Rotate the token with `npx wrangler secret put GITHUB_TOKEN --name transit-dispatcher`.
 `npm run typecheck && npm test` in `workers/dispatcher` run in CI with the other checks.
