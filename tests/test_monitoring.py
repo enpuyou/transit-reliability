@@ -136,3 +136,17 @@ def test_details_a_visitor_reads_use_pacific_time() -> None:
     late = dt.datetime(2026, 10, 19, 14, 0, tzinfo=dt.UTC)
     missing = silver_finding([run(22 * 60, base=late)], late)
     assert "UTC" not in missing.detail and "04:45 PDT" in missing.detail
+
+
+def test_the_rider_rule_checks_exist_and_use_the_given_day() -> None:
+    from transit_reliability.audit.catalog import all_checks
+    from transit_reliability.monitoring.daily import drift_checks
+
+    names = {c.name for c in all_checks("transit", "2026-10-16")}
+    assert {
+        "gold_rider_counts_equal_recount_from_stop_visits",
+        "route_rollup_rider_counts_conserve",
+    } <= names
+    drift = {c.name: c for c in drift_checks("transit", "2026-10-16")}
+    check = drift["rider_rule_scored_share_of_non_last_timepoints"]
+    assert "2026-10-16" in check.sql and check.minimum == 0.8

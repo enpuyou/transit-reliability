@@ -1,7 +1,7 @@
 # 0021: First and last stop coverage; judging on-time by departure (proposed)
 
 Date: 2026-10-20
-Status: partly decided. The owner decided on 2026-10-20 that the LAST stop is left out of on-time shares (and the page says so). The owner also wants BOTH arrival and departure kept, each used where it matters: late is judged on arrival, early on departure (rule below). Implementation: pending the owner's go-ahead.
+Status: partly decided. The owner decided on 2026-10-20 that the LAST stop is left out of on-time shares (and the page says so). The owner also wants BOTH arrival and departure kept, each used where it matters: late is judged on arrival, early on departure (rule below). Implemented 2026-10-20 (rider rule as headline; see 'Implementation' below).
 
 ## Question
 
@@ -64,3 +64,19 @@ percent (n = 66,153); 10-14: 6.7 / 71.9 / 15.0 / 6.4 (64,882); 10-18: 6.7 / 74.8
 Compare the current arrival-only rule on 10-16: 12.5 / 64.2 / 16.3 / 7.1 (56,953) and departure-only:
 7.2 / 68.6 / 18.1 / 6.1 (65,690). The higher on-time share comes from the definition (each side is judged
 only where it matters), not from better service, and the page must say so.
+
+## Implementation (2026-10-20)
+
+- `classify_rider` (pure, tested) and its SQL twin `rider_class_sql` give identical counts on
+  2026-10-16 (4,768 / 47,893 / 11,432 / 4,715 early / on time / late / uncertain, 68,808 scored), checked
+  over all 64,987 distinct interval combinations of the day, and the audit's separately written recount
+  agrees (difference 0).
+- The scored total (68,808) is larger than the exploratory estimate above (66,153) because the build
+  also uses one-sided departure bounds: 3,049 non-last timepoints have a departure LOWER bound but no
+  estimate (the bus was last seen still at the stop). Those prove lateness at the first stop and
+  "not early" anywhere, and are counted. This lowers the on-time share relative to the exploratory
+  72.2 percent (the build gives 69.6 percent on 2026-10-16, sandbox, before the prod rebuild).
+- New columns `n_rider_*` and `n_dep_*` in `trip_performance` and `route_performance`; appended with
+  `mergeSchema`. New daily check `rider_rule_scored_share_of_non_last_timepoints` (minimum 0.8; about 0.94
+  on 2026-10-16) and audit checks `gold_rider_counts_equal_recount_from_stop_visits`,
+  `route_rollup_rider_counts_conserve`.

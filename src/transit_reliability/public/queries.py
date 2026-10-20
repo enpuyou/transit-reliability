@@ -122,9 +122,13 @@ def _distribution_parts(prefix: str) -> list[str]:
         f"FROM (SELECT {lead} AS b FROM {sv} WHERE {cd} AND pointer_lead_ft IS NOT NULL) GROUP BY 3, 4"
     )
     for outcome in ("early", "on_time", "late", "uncertain"):
-        parts.append(
-            f"SELECT 'on_time_by_day_common_lens', service_date, '{outcome}', 0, CAST(sum(n_common_{outcome}) AS DOUBLE) FROM {tp} WHERE service_date BETWEEN date_sub({COMPLETE_DAY}, 6) AND {COMPLETE_DAY} GROUP BY 2"
-        )
+        for name, column in (
+            ("on_time_by_day_common_lens", "n_common"),  # the arrival-only view
+            ("on_time_by_day_rider_rule", "n_rider"),  # the headline (decision 0021)
+        ):
+            parts.append(
+                f"SELECT '{name}', service_date, '{outcome}', 0, CAST(sum({column}_{outcome}) AS DOUBLE) FROM {tp} WHERE service_date BETWEEN date_sub({COMPLETE_DAY}, 6) AND {COMPLETE_DAY} GROUP BY 2"
+            )
     for source, column in (
         ("kcm", "kcm_error_s"),
         ("schedule", "sched_error_s"),
@@ -231,7 +235,7 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         ),
         "gold.trip_performance": (
             "gold",
-            f"SELECT to_json(struct(service_date, trip_id, route_short_name, trip_headsign, trip_status, n_timepoints_measured, median_delay_s, p90_delay_s, n_common_on_time, n_common_late, n_common_early, n_common_uncertain)) FROM {tp} WHERE {latest_day(tp)} AND trip_status = 'observed' LIMIT 1",
+            f"SELECT to_json(struct(service_date, trip_id, route_short_name, trip_headsign, trip_status, n_timepoints_measured, median_delay_s, p90_delay_s, n_rider_on_time, n_rider_late, n_rider_early, n_rider_uncertain, n_common_on_time, n_common_late, n_common_early, n_common_uncertain)) FROM {tp} WHERE {latest_day(tp)} AND trip_status = 'observed' LIMIT 1",
         ),
         "gold.route_performance": (
             "gold",

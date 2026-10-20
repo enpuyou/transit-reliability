@@ -73,7 +73,8 @@ def test_every_catalog_check_is_a_named_single_select_and_names_are_unique() -> 
     specs = all_checks("transit", "2026-10-16")
     assert len({s.name for s in specs}) == len(specs) > 20
     for s in specs:
-        assert s.sql.lstrip().upper().startswith("SELECT"), s.name
+        # read-only, one statement (a CTE is allowed)
+        assert s.sql.lstrip().upper().startswith(("SELECT", "WITH")), s.name
         assert s.minimum is not None or s.maximum is not None, s.name
         for word in ("INSERT", "DELETE", "DROP", "MERGE", "UPDATE", "ALTER"):
             assert f" {word} " not in s.sql.upper(), (s.name, word)

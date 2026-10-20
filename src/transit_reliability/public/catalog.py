@@ -162,7 +162,9 @@ TABLES = (
         "gold",
         "trip_performance",
         "How each trip ran: typical and worst delay, how delay grew, and counts of early, on-time, "
-        "late and uncertain arrivals under three definitions of on time.",
+        "late and uncertain timepoints. The headline is the rider rule: early is judged on when "
+        "the bus leaves, late on when it arrives, the last stop is left out. Arrival-only and "
+        "departure-only versions are kept beside it.",
         "one trip on one service date",
         "daily silver job",
         "max(service_date)",
@@ -213,9 +215,15 @@ GLOSSARY = {
     "Timepoint": "A stop with a published scheduled time that buses are expected to keep to.",
     "Interval": "Our arrival times are estimates. The interval is the range from the last GPS fix "
     "before the bus reached the stop to the first one after; the true time lies inside it.",
-    "On time (common lens)": "Arrived between 1 minute early and 5 minutes late. Judged on the "
-    "whole interval: if the interval straddles a limit the arrival is counted 'uncertain', "
-    "not guessed.",
+    "On time (rider rule)": "The headline. At each timepoint except the last stop: 'early' if "
+    "the bus left more than 1 minute early, 'late' if it arrived more than 5 minutes late (at "
+    "the first stop, where the bus is parked, if it left more than 5 minutes late), otherwise "
+    "'on time' when we are sure it was neither. Judged on the whole interval: if the interval "
+    "straddles a limit the timepoint is counted 'uncertain', not guessed. A bus that arrives "
+    "early and waits is normal and is not counted as early.",
+    "Arrival-only view": "The older measure: the same window (1 minute early to 5 minutes late) "
+    "applied to the arrival time at every timepoint with a measured arrival. Shown beside the "
+    "headline for comparison.",
     "Medallion layers": "Bronze (raw, decoded), silver (cleaned and matched), gold (answers).",
     "Delta table": "A table format on Databricks that keeps a history of every change.",
     "DBU": "Databricks Unit: the measure of compute used. The free plan has an undisclosed daily "

@@ -12,6 +12,7 @@ arrival is known within 60 s. Both are rebuilt for the recent service dates each
 import datetime as dt
 from typing import Any
 
+from transit_reliability.gtfs_static.gold_trip_performance import CLASSES, EXTRA_GROUPS
 from transit_reliability.reliability.lenses import LENSES
 
 ROUTE_TABLE = "route_performance"
@@ -21,11 +22,8 @@ TIGHT_S = 60  # keep prediction rows whose actual arrival is known within this m
 
 
 def route_performance_sql(gold: str, day: dt.date) -> str:
-    sums = ",\n      ".join(
-        f"sum(n_{lens.name}_{k}) AS n_{lens.name}_{k}"
-        for lens in LENSES
-        for k in ("early", "on_time", "late", "uncertain")
-    )
+    groups = [lens.name for lens in LENSES] + list(EXTRA_GROUPS)
+    sums = ",\n      ".join(f"sum(n_{g}_{k}) AS n_{g}_{k}" for g in groups for k in CLASSES)
     return f"""
     SELECT service_date, route_id, first(route_short_name) AS route_short_name, direction_id,
       hour(from_utc_timestamp(scheduled_start, 'America/Los_Angeles')) AS start_hour_pt,
@@ -84,7 +82,7 @@ def _rebuild(
         frame = spark.sql(sql_for(day))
         if spark.catalog.tableExists(target):
             spark.sql(f"DELETE FROM {target} WHERE service_date = DATE'{day.isoformat()}'")
-        frame.write.format("delta").mode("append").saveAsTable(target)
+        frame.write.format("delta").mode("append").option("mergeSchema", "true").saveAsTable(target)
         rows = (
             spark.table(target)
             .where(F.col("service_date") == F.lit(day.isoformat()).cast("date"))

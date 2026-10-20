@@ -19,9 +19,18 @@ Design and verification: decision 0012.
 | Along the trip | `first_tp_delay_s`, `last_tp_delay_s`, `delay_growth_s` | whether delay built up or was recovered |
 | Early departures | `n_tp_departures_measured`, `n_tp_left_early` | timepoints where the bus definitely left more than 1 minute early |
 | Lenses | `n_<lens>_early`, `_on_time`, `_late`, `_uncertain` for `strict`, `common`, `metro_like` | timepoint arrivals by category; the four add up to the timepoints that have an interval |
+| Rider rule (headline) and departure view | `n_rider_*`, `n_dep_*` (each `_early`, `_on_time`, `_late`, `_uncertain`) | timepoints scored by the rider rule (last stop excluded; an arrival or departure bound is enough to score) and by departure alone |
 
-**Headline lens: `common`** (1 minute early to 5 minutes late), chosen 2026-10-16; `strict` and
-`metro_like` are shown alongside, never instead.
+**Headline: the rider rule** (decision 0021, chosen 2026-10-20), counts `n_rider_early`, `_on_time`,
+`_late`, `_uncertain`. It uses the `common` window (1 minute early to 5 minutes late) but judges each
+side where it matters to a rider: **early on the departure** (a bus that leaves early is a missed bus;
+arriving early and holding is normal), **late on the arrival** (at the first stop, where the bus is
+parked, the departure), **on time** when certainly neither. The last stop is not scored. Every bound is
+evidence on its own: a departure with only a lower bound (the bus was last seen still at the stop) can
+prove lateness at the first stop and "not early" anywhere, never "on time" alone. `n_dep_*` is the
+departure-only view of the same window. The arrival-only lenses (`strict`, `common`, `metro_like`) stay
+beside it, never instead. The pure rule is `classify_rider` in `reliability/lenses.py`; the SQL twin is
+`rider_class_sql`; the audit recounts it independently from `stop_visits`.
 
 **Reading it.** Delays are estimates from GPS (typically within about 15 s). A timepoint is counted
 on time only if its whole interval fits the window, so the `uncertain` count is the honest slice we
@@ -78,8 +87,8 @@ WHERE service_date = DATE'2026-10-14' AND width_s <= 60 GROUP BY 1 ORDER BY 1;
 `transit_gold.route_performance`. It **sums the per-trip counts** of `trip_performance` (never averages
 percentages), so any share is recomputed as `sum(n_common_on_time) / sum(n_common_early + n_common_on_time
 + n_common_late + n_common_uncertain)` and always comes with that denominator. Columns: `n_trips`,
-`n_observed`, `n_canceled`, `n_not_observed`; `n_timepoints`, `n_timepoints_measured`; the twelve lens
-counts; early-departure counts; `median_of_trip_median_delays_s` (a median of trip medians, not a pooled
+`n_observed`, `n_canceled`, `n_not_observed`; `n_timepoints`, `n_timepoints_measured`; the twelve arrival lens
+counts plus `n_rider_*` and `n_dep_*`; early-departure counts; `median_of_trip_median_delays_s` (a median of trip medians, not a pooled
 median); first-stop departure median and count. A trip is attributed to the hour it is scheduled to
 start. Checked by conservation: trips, on-time counts, and measured timepoints equal the per-trip totals
 for every date.

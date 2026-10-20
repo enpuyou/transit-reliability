@@ -19,6 +19,7 @@ MAX_COVERAGE_SHIFT = 0.1  # healthy days are 85 to 87 percent
 MAX_ZERO_WIDTH_SHARE = (
     0.01  # a few exact times are fine (a fix right at the stop); 9.5 percent is not
 )
+MIN_RIDER_SCORED_SHARE = 0.8  # about 91 percent of non-last timepoints are scored (2026-10-16)
 MIN_OBSERVED_TRIP_SHARE = 0.9  # about 96 percent of scheduled trips are observed
 
 
@@ -48,6 +49,12 @@ def drift_checks(prefix: str, day: str) -> list[CheckSpec]:
             f"SELECT avg(CASE WHEN arr_lo = arr_hi THEN 1.0 ELSE 0.0 END) FROM {sv} WHERE service_date = DATE'{day}' AND arr_est IS NOT NULL",
             "an arrival 'known' to the second is suspicious: before the fix of decision 0019 about 9 percent of arrivals were collapsed to one instant by the feed's next-stop pointer or a dwell report arriving before the GPS bound",
             maximum=MAX_ZERO_WIDTH_SHARE,
+        ),
+        CheckSpec(
+            "rider_rule_scored_share_of_non_last_timepoints",
+            f"SELECT (SELECT sum(n_rider_early + n_rider_on_time + n_rider_late + n_rider_uncertain) FROM {tp} WHERE service_date = DATE'{day}') / (SELECT count(*) FROM (SELECT timepoint, row_number() OVER (PARTITION BY trip_id ORDER BY stop_sequence) rn, count(*) OVER (PARTITION BY trip_id) cnt FROM {sv} WHERE service_date = DATE'{day}') WHERE timepoint = 1 AND rn < cnt)",
+            "the headline rule scores a timepoint when its arrival or departure was estimated; the share of all non-last timepoints it can score should stay near 90 percent",
+            minimum=MIN_RIDER_SCORED_SHARE,
         ),
         CheckSpec(
             "observed_trip_share",

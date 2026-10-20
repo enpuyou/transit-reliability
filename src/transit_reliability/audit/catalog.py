@@ -219,6 +219,28 @@ def gold(prefix: str, day: str) -> list[CheckSpec]:
             maximum=0,
         ),
         CheckSpec(
+            "gold_rider_counts_equal_recount_from_stop_visits",
+            (
+                f"WITH v AS (SELECT row_number() OVER (PARTITION BY trip_id ORDER BY stop_sequence) rn, count(*) OVER (PARTITION BY trip_id) cnt, timepoint, "
+                f"unix_timestamp(arr_lo) - unix_timestamp(sched_arr) alo, unix_timestamp(arr_hi) - unix_timestamp(sched_arr) ahi, "
+                f"unix_timestamp(dep_lo) - unix_timestamp(sched_dep) plo, unix_timestamp(dep_hi) - unix_timestamp(sched_dep) phi FROM {sv} WHERE {d}), "
+                f"s AS (SELECT *, coalesce(phi < -60, false) AS is_early, coalesce((rn > 1 AND alo > 300) OR (rn = 1 AND plo > 300), false) AS is_late FROM v WHERE timepoint = 1 AND rn < cnt AND (alo IS NOT NULL OR plo IS NOT NULL)), "
+                f"c AS (SELECT count(*) total, count_if(is_early) early, count_if(NOT is_early AND is_late) late, "
+                f"count_if(NOT is_early AND NOT is_late AND coalesce(greatest(alo, plo) >= -60, false) AND coalesce(least(ahi, phi) <= 300, false)) on_time FROM s) "
+                f"SELECT abs(c.early - g.e) + abs(c.late - g.l) + abs(c.on_time - g.o) + abs(c.total - g.t) + abs((c.total - c.early - c.late - c.on_time) - g.u) "
+                f"FROM c, (SELECT sum(n_rider_early) e, sum(n_rider_late) l, sum(n_rider_on_time) o, sum(n_rider_uncertain) u, "
+                f"sum(n_rider_early + n_rider_on_time + n_rider_late + n_rider_uncertain) t FROM {tp} WHERE {d}) g"
+            ),
+            "the headline rider rule (early on departure, late on arrival, last stop out) recounted straight from stop_visits with a separately written formulation",
+            maximum=0,
+        ),
+        CheckSpec(
+            "route_rollup_rider_counts_conserve",
+            f"SELECT abs((SELECT sum(n_rider_early + n_rider_on_time + n_rider_late + n_rider_uncertain) FROM {rp} WHERE {d}) - (SELECT sum(n_rider_early + n_rider_on_time + n_rider_late + n_rider_uncertain) FROM {tp} WHERE {d}))",
+            "route_performance adds the rider counts of trip_performance without losing or inventing any",
+            maximum=0,
+        ),
+        CheckSpec(
             "trip_performance_rows_equal_scheduled_trips",
             f"SELECT abs((SELECT count(*) FROM {tp} WHERE {d}) - (SELECT count(*) FROM {st} WHERE {d}))",
             "one gold row per scheduled trip: none missing, none duplicated",
