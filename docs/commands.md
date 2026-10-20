@@ -1140,11 +1140,11 @@ mkdir -p site/data && cp /tmp/site.json site/data/site.json && cd site && python
 # then open http://localhost:8000   (site/data/ is git-ignored)
 
 # publish by hand / see the last runs
-gh workflow run publish-site.yml ; gh run list --workflow publish-site.yml --limit 3
+gh workflow run publish_site.yml ; gh run list --workflow publish_site.yml --limit 3
 ```
 One-time setup: repository Settings -> Pages -> Source: "GitHub Actions" (or
 `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`). The page then lives at
-`https://<owner>.github.io/<repo>/`.
+`https://<owner>.github.io/<repo>/` (here: https://enpuyou.github.io/transit-reliability/, live since 2026-10-20).
 
 If a section on the page says it is unavailable, `errors` in `site.json` names the query; rerun that
 query from `src/transit_reliability/public/queries.py` in the SQL editor. If the workflow goes red with
