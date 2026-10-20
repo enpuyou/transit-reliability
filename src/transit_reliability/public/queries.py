@@ -130,6 +130,13 @@ def _distribution_parts(prefix: str) -> list[str]:
         f"SELECT 'segment_excess_histogram', {COMPLETE_DAY}, CASE o WHEN 0 THEN 'over 2 min faster' WHEN 1 THEN '1-2 min faster' WHEN 2 THEN 'up to 1 min faster' WHEN 3 THEN 'up to 1 min slower' WHEN 4 THEN '1-2 min slower' ELSE 'over 2 min slower' END, o, CAST(count(*) AS DOUBLE) "
         f"FROM (SELECT CASE WHEN excess_p50_s < -120 THEN 0 WHEN excess_p50_s < -60 THEN 1 WHEN excess_p50_s < 0 THEN 2 WHEN excess_p50_s < 60 THEN 3 WHEN excess_p50_s < 120 THEN 4 ELSE 5 END AS o FROM {rt} WHERE day_type = 'weekday' AND n >= 30) GROUP BY o",
     ]
+    hp = gold("headway_pairs")
+    hwin = f"frequent AND service_date BETWEEN date_sub({COMPLETE_DAY}, 27) AND {COMPLETE_DAY} AND day_type = 'weekday'"
+    border = "CASE band WHEN 'am_peak' THEN 0 WHEN 'midday' THEN 1 WHEN 'pm_peak' THEN 2 WHEN 'evening' THEN 3 ELSE 4 END"
+    for cls in ("bunched", "gapped", "regular", "uncertain"):
+        parts.append(
+            f"SELECT 'headway_outcomes_by_band', {COMPLETE_DAY}, concat(band, '|{cls}'), {border}, CAST(count(*) AS DOUBLE) FROM {hp} WHERE {hwin} AND outcome = '{cls}' GROUP BY band"
+        )
     for outcome in ("early", "on_time", "late", "uncertain"):
         for name, column in (
             ("on_time_by_day_common_lens", "n_common"),  # the arrival-only view
@@ -206,6 +213,7 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
     )
     cr = ops("check_results")
     sg, srt = gold("segment_runs"), gold("segment_runtimes")
+    hp_, hs_ = gold("headway_pairs"), gold("headway_summary")
     return {
         "bronze.vehicle_positions": (
             "bronze",
@@ -262,6 +270,14 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         "gold.segment_runtimes": (
             "gold",
             f"SELECT to_json(struct(route_short_name, from_stop_name, to_stop_name, band, day_type, n, n_days, sched_median_s, obs_p50_s, obs_p85_s, excess_p50_s, share_over_schedule, median_uncertainty_s, detour_share)) FROM {srt} WHERE n >= 30 LIMIT 1",
+        ),
+        "gold.headway_pairs": (
+            "gold",
+            f"SELECT to_json(struct(service_date, route_id, direction_id, stop_id, trip_id, prev_trip_id, sched_h, act_h, act_lo, act_hi, frequent, outcome, band, day_type)) FROM {hp_} WHERE {latest_day(hp_)} AND frequent LIMIT 1",
+        ),
+        "gold.headway_summary": (
+            "gold",
+            f"SELECT to_json(struct(route_short_name, direction_id, band, day_type, n_pairs, n_days, n_bunched, n_gapped, n_regular, n_uncertain, sched_headway_median_s, ratio_p50, median_uncertainty_s)) FROM {hs_} WHERE n_pairs >= 30 LIMIT 1",
         ),
         "gold.prediction_accuracy": (
             "gold",

@@ -128,3 +128,22 @@ a high `detour_share` should be read with the alert text, not as a schedule erro
 Checks (audit and daily suite): run count equals an independent self-join recount, no non-positive
 scheduled runtime, negative observed runtimes under 0.1 percent, median observed/scheduled between 0.6 and
 1.4 (0.94 measured), and the summary is current.
+
+## `headway_pairs` and `headway_summary` (built; decision 0023)
+
+**`headway_pairs`. One row =** one trip paired with the trip scheduled just before it at the same route,
+direction and timepoint, on one service date. Table `transit_gold.headway_pairs`. `sched_h` = scheduled
+gap in seconds (kept up to one hour); `act_h` = actual gap, the difference of the two departure estimates;
+`act_lo` / `act_hi` = the interval of that gap built from the two departure intervals (median width about
+50 s); `frequent` = scheduled 4 to 15 minutes apart, the only pairs where bunching is meaningful;
+`outcome` = `classify_headway` (SQL twin `headway_class_sql`): **bunched** when the whole interval is under
+25 percent of the scheduled gap (a negative gap, buses swapped, counts), **gapped** when it is over twice
+the scheduled gap, **regular** when it stays between, **uncertain** when it straddles a limit (never
+guessed). About 62,000 pairs a day, 34,000 of them frequent.
+
+**`headway_summary`. One row =** one route direction in one time band and day type over the last 28
+complete service dates (frequent pairs only, at least 10): `n_pairs`, `n_days`, the four class counts
+(`n_bunched`, `n_gapped`, `n_regular`, `n_uncertain`; shares are always recomputed from counts), median
+scheduled gap, median and 10th/90th percentile of actual over scheduled, median uncertainty, and
+`built_through`. Measured 2026-10-16 on frequent service: 2.8 percent bunched, 1.3 gapped, 94.1 regular,
+1.8 uncertain (point estimates: 3.3 and 1.5 percent).

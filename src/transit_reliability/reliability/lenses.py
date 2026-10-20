@@ -104,3 +104,33 @@ def classify_rider(
     if lows and highs and max(lows) >= w.early_s and min(highs) <= w.late_s:
         return "on_time"
     return "uncertain"
+
+
+# ---- headways: bunching and gaps (decision 0023) ----
+FREQUENT_MIN_S = 240.0  # only buses scheduled 4 to 15 minutes apart are "frequent service"
+FREQUENT_MAX_S = 900.0
+BUNCHED_BELOW = 0.25  # actual headway under this share of the scheduled one is bunching
+GAPPED_ABOVE = 2.0  # over this multiple of the scheduled headway is a gap
+
+
+def classify_headway(
+    scheduled_s: float, actual_lo: float | None, actual_hi: float | None
+) -> str | None:
+    """bunched, gapped, regular, uncertain, or None (no measurement), for one pair of buses.
+
+    The actual headway (time between two consecutive buses leaving the same timepoint) is an
+    interval [lo, hi] built from two departure intervals. As with on-time, a pair is only called
+    bunched or gapped when the WHOLE interval says so, and regular when the whole interval stays
+    between the two limits; anything straddling a limit is uncertain, not guessed. A negative
+    headway (the buses swapped order) is bunching.
+    """
+
+    if scheduled_s <= 0 or actual_lo is None or actual_hi is None:
+        return None
+    if actual_hi < BUNCHED_BELOW * scheduled_s:
+        return "bunched"
+    if actual_lo > GAPPED_ABOVE * scheduled_s:
+        return "gapped"
+    if actual_lo >= BUNCHED_BELOW * scheduled_s and actual_hi <= GAPPED_ABOVE * scheduled_s:
+        return "regular"
+    return "uncertain"

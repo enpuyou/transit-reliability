@@ -338,6 +338,53 @@ def segments(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def headways(prefix: str, day: str) -> list[CheckSpec]:
+    """Headway pairs recompute from stop visits, every pair gets a class, and the shares are plausible."""
+
+    sv = _t(prefix, "silver", "stop_visits")
+    hp, hs = _t(prefix, "gold", "headway_pairs"), _t(prefix, "gold", "headway_summary")
+    d = f"service_date = DATE'{day}'"
+    return [
+        CheckSpec(
+            "headway_pairs_equal_independent_recount",
+            (
+                f"WITH tp AS (SELECT route_id, direction_id, stop_id, trip_id, sched_dep, row_number() OVER (PARTITION BY route_id, direction_id, stop_id ORDER BY sched_dep, trip_id) rn "
+                f"FROM {sv} WHERE {d} AND timepoint = 1 AND dep_est IS NOT NULL), "
+                f"n AS (SELECT count(*) c FROM tp a JOIN tp b ON a.route_id = b.route_id AND a.direction_id = b.direction_id AND a.stop_id = b.stop_id AND b.rn = a.rn + 1 "
+                f"WHERE unix_timestamp(b.sched_dep) - unix_timestamp(a.sched_dep) BETWEEN 1 AND 3600) "
+                f"SELECT abs((SELECT c FROM n) - (SELECT count(*) FROM {hp} WHERE {d}))"
+            ),
+            "one headway pair per consecutive pair of departures scheduled up to an hour apart at the same route, direction and timepoint, recounted with a row-number join instead of lag()",
+            maximum=0,
+        ),
+        CheckSpec(
+            "headway_pairs_without_a_class_share",
+            f"SELECT avg(CASE WHEN outcome IS NULL THEN 1.0 ELSE 0.0 END) FROM {hp} WHERE {d}",
+            "every pair has bunched, gapped, regular or uncertain; a missing class means a missing bound",
+            maximum=0.001,
+        ),
+        CheckSpec(
+            "headway_median_actual_over_scheduled_ratio_frequent",
+            f"SELECT percentile(act_h / sched_h, 0.5) FROM {hp} WHERE {d} AND frequent",
+            "buses on frequent routes are spaced about as scheduled on a typical day (1.00 measured 2026-10-16)",
+            minimum=0.85,
+            maximum=1.15,
+        ),
+        CheckSpec(
+            "headway_bunched_share_of_frequent_pairs",
+            f"SELECT avg(CASE WHEN outcome = 'bunched' THEN 1.0 ELSE 0.0 END) FROM {hp} WHERE {d} AND frequent",
+            "pairs certainly under a quarter of the scheduled gap (3.3 percent by point estimate on 2026-10-16); far more means a pairing or ordering error",
+            maximum=0.15,
+        ),
+        CheckSpec(
+            "headway_summary_is_current",
+            f"SELECT CASE WHEN count(*) < 100 THEN 999 ELSE abs(datediff(DATE'{day}', max(built_through))) END FROM {hs}",
+            "the trailing-window headway summary has at least 100 rows and was built through the newest complete day",
+            maximum=1,
+        ),
+    ]
+
+
 def all_checks(prefix: str, day: str) -> list[CheckSpec]:
     return [replace(c, severity="warn") if c.name in KNOWN_LIMITS else c for c in _all(prefix, day)]
 
@@ -350,4 +397,5 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *coverage(prefix, day),
         *gold(prefix, day),
         *segments(prefix, day),
+        *headways(prefix, day),
     ]

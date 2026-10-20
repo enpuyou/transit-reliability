@@ -137,11 +137,32 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: headway_pairs
+          depends_on:
+            - task_key: stop_visits
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_headway_pairs
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: headway_summary
+          depends_on:
+            - task_key: headway_pairs
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_headway_summary
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: health_checks
           depends_on:
             - task_key: route_performance
             - task_key: prediction_accuracy
             - task_key: segment_runtimes
+            - task_key: headway_summary
           python_wheel_task:
             package_name: transit_reliability
             entry_point: run_health_checks

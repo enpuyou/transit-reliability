@@ -46,7 +46,7 @@ why, and what to change. The evidence supports the first and the benchmark part 
      presented as ground truth. Coverage stays a reported number. A ride test would remove the one
      unmeasurable term (GPS clock offset, door opening versus reaching the stop point) and remains
      welcome. If an independent source of true times appears, use it.
-   - **G2, ridership spike (before Phase 6):** confirm a ridership source exists with route or
+   - **G2, ridership spike (before Phase 6):** [checked 2026-10-20: no downloadable licensed route- or stop-level source found; rider-minutes-lost dropped as the headline, see decision 0023] confirm a ridership source exists with route or
      stop granularity and a usable license. If not, drop rider-minutes lost as the headline
      and use delay and trips affected.
    - **G3, publication check (before anything is public):** read KCM's terms of use for the

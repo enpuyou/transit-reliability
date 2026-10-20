@@ -283,3 +283,32 @@ def build_gold_segment_runtimes() -> None:
     from transit_reliability.gtfs_static.gold_segments import build_segment_runtimes
 
     build_segment_runtimes(_spark_session(), args.schema_prefix)
+
+
+def build_gold_headway_pairs() -> None:
+    """Pair each trip with the one scheduled before it at a timepoint: scheduled vs actual gap."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_headways import build_headway_pairs
+
+    build_headway_pairs(_spark_session(), args.schema_prefix, args.rebuild_from)
+
+
+def build_gold_headway_summary() -> None:
+    """Count bunched, gapped, regular and uncertain pairs per route, band and day type (28 days)."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_headways import build_headway_summary
+
+    build_headway_summary(_spark_session(), args.schema_prefix)

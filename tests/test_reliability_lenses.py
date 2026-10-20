@@ -106,3 +106,16 @@ def test_a_one_sided_departure_bound_can_prove_late_at_the_first_stop_but_never_
 def test_a_one_sided_bound_still_certifies_not_early_when_the_other_side_is_known() -> None:
     # arrival known within the window; the departure is only known to be after -20 s
     assert rider((-30.0, 100.0), (-20.0, None)) == "on_time"
+
+
+def test_headway_classes_follow_the_whole_interval() -> None:
+    from transit_reliability.reliability.lenses import classify_headway
+
+    sched = 600.0  # a bus every 10 minutes: bunched below 150 s, gapped above 1,200 s
+    assert classify_headway(sched, 20.0, 100.0) == "bunched"
+    assert classify_headway(sched, -60.0, -10.0) == "bunched"  # buses swapped order
+    assert classify_headway(sched, 1250.0, 1400.0) == "gapped"
+    assert classify_headway(sched, 400.0, 700.0) == "regular"
+    assert classify_headway(sched, 120.0, 180.0) == "uncertain"  # may or may not be under 150 s
+    assert classify_headway(sched, 1100.0, 1300.0) == "uncertain"  # may or may not be over 1,200 s
+    assert classify_headway(sched, None, 500.0) is None and classify_headway(0.0, 1.0, 2.0) is None

@@ -215,6 +215,24 @@ TABLES = (
         "max(last_day)",
     ),
     TableInfo(
+        "gold",
+        "headway_pairs",
+        "How far apart consecutive buses of a route really were at a timepoint, next to the "
+        "scheduled gap, and whether the pair was bunched, gapped, regular or too uncertain.",
+        "one trip and the trip scheduled just before it at one timepoint on one service date",
+        "daily silver job",
+        "max(service_date)",
+    ),
+    TableInfo(
+        "gold",
+        "headway_summary",
+        "Counts of bunched, gapped, regular and uncertain pairs per route, direction, time of day "
+        "and day type over the last 28 days, for frequent service only.",
+        "one route direction in one time band on one day type, over the last 28 days",
+        "daily silver job",
+        "max(built_through)",
+    ),
+    TableInfo(
         "ops",
         "check_results",
         "Every monitoring check ever run: value, rule, verdict, and the SQL to rerun it.",
@@ -247,6 +265,11 @@ GLOSSARY = {
     "Running time": "How long a bus takes between two consecutive timepoints. The timetable "
     "says how long it should take; we estimate how long it did take from GPS, so each figure "
     "has an uncertainty of about a minute that shrinks when many trips are averaged.",
+    "Bunching": "Buses on a frequent route are supposed to arrive evenly spaced. Bunching is two "
+    "buses arriving almost together (here: less than a quarter of the scheduled gap apart), which "
+    "leaves a long wait for the next rider; a gap is the opposite (more than twice the scheduled "
+    "gap). Spacing is estimated from GPS, so a pair is only called bunched or a gap when the whole "
+    "estimated range says so.",
     "DBU": "Databricks Unit: the measure of compute used. The free plan has an undisclosed daily "
     "limit.",
 }
