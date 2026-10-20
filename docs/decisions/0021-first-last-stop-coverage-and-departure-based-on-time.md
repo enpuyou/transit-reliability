@@ -1,7 +1,7 @@
 # 0021: First and last stop coverage; judging on-time by departure (proposed)
 
 Date: 2026-10-20
-Status: proposed (measurement done on 2026-10-16; owner decision pending)
+Status: partly decided. The owner decided on 2026-10-20 that the LAST stop is left out of on-time shares (and the page says so). Departure as the headline: pending the owner's go-ahead.
 
 ## Question
 
