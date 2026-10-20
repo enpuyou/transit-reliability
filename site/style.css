@@ -61,3 +61,19 @@ dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
 dt { font-weight: 600; } dd { margin: 0; color: var(--muted); }
 .foot { color: var(--muted); font-size: .85rem; padding: 28px 16px 48px; border-top: 1px solid var(--line); margin-top: 40px; }
 @media (max-width: 640px) { dl { grid-template-columns: 1fr; } .pipebox:not(:last-child)::after { display: none; } }
+
+.fresh { margin-top: 6px; }
+.verdict { padding: 10px 14px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-weight: 600; }
+.verdict.good { border-color: var(--good); color: var(--good); }
+.verdict.bad { border-color: var(--bad); color: var(--bad); }
+.fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.fcol { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: .9rem; min-width: 0; }
+.fcol h4 { margin: 0 0 4px; font-size: .95rem; }
+.fcol p { margin: 4px 0; }
+.probes { list-style: none; padding: 0; margin: 4px 0; }
+.probes li { margin: 3px 0; }
+.btn { margin-top: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
+.plot { width: 100%; min-height: 180px; }
+details.nums { margin-top: 4px; font-size: .85rem; }
+.numwrap { max-height: 280px; overflow: auto; margin-top: 6px; }
+@media (max-width: 760px) { .fgrid { grid-template-columns: 1fr; } }

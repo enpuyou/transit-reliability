@@ -110,3 +110,14 @@ def test_proof_report_helpers_show_pacific_wall_clock_and_real_distances() -> No
     assert evenly_spaced([3, 5], 6) == [3, 5]
     # 0.0001 degree of longitude at latitude 47.6 is about 25 feet
     assert 24 < feet_between(47.6, -122.3, 47.6, -122.2999) < 26
+
+
+def test_the_status_file_carries_when_it_was_checked_and_what_each_probe_found() -> None:
+    from transit_reliability.monitoring.watchdog import Finding, status_payload
+
+    payload = status_payload([Finding("a", True, "fine"), Finding("b", False, "bad")], NOW)
+    assert payload["checked_at"] == NOW.isoformat()
+    assert payload["findings"] == [
+        {"name": "a", "ok": True, "detail": "fine"},
+        {"name": "b", "ok": False, "detail": "bad"},
+    ]

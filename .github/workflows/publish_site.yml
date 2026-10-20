@@ -1,15 +1,17 @@
 name: publish-site
 
-# Publish the transparency site (site/) to GitHub Pages every hour. The page never queries
+# Publish the transparency site (site/) to GitHub Pages every 15 minutes. The page never queries
 # Databricks: a Databricks job writes one JSON file of aggregates (public/site.json in the state
-# volume), and this workflow only copies that file. It fails (GitHub emails the owner) when the file
-# is missing or older than 3 hours, so a stale site is a red run, not a quiet lie.
+# volume, rebuilt hourly), and this workflow copies that file and adds status.json: live probes from
+# scripts/watchdog.py (collector file age, job runs), which cost no Databricks compute. The page shows
+# the age of both. If site.json is older than 3 hours the page is STILL published (so visitors see the
+# warning and the probes) and the run then fails, so GitHub emails the owner.
 # Needs repo secrets DATABRICKS_HOST and DATABRICKS_TOKEN (same as watchdog). GitHub Pages must be set
 # to "GitHub Actions" as its source (docs/commands.md, "Transparency site").
 
 on:
   schedule:
-    - cron: "35 * * * *" # the monitor job (:12) refreshes the file by about :17
+    - cron: "*/15 * * * *" # GitHub may delay scheduled runs; the page warns when probes are over 45 min old
   workflow_dispatch:
   push:
     branches: [main]
@@ -51,19 +53,25 @@ jobs:
           mkdir -p site/data
           databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/site.json site/data/site.json --overwrite
 
-      - name: Check the data file is valid and fresh
+      - name: Live probes (status.json)
+        # never blocks publishing: a failing probe is exactly what visitors need to see
+        run: python3 scripts/watchdog.py --json-out site/data/status.json || true
+
+      - name: Check the data file is valid and how old it is
+        id: fresh
         run: |
           python3 - <<'PY'
-          import datetime as dt, json
+          import datetime as dt, json, os
           data = json.load(open("site/data/site.json"))
           generated = dt.datetime.fromisoformat(data["generated_at"])
           age = (dt.datetime.now(dt.UTC) - generated).total_seconds() / 3600
           print(f"site.json built {generated:%Y-%m-%d %H:%M} UTC ({age:.1f} h ago), tables: {len(data['tables'])}")
-          assert age < 3, f"site data is {age:.1f} h old (limit 3 h): the Databricks monitor job is not refreshing it"
           assert data.get("attribution"), "attribution legend missing"
           assert {"pipeline_tables", "check_latest", "hourly_snapshots"} <= set(data["tables"]), "required tables missing"
           if data.get("errors"):
               print("sections unavailable:", ", ".join(data["errors"]))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"stale={'true' if age >= 3 else 'false'}\nage={age:.1f}\n")
           PY
 
       - uses: actions/configure-pages@v5
@@ -75,3 +83,9 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+
+      - name: Fail the run if the data is stale (after publishing, so visitors see the warning)
+        if: steps.fresh.outputs.stale == 'true'
+        run: |
+          echo "site data is ${{ steps.fresh.outputs.age }} h old (limit 3 h): the Databricks monitor job is not refreshing it"
+          exit 1

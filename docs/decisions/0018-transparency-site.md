@@ -30,6 +30,23 @@ CLAUDE.md rule forbids querying the warehouse from a public path.
   unmeasured; early is judged on arrival; the zero-width interval issue; partial days) because a
   transparency page that hides them would not be transparent.
 
+## Freshness and interactivity (added 2026-10-20)
+
+- The site is not real time and says so. Two separate clocks are shown: the hourly tables and charts
+  (`site.json`) and the live probes (`status.json`, written every 15 minutes by `scripts/watchdog.py`
+  inside the publish workflow, from outside Databricks, at no Databricks compute cost: jobs API and a
+  file listing only).
+- The page tells three situations apart: probes old or missing (over 45 minutes) means publishing or the
+  status feed stopped; a failing probe names the pipeline problem (collector silent, job not run); tables
+  older than 3 hours with healthy probes means only the hourly refresh stopped. Ages tick in the
+  browser, open tabs re-check every 5 minutes and offer a reload button when new data exists.
+- When `site.json` is stale the workflow still publishes (so visitors see the warning) and then fails,
+  so GitHub emails the owner.
+- Charts are Plotly.js (basic bundle 2.35.2, MIT, vendored in `site/vendor/` so the page has no
+  third-party runtime dependency): hover tooltips, drag-to-zoom, reset, legend toggling, a range slider on
+  long time series, PNG download, and a "show the numbers" table under every chart. The lineage graph
+  highlights what a hovered table reads and what reads it.
+
 ## Consequences
 
 - One data layer feeds the page; a Databricks dashboard can be added later on the same tables.

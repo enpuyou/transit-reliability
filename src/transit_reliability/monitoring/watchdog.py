@@ -91,3 +91,16 @@ def summary_markdown(findings: Sequence[Finding], now: dt.datetime) -> str:
     ]
     lines += [f"| {'ok' if f.ok else '**FAIL**'} | {f.name} | {f.detail} |" for f in findings]
     return "\n".join(lines)
+
+
+def status_payload(findings: Sequence[Finding], now: dt.datetime) -> dict[str, Any]:
+    """The small file the website reads every 15 minutes (`status.json`).
+
+    It says when the probes ran and what each found, so a visitor can tell "the pipeline has a
+    problem" (a finding fails) from "publishing stopped" (checked_at is old).
+    """
+
+    return {
+        "checked_at": now.isoformat(),
+        "findings": [{"name": f.name, "ok": f.ok, "detail": f.detail} for f in findings],
+    }

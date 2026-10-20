@@ -26,6 +26,7 @@ from transit_reliability.monitoring.watchdog import (  # noqa: E402
     job_finding,
     landing_finding,
     silver_finding,
+    status_payload,
     summary_markdown,
 )
 
@@ -64,6 +65,7 @@ def landing_names(source: str, now: dt.datetime, profile: str | None) -> list[st
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", help="CLI profile (omit in CI, where env vars are used)")
+    parser.add_argument("--json-out", help="also write the findings as status.json for the website")
     args = parser.parse_args()
     now = dt.datetime.now(dt.UTC)
     findings: list[Finding] = []
@@ -95,6 +97,9 @@ def main() -> int:
         "silver_job_daily_run", lambda: silver_finding(job_runs(args.profile, "-prod-silver"), now)
     )
 
+    if args.json_out:
+        Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json_out).write_text(json.dumps(status_payload(findings, now)))
     report = summary_markdown(findings, now)
     print(report)
     if os.environ.get("GITHUB_STEP_SUMMARY"):

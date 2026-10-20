@@ -1146,6 +1146,13 @@ One-time setup: repository Settings -> Pages -> Source: "GitHub Actions" (or
 `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`). The page then lives at
 `https://<owner>.github.io/<repo>/` (here: https://enpuyou.github.io/transit-reliability/, live since 2026-10-20).
 
+Freshness: `data/site.json` is rebuilt hourly and `data/status.json` every 15 minutes (workflow
+`publish_site.yml`, via `scripts/watchdog.py --json-out`). Run the probes yourself, locally:
+`uv run python scripts/watchdog.py --profile enpu --json-out site/data/status.json`. To see the page's
+failure messages, edit `checked_at` in `site/data/status.json` to two hours ago (stale probes) or set a
+finding's `ok` to false, then reload the local preview. Charts need `site/vendor/plotly-basic.min.js`
+(vendored; upgrade by downloading a newer `plotly.js-basic-dist-min` build and checking the page).
+
 If a section on the page says it is unavailable, `errors` in `site.json` names the query; rerun that
 query from `src/transit_reliability/public/queries.py` in the SQL editor. If the workflow goes red with
 "site data is N h old", the monitor job is not running: see "Monitoring" in `docs/runbook.md`.

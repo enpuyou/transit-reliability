@@ -13,8 +13,12 @@
     <h1>Transit pipeline transparency</h1>
     <p class="lede">How real-time King County Metro bus data becomes reliability numbers, one step at a time:
       what goes in, what each stage does to it, how the data looks, and how we know it is working.
-      Everything below is read from the live pipeline; nothing is typed in by hand except the explanations.</p>
-    <div id="status" class="status" aria-live="polite">Loading…</div>
+      Everything below is read from the pipeline; nothing is typed in by hand except the explanations.
+      This page is <strong>not real time</strong>: the charts and tables are rebuilt hourly, and a lighter set of live probes
+      (is the collector still delivering? did the jobs run?) is refreshed about every 15 minutes. The panel below says how old each is
+      and tells a pipeline problem apart from a page that has stopped updating. Charts are interactive: hover for exact values,
+      drag to zoom, double-click to reset, click a legend entry to hide a series.</p>
+    <div id="freshness" class="fresh" aria-live="polite"><div class="verdict">Loading…</div></div>
   </div>
 </header>
 
@@ -70,9 +74,10 @@
 
 <footer class="wrap foot">
   <p id="attribution"></p>
-  <p>Data source: King County Metro public GTFS and GTFS-realtime feeds. This is an independent hobby project, not an official King County or Metro product. Aggregate numbers and masked samples only: vehicle identifiers are hashed and coordinates rounded to about 1 km.</p>
+  <p>Data source: King County Metro public GTFS and GTFS-realtime feeds. This is an independent hobby project, not an official King County or Metro product. Charts use the open-source Plotly.js library (MIT licence, bundled in vendor/). Aggregate numbers and masked samples only: vehicle identifiers are hashed and coordinates rounded to about 1 km.</p>
   <p id="generated"></p>
 </footer>
+<script src="vendor/plotly-basic.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
