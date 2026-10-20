@@ -88,3 +88,23 @@ def test_dates_between_is_inclusive() -> None:
         dt.date(2026, 10, 14),
         dt.date(2026, 10, 15),
     ]
+
+
+def test_a_feed_change_reaches_the_current_day_but_never_rewrites_history() -> None:
+    import datetime as dt
+
+    from transit_reliability.gtfs_static.load import dates_to_expand
+
+    today = dt.date(2026, 10, 20)
+    days = [today - dt.timedelta(days=n) for n in (2, 1, 0)] + [today + dt.timedelta(days=1)]
+    old, new = "FAL26-161.2", "FAL26-162.0"
+    done = {days[0]: {old}, days[1]: {old}, days[2]: {old}}  # tomorrow was never expanded
+    chosen = {d: new for d in days}  # a newer feed now covers every date
+    assert dates_to_expand(days, done, chosen, today) == [
+        days[2],
+        days[3],
+    ]  # today and the unbuilt day
+    # nothing changes while the chosen feed is the one already used
+    assert dates_to_expand(days[:3], done, {d: old for d in days[:3]}, today) == []
+    # a date with no feed is skipped, never expanded
+    assert dates_to_expand(days, {}, {d: None for d in days}, today) == []

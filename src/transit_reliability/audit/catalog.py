@@ -291,6 +291,53 @@ KNOWN_LIMITS = frozenset(
 )
 
 
+def segments(prefix: str, day: str) -> list[CheckSpec]:
+    """Segment running times recompute from stop visits, are positive, and are plausible."""
+
+    sv = _t(prefix, "silver", "stop_visits")
+    sr, rt = _t(prefix, "gold", "segment_runs"), _t(prefix, "gold", "segment_runtimes")
+    d = f"service_date = DATE'{day}'"
+    return [
+        CheckSpec(
+            "segment_runs_equal_independent_pair_count",
+            (
+                f"WITH tp AS (SELECT trip_id, stop_sequence, sched_arr, sched_dep, arr_est, dep_est FROM {sv} WHERE {d} AND timepoint = 1), "
+                f"nxt AS (SELECT a.trip_id, a.stop_sequence s1, min(b.stop_sequence) s2 FROM tp a JOIN tp b ON a.trip_id = b.trip_id AND b.stop_sequence > a.stop_sequence GROUP BY 1, 2), "
+                f"pairs AS (SELECT count(*) n FROM nxt JOIN tp a ON a.trip_id = nxt.trip_id AND a.stop_sequence = nxt.s1 JOIN tp b ON b.trip_id = nxt.trip_id AND b.stop_sequence = nxt.s2 "
+                f"WHERE a.dep_est IS NOT NULL AND b.arr_est IS NOT NULL AND unix_timestamp(b.sched_arr) > unix_timestamp(a.sched_dep)) "
+                f"SELECT abs((SELECT n FROM pairs) - (SELECT count(*) FROM {sr} WHERE {d}))"
+            ),
+            "one segment run per pair of consecutive timepoints that has a departure, an arrival and a positive scheduled runtime, recounted with a self-join instead of lead()",
+            maximum=0,
+        ),
+        CheckSpec(
+            "segment_runs_scheduled_runtime_not_positive",
+            f"SELECT count(*) FROM {sr} WHERE {d} AND sched_s <= 0",
+            "a scheduled running time is the gap between a departure and the next arrival, never zero or negative",
+            maximum=0,
+        ),
+        CheckSpec(
+            "segment_runs_negative_observed_runtime_share",
+            f"SELECT avg(CASE WHEN obs_s < 0 THEN 1.0 ELSE 0.0 END) FROM {sr} WHERE {d}",
+            "a bus cannot arrive at the next timepoint before it left this one; a few can appear when two estimates overlap",
+            maximum=0.001,
+        ),
+        CheckSpec(
+            "segment_runs_median_observed_over_scheduled_ratio",
+            f"SELECT percentile(obs_s / sched_s, 0.5) FROM {sr} WHERE {d} AND sched_s >= 120",
+            "buses take roughly the scheduled time between timepoints (0.95 on 2026-10-14 to 10-16); far outside means a unit or matching error",
+            minimum=0.6,
+            maximum=1.4,
+        ),
+        CheckSpec(
+            "segment_runtimes_summary_is_current",
+            f"SELECT CASE WHEN count(*) < 500 THEN 999 ELSE abs(datediff(DATE'{day}', max(last_day))) END FROM {rt}",
+            "the trailing-window summary has at least 500 segment rows and ends at the newest complete day",
+            maximum=1,
+        ),
+    ]
+
+
 def all_checks(prefix: str, day: str) -> list[CheckSpec]:
     return [replace(c, severity="warn") if c.name in KNOWN_LIMITS else c for c in _all(prefix, day)]
 
@@ -302,4 +349,5 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *stop_visits(prefix, day),
         *coverage(prefix, day),
         *gold(prefix, day),
+        *segments(prefix, day),
     ]

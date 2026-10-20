@@ -4,7 +4,7 @@ import csv
 import datetime as dt
 import io
 import zipfile
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -159,6 +159,31 @@ def choose_feed(service_date: dt.date, feeds: Sequence[FeedWindow]) -> FeedWindo
 
     valid = [f for f in feeds if f.start <= service_date <= f.end]
     return max(valid, key=lambda f: f.feed_date) if valid else None
+
+
+def dates_to_expand(
+    wanted: Sequence[dt.date],
+    expanded_with: Mapping[dt.date, set[str]],
+    chosen: Mapping[dt.date, str | None],
+    today: dt.date,
+) -> list[dt.date]:
+    """Service dates whose stop times must be (re)built.
+
+    A date never expanded, and the CURRENT date (and any later one) when the feed now chosen for it
+    differs from the one it was expanded with: a schedule change published mid-day must reach that
+    day's stop times. Earlier dates keep the timetable that was in effect when they were built, so
+    history is never rewritten by a later feed.
+    """
+
+    out = []
+    for day in wanted:
+        feed = chosen.get(day)
+        if feed is None:
+            continue
+        versions = expanded_with.get(day)
+        if versions is None or (day >= today and versions != {feed}):
+            out.append(day)
+    return out
 
 
 def day_origin_epoch(service_date: dt.date) -> int:

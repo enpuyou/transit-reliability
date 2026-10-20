@@ -15,6 +15,7 @@ from transit_reliability.gtfs_static.load import (
     FeedWindow,
     choose_feed,
     dates_between,
+    dates_to_expand,
     day_origin_epoch,
     read_feed_info,
     read_rows,
@@ -197,17 +198,20 @@ def expand_schedule(spark: Any, prefix: str) -> None:
         return
     wanted = dates_between(_compact_date(bounds["first"]), _compact_date(bounds["last"]))
     target = _silver(prefix, SCHEDULED_TABLE)
-    done = (
-        {r["service_date"] for r in spark.table(target).select("service_date").distinct().collect()}
-        if spark.catalog.tableExists(target)
-        else set()
-    )
+    expanded_with: dict[dt.date, set[str]] = {}
+    if spark.catalog.tableExists(target):
+        for r in spark.table(target).select("service_date", "feed_version").distinct().collect():
+            expanded_with.setdefault(r["service_date"], set()).add(r["feed_version"])
     feeds = _feed_windows(spark, prefix)
-    for day in (d for d in wanted if d not in done):
-        feed = choose_feed(day, feeds)
-        if feed is None:
+    chosen = {d: choose_feed(d, feeds) for d in wanted}
+    for day in wanted:
+        if chosen[day] is None and day not in expanded_with:
             print(f"no feed covers {day}; skipped")
-            continue
+    today = dt.datetime.now(dt.UTC).date()
+    versions = {d: f.feed_version for d, f in chosen.items() if f is not None}
+    for day in dates_to_expand(wanted, expanded_with, versions, today):
+        feed = chosen[day]
+        assert feed is not None  # dates_to_expand only returns dates with a chosen feed
         count = _expand_one_day(spark, prefix, day, feed)
         print(f"expanded {day} with feed {feed.feed_version}: {count} rows")
 

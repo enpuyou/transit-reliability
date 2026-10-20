@@ -105,3 +105,26 @@ percentile absolute error, and the number within 60 s. Only rows whose actual ar
 numbers query `prediction_errors` directly. Checked by conservation against `prediction_errors`.
 
 **Not built yet:** spacing and bunching, running time against the timetable.
+
+## `segment_runs` and `segment_runtimes` (built; decision 0022)
+
+**`segment_runs`. One row =** one trip between two consecutive timepoints on one service date. Table
+`transit_gold.segment_runs`. `sched_s` = scheduled arrival at the next timepoint minus scheduled
+departure here; `obs_s` = our estimated arrival at the next minus our estimated departure here;
+`obs_width_s` = the combined width of the two estimate intervals (median about 53 s); `band` (Seattle
+time: am_peak 6-9, midday 9-3, pm_peak 3-7, evening 7-midnight, night) and `day_type` (weekday,
+saturday, sunday); `detour_alert` = the agency published a reroute or detour alert naming this route that
+day (headline text match, whole route, whole day; it marks weaker estimates and a timetable known to be
+wrong, not a measurement of the detour). A pair is kept only when it has a departure, an arrival and a
+positive scheduled runtime. About 54,000 rows a day.
+
+**`segment_runtimes`. One row =** one route segment (direction, from and to stop) in one band and day
+type over the last 28 complete service dates, with at least 10 runs: `n`, `n_days`, `sched_median_s`,
+`obs_p50_s`, `obs_p85_s`, `obs_p95_s`, `excess_p50_s` (median observed minus scheduled), `share_over_schedule`,
+`median_uncertainty_s`, `detour_share`. Quantiles are recomputed from the runs, never pooled from daily
+numbers. Read it as: positive `excess_p50_s` means the timetable is tighter than reality. A segment with
+a high `detour_share` should be read with the alert text, not as a schedule error.
+
+Checks (audit and daily suite): run count equals an independent self-join recount, no non-positive
+scheduled runtime, negative observed runtimes under 0.1 percent, median observed/scheduled between 0.6 and
+1.4 (0.94 measured), and the summary is current.

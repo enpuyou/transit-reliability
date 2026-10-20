@@ -197,6 +197,24 @@ TABLES = (
         "max(service_date)",
     ),
     TableInfo(
+        "gold",
+        "segment_runs",
+        "How long each trip really took between two consecutive timepoints, next to the scheduled "
+        "time, with how uncertain our estimate is and whether a detour alert covered the route.",
+        "one trip between two consecutive timepoints on one service date",
+        "daily silver job",
+        "max(service_date)",
+    ),
+    TableInfo(
+        "gold",
+        "segment_runtimes",
+        "The last 28 complete days of those runs summarised by route segment, time of day and day "
+        "type: typical, 85th-percentile and 95th-percentile running time against the timetable.",
+        "one route segment in one time band on one day type, over the last 28 days",
+        "daily silver job",
+        "max(last_day)",
+    ),
+    TableInfo(
         "ops",
         "check_results",
         "Every monitoring check ever run: value, rule, verdict, and the SQL to rerun it.",
@@ -226,6 +244,9 @@ GLOSSARY = {
     "headline for comparison.",
     "Medallion layers": "Bronze (raw, decoded), silver (cleaned and matched), gold (answers).",
     "Delta table": "A table format on Databricks that keeps a history of every change.",
+    "Running time": "How long a bus takes between two consecutive timepoints. The timetable "
+    "says how long it should take; we estimate how long it did take from GPS, so each figure "
+    "has an uncertainty of about a minute that shrinks when many trips are averaged.",
     "DBU": "Databricks Unit: the measure of compute used. The free plan has an undisclosed daily "
     "limit.",
 }

@@ -254,3 +254,32 @@ def fail_job() -> None:
     raise RuntimeError(
         f"{args.reason}; see workspace.transit_ops.check_results and the failed task"
     )
+
+
+def build_gold_segment_runs() -> None:
+    """One row per trip and pair of consecutive timepoints: scheduled vs observed running time."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument(
+        "--rebuild-from",
+        type=dt.date.fromisoformat,
+        help="recompute service dates from this day (backfill)",
+    )
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_segments import build_segment_runs
+
+    build_segment_runs(_spark_session(), args.schema_prefix, args.rebuild_from)
+
+
+def build_gold_segment_runtimes() -> None:
+    """Summarise the last 28 complete days of segment runs by segment, band and day type."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_segments import build_segment_runtimes
+
+    build_segment_runtimes(_spark_session(), args.schema_prefix)

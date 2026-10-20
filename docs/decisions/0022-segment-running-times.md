@@ -1,7 +1,7 @@
 # 0022: Segment running times against the timetable (proposed)
 
 Date: 2026-10-20
-Status: proposed (first look done, see `docs/findings.md`; awaiting the owner's go-ahead to build)
+Status: accepted and built 2026-10-20 (first look in `docs/findings.md`)
 
 ## Question
 
@@ -26,7 +26,16 @@ segment, time of day and day type, and where is the schedule too tight or too lo
 - Checks: row-count recount from `stop_visits`, no negative or zero scheduled runtimes, observed within
   a plausible ratio band; public page gets a segment section and the findings.
 
-## Not decided
+## Decisions taken while building
 
-Whether to publish segment names publicly as "schedule problems" (they are estimates with an interval;
-Metro's own explanation, such as a detour, should be shown beside them).
+- Public page: aggregates only (typical running time against the timetable by time of day, the share of
+  runs slower than scheduled, and how many segments fit the timetable). Route-level results stay in
+  `segment_runtimes` and the findings, because they are estimates with an interval and need the agency's
+  own explanation beside them (the owner did not ask for named routes to be published; revisit on request).
+- The detour flag is a route-level, whole-day text match on reroute or detour alerts. It matched an
+  independent Python evaluation exactly on 2026-10-16 (24 routes, 23 percent of runs), and flags route 77.
+- Observed running time uses a departure and an arrival estimate, each with an interval; the per-run
+  uncertainty is kept in `obs_width_s` and summaries report its median.
+- A schedule-version fix made in the same change: `expand_schedule` now re-expands the current service
+  date if a newer feed version is chosen for it (`dates_to_expand`), because earlier dates keep the timetable
+  that applied when they were built.

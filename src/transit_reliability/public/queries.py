@@ -121,6 +121,15 @@ def _distribution_parts(prefix: str) -> list[str]:
         f"SELECT 'pointer_lead_feet', {COMPLETE_DAY}, CASE b WHEN 0 THEN '0-100' WHEN 1 THEN '101-200' WHEN 2 THEN '201-500' WHEN 3 THEN '501-1000' WHEN 4 THEN '1001-2000' ELSE 'over 2000' END, b, CAST(count(*) AS DOUBLE) "
         f"FROM (SELECT {lead} AS b FROM {sv} WHERE {cd} AND pointer_lead_ft IS NOT NULL) GROUP BY 3, 4"
     )
+    sr, rt = gold("segment_runs"), gold("segment_runtimes")
+    win = f"service_date BETWEEN date_sub({COMPLETE_DAY}, 27) AND {COMPLETE_DAY} AND day_type = 'weekday'"
+    order = "CASE band WHEN 'am_peak' THEN 0 WHEN 'midday' THEN 1 WHEN 'pm_peak' THEN 2 WHEN 'evening' THEN 3 ELSE 4 END"
+    parts += [
+        f"SELECT 'segment_excess_by_band', {COMPLETE_DAY}, band, {order}, percentile(obs_s - sched_s, 0.5) FROM {sr} WHERE {win} GROUP BY band",
+        f"SELECT 'segment_share_over_by_band', {COMPLETE_DAY}, band, {order}, avg(CASE WHEN obs_s > sched_s THEN 1.0 ELSE 0.0 END) FROM {sr} WHERE {win} GROUP BY band",
+        f"SELECT 'segment_excess_histogram', {COMPLETE_DAY}, CASE o WHEN 0 THEN 'over 2 min faster' WHEN 1 THEN '1-2 min faster' WHEN 2 THEN 'up to 1 min faster' WHEN 3 THEN 'up to 1 min slower' WHEN 4 THEN '1-2 min slower' ELSE 'over 2 min slower' END, o, CAST(count(*) AS DOUBLE) "
+        f"FROM (SELECT CASE WHEN excess_p50_s < -120 THEN 0 WHEN excess_p50_s < -60 THEN 1 WHEN excess_p50_s < 0 THEN 2 WHEN excess_p50_s < 60 THEN 3 WHEN excess_p50_s < 120 THEN 4 ELSE 5 END AS o FROM {rt} WHERE day_type = 'weekday' AND n >= 30) GROUP BY o",
+    ]
     for outcome in ("early", "on_time", "late", "uncertain"):
         for name, column in (
             ("on_time_by_day_common_lens", "n_common"),  # the arrival-only view
@@ -196,6 +205,7 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         gold("prediction_accuracy"),
     )
     cr = ops("check_results")
+    sg, srt = gold("segment_runs"), gold("segment_runtimes")
     return {
         "bronze.vehicle_positions": (
             "bronze",
@@ -244,6 +254,14 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         "gold.prediction_errors": (
             "gold",
             f"SELECT to_json(struct(service_date, trip_id, stop_sequence, horizon_min, as_of, actual_arrival, width_s, kcm_error_s, sched_error_s, persistence_error_s)) FROM {pe} WHERE {latest_day(pe)} LIMIT 1",
+        ),
+        "gold.segment_runs": (
+            "gold",
+            f"SELECT to_json(struct(service_date, trip_id, route_id, direction_id, from_stop_id, to_stop_id, sched_s, obs_s, obs_width_s, band, day_type, detour_alert)) FROM {sg} WHERE {latest_day(sg)} LIMIT 1",
+        ),
+        "gold.segment_runtimes": (
+            "gold",
+            f"SELECT to_json(struct(route_short_name, from_stop_name, to_stop_name, band, day_type, n, n_days, sched_median_s, obs_p50_s, obs_p85_s, excess_p50_s, share_over_schedule, median_uncertainty_s, detour_share)) FROM {srt} WHERE n >= 30 LIMIT 1",
         ),
         "gold.prediction_accuracy": (
             "gold",
