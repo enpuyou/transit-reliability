@@ -4,6 +4,35 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-20 the headline on-time measure is now the rider rule (decision 0021)
+
+Owner decision: judge EARLY on the departure (a bus that leaves early is a missed bus; arriving early and
+holding is normal) and LATE on the arrival (at the first stop, on the departure), last stop left out
+(its trip data ends about 1,000 ft before it and the bus is then absent for a median 9 minutes). Counts
+`n_rider_*` in `trip_performance` and `route_performance`; the arrival-only view stays alongside.
+Prod rebuilt 2026-10-13 onward; audit 27 passed, 0 failed, 3 warnings; independent recount equal.
+
+Per day, early / on time / late / uncertain (share of scored timepoints), rider rule vs the arrival-only
+view used until now:
+
+| Day | Rider rule (n scored) | Arrival-only (n) |
+|---|---|---|
+| 10-14 | 6.4 / 68.6 / 16.1 / 8.9 (68,179) | 11.7 / 63.8 / 16.0 / 8.6 (55,783) |
+| 10-15 | 6.1 / 68.4 / 18.2 / 7.2 (68,764) | 11.1 / 63.7 / 17.6 / 7.6 (56,315) |
+| 10-16 | 6.9 / 69.6 / 16.6 / 6.9 (68,808) | 12.5 / 64.2 / 16.3 / 7.1 (56,953) |
+| 10-17 | 6.0 / 69.0 / 17.0 / 8.0 (50,242) | 11.1 / 64.7 / 16.1 / 8.1 (41,130) |
+| 10-18 | 6.5 / 72.1 / 14.0 / 7.3 (48,443) | 11.7 / 67.4 / 13.5 / 7.5 (40,084) |
+
+- Read the on-time share as a DEFINITION effect: about 5 points more on time than the arrival-only view
+  because buses that arrive early and wait are no longer counted early. It does not mean service
+  improved. The late share is about the same (it is judged on the arrival either way, plus the first
+  stop's departure).
+- The rule scores 94.4 percent of non-last timepoints (2026-10-18); the arrival-only view scored only 66
+  percent of all timepoints, none at the first stop.
+- 3,049 non-last timepoints on 10-16 have a departure lower bound without an estimate (the bus was last
+  seen still at the stop); they count as evidence of lateness or "not early", never alone as on time.
+- Earlier per-day tables below (arrival-only) remain valid as that view.
+
 ## 2026-10-20 second correction: arrivals are no longer collapsed to a single instant (decision 0019)
 
 The proof report found that about 9.5 percent of measured arrivals had a zero-width interval. Cause:
