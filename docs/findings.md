@@ -4,6 +4,26 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-20 segment running times in prod (decision 0022; 2026-10-13 to 10-19, 389,000 segment runs)
+
+Built `segment_runs` (about 54,000 rows a day) and `segment_runtimes` (7,786 segment, band and day-type rows,
+2,877 with at least 30 runs). Audit 32 passed, 0 failed; the detour flag equals an independent Python
+evaluation of the alert text on 2026-10-16.
+
+- The first-look picture holds on every day: median 14 to 26 s FASTER than the timetable; weekday medians by
+  time band: morning peak -15 s (41.6 percent of runs slower than scheduled), afternoon peak -23 s (39.6),
+  midday -26 s (36.9), evening -21 s (37.3), overnight -21 s (36.8). The peaks are the tightest.
+- Detours are common and distort the extremes: on a typical day 7 to 23 percent of runs are on a route with
+  a reroute or detour alert (43 percent on Saturday 10-17, a day of street events). Of the 25 largest weekday
+  overruns (at least 30 runs), 22 are on routes with such an alert: route 77 throughout (the Roosevelt Station
+  to NE 125th St segment is scheduled 540 s and observed 1,122 s in the afternoon peak; NE 130th St and 5th
+  Ave NE to NE 125th St and 30th Ave NE is scheduled 240 s and observed 601 s).
+- The one large overrun with NO alert: route 906, S 180th St and Andover Park W to S Carr Rd and Talbot Rd S,
+  afternoon peak, scheduled 540 s, observed median 895 s (p85 1,066 s, 34 runs). Either the timetable is
+  tight there or an unannounced diversion; it is the best candidate for a real schedule finding so far, and
+  needs more days before it is quoted.
+- Not published by name on the site (aggregates only), per decision 0022.
+
 ## 2026-10-20 running time against the timetable (first look; 3 weekdays, 2026-10-14 to 10-16)
 
 Segment = consecutive timepoints of a trip; observed running time = arrival at the next timepoint minus
