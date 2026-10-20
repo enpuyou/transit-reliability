@@ -133,7 +133,7 @@ or run any workflow by hand to keep it alive. Compute cost of the monitor job: n
 
 The Worker `transit-dispatcher` triggers the site/probe workflow every 15 minutes and the watchdog hourly
 using a fine-grained GitHub token (secret `GITHUB_TOKEN` in Cloudflare; Actions read and write on this
-repository only). Token expiry date: not yet set (record it here when created). When the token is missing
+repository only). Token expiry: none (the owner created it with no expiration on 2026-10-20, scoped to this one repository with Actions read and write only; review it periodically and revoke it in GitHub settings if the Worker is ever retired). When the token is missing
 or expired the probes stop and the public page turns red with "Cannot confirm the pipeline is alive".
 GitHub's own schedule is only a fallback. Databricks CLI login (`databricks auth login --profile enpu`)
 also expires; on 2026-10-20 both CLI profiles were invalid ("Refresh token is invalid") and had to be

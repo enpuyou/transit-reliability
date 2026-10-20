@@ -7,7 +7,7 @@ something starts failing, because free-plan limits change.
 
 | Area | Limit | Our usage | Status |
 |---|---|---|---|
-| Cloudflare cron triggers | 5 per account | 1 | OK |
+| Cloudflare cron triggers | 5 per account | 3 (collector 1, dispatcher 2) | OK |
 | Cloudflare requests | 100,000 per day | about 1,440 cron runs per day | OK |
 | Cloudflare CPU per cron run | 10 ms | 9 to 16 ms over 9 runs on 2026-10-15 (median 11; 16 on the minute that also fetched alerts); 6 to 10 ms on 2026-10-13. All 9 reported `ok`, no exceptions | AT RISK and over the stated limit without failing; enforcement is not strict per run. See decision 0003 |
 | Cloudflare subrequests | 50 per invocation | about 10 (fetch + upload per source, vehicle positions 3x) | OK |
@@ -101,3 +101,23 @@ dashboard logs for those windows.
   day's job DBU here (query in "Monitoring compute" above) and compare.
 - `site.json` was 223 KB in the first preview (14 tables, 7 days of hourly data). GitHub Pages limits
   are far above that (unverified for this repository's plan).
+
+## Measured compute by job (system.billing.usage, 2026-10-13 to 10-20; corrects the 2026-10-19 estimate)
+
+DBU per UTC day (billing lags about a day; 10-20 is billed only through 17:00 UTC):
+
+| Day | ingest | silver | monitor | dev and one-off runs | SQL warehouse | other | total |
+|---|---|---|---|---|---|---|---|
+| 10-15 | 18.74 | 1.88 | 0 | 3.94 | 14.34 | 1.41 | 40.31 (highest day, no cut-off) |
+| 10-16 | 16.84 | 6.50 | 0 | 1.18 | 8.81 | 1.41 | 34.74 |
+| 10-17 | 18.43 | 1.93 | 0 | 0 | 0 | 0.65 | 21.01 |
+| 10-18 | 16.59 | 2.09 | 0 | 2.79 | 2.83 | 0.41 | 24.71 |
+| 10-19 | 13.23 | 2.25 | 0 | 1.97 | 3.56 | 1.19 | 22.20 |
+| 10-20 (to 17:00) | 11.49 | 2.86 | 10.53 | 4.17 | 5.80 | 1.28 | 36.13 |
+
+The monitor job cost 10.53 DBU over its 17 runs that day, about 0.62 DBU per run (two tasks, each with
+its own serverless start; about 126 s), so about 15 DBU per day at 24 runs. The 2026-10-19 estimate in
+"Monitoring compute" above (about 2.5 DBU per day) was wrong by a factor of six: it scaled the per-minute
+cost of ingest runs, but short two-task runs cost far more per minute. At 15 DBU per day the monitor is now
+the largest single consumer after ingest. The quota itself is still unpublished, so no headroom can be
+stated; the highest day so far (40.3 DBU) did not hit a cut-off, but 10-20 is on course to exceed it.
