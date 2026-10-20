@@ -4,6 +4,23 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-20 bunching and gaps (decision 0023; frequent service, 2026-10-13 to 10-20)
+
+About 34,000 frequent pairs a day (buses scheduled 4 to 15 minutes apart at a timepoint); a pair is
+called bunched (under 25 percent of the scheduled gap) or gapped (over twice) only when the whole
+estimated interval of the actual gap says so (median width about 50 s). Audit 37 passed, 0 failed.
+
+- Typical day: 2.6 to 2.8 percent bunched, 1.2 to 1.3 gapped, 93 to 94 percent regular, 1.8 to 3 percent
+  uncertain (weekdays 10-14 to 10-16; the Sunday 10-18 was calmer: 1.3 / 0.3 / 97.6).
+- Time of day, weekdays pooled: the afternoon peak (3 to 7 pm) is the worst, 3.8 percent bunched and 2.0
+  percent gapped, about double the morning peak (1.7 and 0.9); midday 2.0 and 0.7; evening 2.4 and 0.9.
+- Highest by route (weekday, at least 300 pairs, certain classes): E Line 10.1 percent bunched and 5.4
+  gapped (4,241 pairs), route 40 5.8 and 3.5, route 168 5.5 and 2.7, route 75 4.9 and 3.4, route 60 4.8 and
+  2.6. Not published by name on the site; these are estimates with an interval and need more weeks.
+- The median actual-over-scheduled gap is 1.00, as it should be on average; the story is the tails.
+- Ridership (gate G2) found no downloadable licensed source, so rider-weighted rankings are not possible;
+  rankings use trips affected (decision 0023).
+
 ## 2026-10-20 segment running times in prod (decision 0022; 2026-10-13 to 10-19, 389,000 segment runs)
 
 Built `segment_runs` (about 54,000 rows a day) and `segment_runtimes` (7,786 segment, band and day-type rows,

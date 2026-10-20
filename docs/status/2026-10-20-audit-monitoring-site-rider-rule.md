@@ -11,8 +11,8 @@ Branch: `main`, pushed through commit 60ea2c3 (plus the docs added after it).
 | 2 Bronze | Done, prod ingest every 30 minutes. |
 | 3 Silver | Done, except `alert_versions` (alert feeds not collected richly yet). |
 | 4 Public site | Changed: a transparency site on GitHub Pages instead of the planned live map (decision 0018). Live map open (decision 0013). |
-| 5 Arrivals and metrics | Mostly done: stop visits, trip and route reliability, prediction accuracy, rider-rule headline (0021). Open: headways and bunching, segment running times (first look below), `docs/metrics.md`. Ride test waived. |
-| 6 Context and "why / who" | Not started; gate G2 (ridership source) open. |
+| 5 Arrivals and metrics | Done except `docs/metrics.md` (definitions live in `docs/gold_tables.md` and the decisions): stop visits, trip and route reliability, prediction accuracy, rider-rule headline (0021), segment running times (0022), headways and bunching (0023). Ride test waived. |
+| 6 Context and "why / who" | Not started. Gate G2 checked 2026-10-20: no licensed route- or stop-level ridership source found, so rider-minutes-lost is dropped as the headline (0023). Weather, events, WSDOT, 911 open. |
 | 7 ML | Not started; needs 3 weeks of data, so not before about 2026-11-03 (gate G4). |
 | 8 Hardening | About half: CI, checks as code, runbook, monitoring, ADRs. Open: auto-deploy, smoke test, outage drill, README reproduction pass. |
 | 9 Polish | Not started. |
@@ -45,7 +45,7 @@ deleted workspace would lose raw files and silver tables, which cannot be re-fet
 
 ## Open items and next
 
-1. Running time against the timetable (first look in `docs/findings.md`, decision 0022 proposed).
+1. Phase 6 context data (weather first), or the Phase 8 hardening items.
 2. Slow the hourly monitor (about 10 DBU a day saved); reword or retire the two arrival-coverage warnings.
 3. Decision 0013 (live view); gate G2 ridership spike; `alert_versions`.
 4. Known unknowns: why scheduled runs vanished on 2026-10-19 17:30 to 22:30 UTC (cause unverified);
