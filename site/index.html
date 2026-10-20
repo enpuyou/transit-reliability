@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transit Pipeline Transparency</title>
+<meta name="description" content="A live, plain-language view of every step of a transit data pipeline: what goes in, what each stage does, how the data looks, and how we know it works.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Transit pipeline transparency</h1>
+    <p class="lede">How real-time King County Metro bus data becomes reliability numbers, one step at a time:
+      what goes in, what each stage does to it, how the data looks, and how we know it is working.
+      Everything below is read from the live pipeline; nothing is typed in by hand except the explanations.</p>
+    <div id="status" class="status" aria-live="polite">Loading…</div>
+  </div>
+</header>
+
+<nav class="wrap toc" id="toc" aria-label="Sections"></nav>
+
+<main class="wrap">
+  <section id="map-section">
+    <h2>The pipeline at a glance</h2>
+    <p>Data flows left to right. Each box shows the headline number for that stage. Select a box to jump to its explanation.</p>
+    <div id="pipeline-map" class="pipemap"></div>
+    <p class="note">Times on this page are UTC unless a label says Pacific. Counts come from the pipeline's own tables.</p>
+  </section>
+
+  <div id="layers"></div>
+
+  <section id="lineage-section">
+    <h2>How tables depend on each other</h2>
+    <p>This graph is not drawn by hand: Databricks records which tables each job read and wrote, and this shows those records for the last 30 days.</p>
+    <div id="lineage" class="chart"></div>
+  </section>
+
+  <section id="jobs-section">
+    <h2>Jobs: what ran, when, and whether it worked</h2>
+    <p>Each square is one run of a scheduled job over the last 7 days (green succeeded, red failed). A <em>gap</em> in a row means the job did not run when it should have. Gaps are the failures a job cannot report about itself, which is why a separate watchdog outside Databricks checks them.</p>
+    <div id="job-strips"></div>
+    <h3>Where the daily job spends its time</h3>
+    <div id="task-times" class="chart"></div>
+  </section>
+
+  <section id="cost-section">
+    <h2>Compute cost</h2>
+    <p>Databricks measures compute in DBUs. The free plan has a daily allowance that is not published, so we track our own usage to stay away from the cut-off.</p>
+    <div id="billing" class="chart"></div>
+  </section>
+
+  <section id="limits-section">
+    <h2>What these numbers can and cannot tell you</h2>
+    <ul class="limits">
+      <li><strong>Arrival times are estimates.</strong> Buses report GPS positions every 20 seconds or so. We work out when a bus reached a stop by placing those positions along the route, and we always keep the interval between the last position before the stop and the first one after.</li>
+      <li><strong>Not every stop is measured.</strong> About two thirds of timepoints (stops with a published time) have a measured arrival. The first stop of a trip is almost never measured, because the bus is often first seen after it has left; the last stop only occasionally. Percentages describe the middle of trips.</li>
+      <li><strong>"Early" is judged on arrival.</strong> Buses are supposed to wait at timepoints until the scheduled time, so arriving early is normal; leaving early is the real problem.</li>
+      <li><strong>Some arrivals are suspiciously exact.</strong> Roughly 9 percent of measured arrivals have a zero-width interval because the agency's "next stop" pointer sometimes runs ahead of the bus and we currently trust it. This is a known issue, tracked by a warning check below.</li>
+      <li><strong>Partial days.</strong> Collection began on 2026-10-13 about 21:43 UTC and the first and latest days are incomplete; their missing trips are missing data, not missed service.</li>
+      <li><strong>Independent review.</strong> A separate reviewer with no knowledge of how the pipeline was built audited the code and the data on 2026-10-19 and found a real bug, which was fixed and the data rebuilt.</li>
+    </ul>
+  </section>
+
+  <section id="glossary-section">
+    <h2>Glossary</h2>
+    <dl id="glossary"></dl>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p id="attribution"></p>
+  <p>Data source: King County Metro public GTFS and GTFS-realtime feeds. This is an independent hobby project, not an official King County or Metro product. Aggregate numbers and masked samples only: vehicle identifiers are hashed and coordinates rounded to about 1 km.</p>
+  <p id="generated"></p>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

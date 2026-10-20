@@ -92,3 +92,12 @@ dashboard logs for those windows.
   2 hours (`0 12 0/2 * * ?`) in `resources/monitor_job.yml` and redeploy.
 - The watchdog and the proof report use no Databricks compute (jobs API and file listing only) except
   the SQL warehouse for the proof report.
+
+## Transparency site (added 2026-10-20; decision 0018)
+
+- The `publish_site` tasks add compute to the monitor job (live sections, expected well under a
+  minute: the sandbox timings of the live queries were 5 to 12 s each) and to the silver job (the heavy
+  sections, 5 to 11 s each in the sandbox). NOT yet measured in production; record the first full
+  day's job DBU here (query in "Monitoring compute" above) and compare.
+- `site.json` was 223 KB in the first preview (14 tables, 7 days of hourly data). GitHub Pages limits
+  are far above that (unverified for this repository's plan).

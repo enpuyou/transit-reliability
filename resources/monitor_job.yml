@@ -24,6 +24,22 @@ resources:
               - --suite
               - hourly
           environment_key: default
+        - task_key: publish_live
+          depends_on:
+            - task_key: hourly_checks
+          # run even when a check failed: the page must show the failure, not go stale
+          run_if: ALL_DONE
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: publish_site
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --state-volume
+              - ${var.state_volume}
+              - --parts
+              - live
+          environment_key: default
       environments:
         - environment_key: default
           spec:

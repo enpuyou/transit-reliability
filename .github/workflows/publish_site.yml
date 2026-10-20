@@ -1,0 +1,77 @@
+name: publish-site
+
+# Publish the transparency site (site/) to GitHub Pages every hour. The page never queries
+# Databricks: a Databricks job writes one JSON file of aggregates (public/site.json in the state
+# volume), and this workflow only copies that file. It fails (GitHub emails the owner) when the file
+# is missing or older than 3 hours, so a stale site is a red run, not a quiet lie.
+# Needs repo secrets DATABRICKS_HOST and DATABRICKS_TOKEN (same as watchdog). GitHub Pages must be set
+# to "GitHub Actions" as its source (docs/commands.md, "Transparency site").
+
+on:
+  schedule:
+    - cron: "35 * * * *" # the monitor job (:12) refreshes the file by about :17
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/publish_site.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+
+      - name: Check secrets are configured
+        run: |
+          test -n "$DATABRICKS_HOST" || { echo "DATABRICKS_HOST secret is missing"; exit 1; }
+          test -n "$DATABRICKS_TOKEN" || { echo "DATABRICKS_TOKEN secret is missing"; exit 1; }
+
+      - name: Fetch the data file
+        run: |
+          mkdir -p site/data
+          databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/site.json site/data/site.json --overwrite
+
+      - name: Check the data file is valid and fresh
+        run: |
+          python3 - <<'PY'
+          import datetime as dt, json
+          data = json.load(open("site/data/site.json"))
+          generated = dt.datetime.fromisoformat(data["generated_at"])
+          age = (dt.datetime.now(dt.UTC) - generated).total_seconds() / 3600
+          print(f"site.json built {generated:%Y-%m-%d %H:%M} UTC ({age:.1f} h ago), tables: {len(data['tables'])}")
+          assert age < 3, f"site data is {age:.1f} h old (limit 3 h): the Databricks monitor job is not refreshing it"
+          assert data.get("attribution"), "attribution legend missing"
+          assert {"pipeline_tables", "check_latest", "hourly_snapshots"} <= set(data["tables"]), "required tables missing"
+          if data.get("errors"):
+              print("sections unavailable:", ", ".join(data["errors"]))
+          PY
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

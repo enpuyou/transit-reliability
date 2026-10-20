@@ -53,8 +53,13 @@ why, and what to change. The evidence supports the first and the benchmark part 
      realtime feeds, record the required attribution, and look at what Metro already
      publishes so claims of novelty are accurate. Status 2026-10-15: terms read and recorded
      in `docs/data_reports/kcm_realtime.md` (revocable license to use and redistribute,
-     attribution legend required, data as-is); the check of what Metro already publishes is
-     still open. Until both are done nothing is public.
+     attribution legend required, data as-is). The check of what Metro already publishes was done on
+     2026-10-19 (web search, secondary sources; confirm on kingcounty.gov before quoting): Metro
+     publishes a rider dashboard ("The Dash"), a Strategic Plan dashboard and performance reports, and
+     is reported to define on time as at most 5.5 minutes late or 1.5 minutes early (our `metro_like`
+     lens). So nothing here may be presented as the first measure of Metro's reliability. The
+     transparency site (decision 0018) is public from that date with the attribution legend and
+     aggregates only; it presents the pipeline and its checks, not a ranking of Metro.
    - **G4, enough history (before Phase 7):** at least 3 weeks of collection and enough
      stop visits per horizon for stable error estimates. Otherwise postpone modeling.
    - **G5, compute headroom:** daily DBU stays inside a level we choose and record in

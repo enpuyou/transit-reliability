@@ -225,3 +225,17 @@ def run_monitor() -> None:
 
     day = dt.date.fromisoformat(args.day) if args.day else None
     run(_spark_session(), args.schema_prefix, args.suite, day)
+
+
+def publish_site() -> None:
+    """Build the <prefix>_public aggregate tables and export site.json for the website."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--state-volume", required=True)
+    parser.add_argument("--parts", choices=["live", "all"], default="all")
+    args = parser.parse_args()
+
+    from transit_reliability.public.build import publish_site as run
+
+    run(_spark_session(), args.schema_prefix, args.state_volume, args.parts)

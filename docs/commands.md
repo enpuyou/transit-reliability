@@ -1119,3 +1119,34 @@ daily suite through a one-off submit of entry point `run_monitor` with `--suite 
 
 **Statuses.** `pass`; `fail` (a rule broke; the job fails and emails); `warn` (a known limit, see
 `KNOWN_LIMITS` in `audit/catalog.py` and decision 0016; recorded, never alerts).
+
+## Transparency site (public page built from aggregates; decision 0018)
+
+How it flows: `publish_site` task (hourly in the monitor job, daily in the silver job) -> tables in
+`workspace.transit_public` -> `site.json` in the state volume -> GitHub workflow `publish-site` copies
+that one file -> GitHub Pages. The page never queries Databricks.
+
+```bash
+# the file the page reads
+databricks fs ls dbfs:/Volumes/workspace/transit_ops/state/public --profile enpu -l
+databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/site.json /tmp/site.json --profile enpu
+python3 -c "import json;d=json.load(open('/tmp/site.json'));print(d['generated_at'], d['errors'], {k:len(v) for k,v in d['tables'].items()})"
+
+# refresh now instead of waiting: run the monitor job (hourly sections) or the silver job (all sections)
+databricks jobs run-now <monitor job id> --profile enpu
+
+# preview the page locally with that file
+mkdir -p site/data && cp /tmp/site.json site/data/site.json && cd site && python3 -m http.server 8000
+# then open http://localhost:8000   (site/data/ is git-ignored)
+
+# publish by hand / see the last runs
+gh workflow run publish-site.yml ; gh run list --workflow publish-site.yml --limit 3
+```
+One-time setup: repository Settings -> Pages -> Source: "GitHub Actions" (or
+`gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`). The page then lives at
+`https://<owner>.github.io/<repo>/`.
+
+If a section on the page says it is unavailable, `errors` in `site.json` names the query; rerun that
+query from `src/transit_reliability/public/queries.py` in the SQL editor. If the workflow goes red with
+"site data is N h old", the monitor job is not running: see "Monitoring" in `docs/runbook.md`.
+To see the public tables themselves: `SHOW TABLES IN workspace.transit_public`.
