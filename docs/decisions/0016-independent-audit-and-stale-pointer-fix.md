@@ -29,6 +29,15 @@ project goals and read-only access, reviewed the code and ran its own SQL on pro
   structural coverage items and the next-day errors above.
 - Independent review of this kind should be repeated at each phase boundary.
 
+## Found afterwards (2026-10-19, by the proof report on five random trips)
+
+The feed's next-stop pointer sometimes runs AHEAD of the bus; the inference trusts it over the GPS
+geometry, collapsing the arrival interval to the pointer's time. On 2026-10-17, 26,707 of 282,059
+measured arrivals (9.5 percent) have a zero-width interval; example trip 833153111 stop 29: pointer
+advanced at 01:04:38 UTC, bus 2,729 ft away, the stop's departure estimate says it arrived later.
+Recorded as warn check `zero_width_arrival_interval_share`; not fixed (another prod rebuild; decide
+first whether to trust the geometry, or widen the interval to include both).
+
 ## Still open
 
 Wiring the checks into a results table and an hourly freshness check; a check for a scheduled job that

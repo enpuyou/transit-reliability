@@ -113,3 +113,17 @@ The prod ingest and silver jobs email the deploying user when a run fails
 `databricks jobs get <job_id> --profile enpu -o json` and look at `settings.email_notifications`.
 Delivery has not been tested with a real failure (unverified); a failed health check fails the
 silver job, so it also sends mail.
+
+## Monitoring (since 2026-10-19; decision 0017)
+
+| Layer | Where | Cadence | Reaches you by |
+|---|---|---|---|
+| Hourly checks | job `transit-reliability-prod-monitor` | hourly at :12 | Databricks email on failure |
+| Daily checks | last task `daily_checks` of the silver job | daily after 11:45 UTC | Databricks email on failure |
+| Results history | `workspace.transit_ops.check_results` | every run | SQL editor, proof report |
+| External watchdog | GitHub workflow `watchdog` | hourly at :20 | GitHub email on failure |
+
+If the watchdog says "could not check", suspect the Databricks token (rotate: `docs/commands.md`,
+"Token rotation"; the GitHub secret `DATABRICKS_TOKEN` is separate from the Worker's). GitHub disables
+scheduled workflows after 60 days without repository activity (unverified for this repository): push
+or run any workflow by hand to keep it alive. Compute cost of the monitor job: not yet measured.

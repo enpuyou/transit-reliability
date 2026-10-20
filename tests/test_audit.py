@@ -48,7 +48,7 @@ def test_render_marks_failures_and_counts() -> None:
         lambda sql: 0.0 if sql == "A" else 5.0,
     )
     text = render(results)
-    assert "ok   a" in text and "FAIL b" in text and "1 passed, 1 failed" in text
+    assert "ok   a" in text and "FAIL b" in text and "1 passed, 1 failed, 0 warnings" in text
 
 
 def test_missing_files_are_ignored_only_when_they_are_empty_feeds() -> None:
@@ -78,9 +78,9 @@ def test_every_catalog_check_is_a_named_single_select_and_names_are_unique() -> 
         for word in ("INSERT", "DELETE", "DROP", "MERGE", "UPDATE", "ALTER"):
             assert f" {word} " not in s.sql.upper(), (s.name, word)
         assert "workspace.transit_" in s.sql
-        assert "2026-10-16" in s.sql or s.name.startswith(
-            ("silver_", "quarantine_")
-        ), s.name  # date-bound checks must use the date given
+        assert "2026-10-16" in s.sql or s.name.startswith(("silver_", "quarantine_")), (
+            s.name
+        )  # date-bound checks must use the date given
 
 
 def test_the_catalog_follows_the_schema_prefix() -> None:

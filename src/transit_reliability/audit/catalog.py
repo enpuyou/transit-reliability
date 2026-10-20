@@ -6,6 +6,8 @@ build cannot also hide here. `prefix` is `transit` (prod) or `dev_transit`. `day
 (ISO text) that is complete: pass a date at least two days old, or partial-day results mislead.
 """
 
+from dataclasses import replace
+
 from transit_reliability.audit.core import CheckSpec
 
 MAX_GAP_S = 180.0  # the width an "interpolated" arrival interval may not exceed (arrivals/infer.py)
@@ -255,7 +257,23 @@ def gold(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+# Rules that are broken today for reasons we understand and have written down (decision 0016).
+# They are recorded and shown as warnings, not failures, so a real new failure stays visible.
+KNOWN_LIMITS = frozenset(
+    {
+        "timepoints_with_an_interval_share",  # trip starts and ends are mostly unmeasured
+        "first_timepoint_of_trip_measured_share",
+        "last_timepoint_of_trip_measured_share",
+        "prediction_error_beyond_1h_share",  # next-day runs of the same trip_id
+    }
+)
+
+
 def all_checks(prefix: str, day: str) -> list[CheckSpec]:
+    return [replace(c, severity="warn") if c.name in KNOWN_LIMITS else c for c in _all(prefix, day)]
+
+
+def _all(prefix: str, day: str) -> list[CheckSpec]:
     return [
         *bronze_to_silver(prefix),
         *schedule(prefix, day),

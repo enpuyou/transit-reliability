@@ -39,6 +39,9 @@ variables:
   silver_pause_status:
     description: Whether the scheduled silver job is paused (separate so each can be held).
     default: UNPAUSED
+  monitor_pause_status:
+    description: Whether the hourly monitor job is paused.
+    default: UNPAUSED
 
 targets:
   dev:
@@ -50,6 +53,7 @@ targets:
       schema_prefix: dev_transit
       ingest_pause_status: PAUSED
       silver_pause_status: PAUSED
+      monitor_pause_status: PAUSED
   prod:
     mode: production
     workspace:
@@ -59,3 +63,4 @@ targets:
       schema_prefix: transit
       ingest_pause_status: UNPAUSED
       silver_pause_status: UNPAUSED
+      monitor_pause_status: UNPAUSED

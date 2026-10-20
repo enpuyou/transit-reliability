@@ -20,6 +20,8 @@ class CheckSpec:
     explanation: str
     minimum: float | None = None
     maximum: float | None = None
+    # "error" fails the job; "warn" is recorded and shown but never fails it (a known limit)
+    severity: str = "error"
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,15 @@ class CheckResult:
     sql: str
     explanation: str
     error: str | None = None
+    severity: str = "error"
+
+    @property
+    def status(self) -> str:
+        """pass, fail (a broken rule that must be fixed), or warn (a broken rule we accept)."""
+
+        if self.passed:
+            return "pass"
+        return "fail" if self.severity == "error" else "warn"
 
 
 def describe_rule(minimum: float | None, maximum: float | None) -> str:
@@ -60,6 +71,7 @@ def evaluate(spec: CheckSpec, value: float | None, error: str | None = None) -> 
         spec.sql,
         spec.explanation,
         error,
+        spec.severity,
     )
 
 
@@ -81,9 +93,11 @@ def render(results: Sequence[CheckResult]) -> str:
     lines = []
     for r in results:
         shown = "no value" if r.value is None else f"{r.value:g}"
-        lines.append(f"{'ok  ' if r.passed else 'FAIL'} {r.name} = {shown} (rule: {r.rule})")
-    failed = sum(1 for r in results if not r.passed)
-    lines.append(f"{len(results) - failed} passed, {failed} failed")
+        tag = {"pass": "ok  ", "fail": "FAIL", "warn": "warn"}[r.status]
+        lines.append(f"{tag} {r.name} = {shown} (rule: {r.rule})")
+    failed = sum(1 for r in results if r.status == "fail")
+    warned = sum(1 for r in results if r.status == "warn")
+    lines.append(f"{len(results) - failed - warned} passed, {failed} failed, {warned} warnings")
     return "\n".join(lines)
 
 

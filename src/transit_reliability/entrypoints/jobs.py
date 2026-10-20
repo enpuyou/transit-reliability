@@ -208,3 +208,20 @@ def run_health_checks() -> None:
     from transit_reliability.gtfs_static.ops_health import run_health_checks as run
 
     run(_spark_session(), args.schema_prefix)
+
+
+def run_monitor() -> None:
+    """Run a check suite, keep its results in <prefix>_ops.check_results, fail on real failures."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--suite", required=True, choices=["hourly", "daily"])
+    parser.add_argument("--day", help="service date (daily suite); default is the newest complete")
+    args = parser.parse_args()
+
+    import datetime as dt
+
+    from transit_reliability.monitoring.run import run_monitor as run
+
+    day = dt.date.fromisoformat(args.day) if args.day else None
+    run(_spark_session(), args.schema_prefix, args.suite, day)

@@ -1078,3 +1078,44 @@ then `build_gold_route_performance` (after trips) and `build_gold_prediction_acc
 `--schema-prefix transit --rebuild-from D`, then `run_health_checks`. 2026-10-19 timings from 10-13: 770 s,
 103, 156, 81, 83 s. `run_health_checks` fails with `silver_lag_hours` if silver vehicle positions are older
 than 3 hours; rerun `build_silver_vehicle_positions` first (it is not part of this rebuild).
+
+## Monitoring: how to inspect that everything works
+
+You do not have to look anywhere for problems; look when you want proof.
+
+**Alerts (nothing to do until one arrives).**
+- Email from Databricks: a job failed. The subject names the job; open the run, read the error, which
+  lists each failing check and its measured value.
+- Email from GitHub ("watchdog" run failed): something is missing or unreachable. Open the run; the
+  summary table says which check and why (for example "newest run started 330 min ago").
+
+**See the state now (a few seconds, no warehouse needed):**
+```bash
+uv run python scripts/watchdog.py --profile enpu
+```
+
+**See the newest result of every check, and verify by eye (needs the SQL warehouse running):**
+```bash
+uv run python scripts/proof_report.py --profile enpu                 # saves docs/data_reports/proof_<day>.md
+uv run python scripts/proof_report.py --profile enpu --seed second   # different random trips
+```
+Part 2 lists five random trips. Take a stop's location into a map, and ask: is a bus 600 ft away at the
+time of the fix before and 150 ft away at the fix after consistent with an arrival between them?
+
+**Ask the results table directly (SQL editor):**
+```sql
+-- failures and warnings in the last day
+SELECT run_ts, suite, check_name, status, value, rule FROM workspace.transit_ops.check_results
+WHERE status <> 'pass' AND run_ts > current_timestamp() - INTERVAL 1 DAY ORDER BY run_ts DESC;
+-- trend of one check
+SELECT run_ts, value FROM workspace.transit_ops.check_results
+WHERE check_name = 'bronze_vehicle_positions_snapshots_in_a_full_hour' ORDER BY run_ts;
+-- the exact SQL behind a check, to rerun by hand
+SELECT DISTINCT sql FROM workspace.transit_ops.check_results WHERE check_name = '<name>';
+```
+
+**Run a suite by hand:** `databricks jobs run-now <monitor job id> --profile enpu` (hourly), or the
+daily suite through a one-off submit of entry point `run_monitor` with `--suite daily [--day D]`.
+
+**Statuses.** `pass`; `fail` (a rule broke; the job fails and emails); `warn` (a known limit, see
+`KNOWN_LIMITS` in `audit/catalog.py` and decision 0016; recorded, never alerts).

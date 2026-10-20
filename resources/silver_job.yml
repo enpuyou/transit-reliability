@@ -128,6 +128,18 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: daily_checks
+          depends_on:
+            - task_key: health_checks
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: run_monitor
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --suite
+              - daily
+          environment_key: default
       environments:
         - environment_key: default
           spec:

@@ -1,0 +1,32 @@
+resources:
+  jobs:
+    monitor_job:
+      name: transit-reliability-${bundle.target}-monitor
+      # Hourly, at :12 so the :00 ingest run has finished. Runs the hourly check suite (freshness,
+      # volume, gaps, schedule currency), keeps every result in <prefix>_ops.check_results, and fails
+      # (with an email) when a check breaks. The external watchdog (.github/workflows/watchdog.yml)
+      # also watches this job, because a job that never starts cannot email.
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+      schedule:
+        quartz_cron_expression: 0 12 * * * ?
+        timezone_id: UTC
+        pause_status: ${var.monitor_pause_status}
+      tasks:
+        - task_key: hourly_checks
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: run_monitor
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --suite
+              - hourly
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../dist/*.whl
