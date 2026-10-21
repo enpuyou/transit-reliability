@@ -253,6 +253,19 @@ def publish_site() -> None:
     run(_spark_session(), args.schema_prefix, args.state_volume, args.parts)
 
 
+def export_map_history() -> None:
+    """Write public/stop_history.json (typical lateness per timetable stop) for the live map."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--state-volume", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.public.map_data import export_map_history as run
+
+    run(_spark_session(), args.schema_prefix, args.state_volume)
+
+
 def fail_job() -> None:
     """Fail on purpose. Used by a task that runs only when an upstream task failed.
 

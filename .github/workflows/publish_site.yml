@@ -53,6 +53,10 @@ jobs:
           mkdir -p site/data
           databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/site.json site/data/site.json --overwrite
 
+      - name: Fetch the map's typical-lateness file
+        # optional: the map popup just omits "usually ..." lines if it is missing
+        run: databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/stop_history.json site/data/stop_history.json --overwrite || echo "no stop_history.json yet"
+
       - name: Live probes (status.json)
         # never blocks publishing: a failing probe is exactly what visitors need to see
         run: python3 scripts/watchdog.py --json-out site/data/status.json || true

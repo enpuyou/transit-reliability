@@ -96,3 +96,19 @@ def test_is_publish_hour_every_three_hours() -> None:
 
     assert [h for h in range(24) if is_publish_hour(at(h), 3)] == [0, 3, 6, 9, 12, 15, 18, 21]
     assert all(is_publish_hour(at(h), 1) for h in range(24))
+
+
+def test_stop_history_payload_and_sql() -> None:
+    import datetime as dt
+
+    from transit_reliability.public.map_data import history_payload, history_sql
+
+    rows = [
+        ("100001", 0, "1530", "wk", "mid", 36.4, 198.6, 95),
+        ("100001", 0, "1530", "sat", "am", 124.0, 225.0, 6),
+    ]
+    out = history_payload(rows, dt.date(2026, 10, 13), dt.date(2026, 10, 19))
+    assert out["h"]["100001|0|1530"] == {"wk.mid": [36, 199, 95], "sat.am": [124, 225, 6]}
+    assert (out["first_day"], out["last_day"]) == ("2026-10-13", "2026-10-19")
+    sql = history_sql("transit", dt.date(2026, 10, 13), dt.date(2026, 10, 19))
+    assert "workspace.transit_silver.stop_visits" in sql and "timepoint = 1" in sql

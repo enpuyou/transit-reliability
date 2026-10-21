@@ -221,6 +221,20 @@ resources:
               - --parts
               - all
           environment_key: default
+        - task_key: map_history
+          depends_on:
+            - task_key: daily_checks
+          # typical lateness per timetable stop, for the live map popup (decision 0025); runs beside
+          # publish_all so neither blocks the other
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: export_map_history
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --state-volume
+              - ${var.state_volume}
+          environment_key: default
       environments:
         - environment_key: default
           spec:

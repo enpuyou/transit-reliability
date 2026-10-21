@@ -40,7 +40,7 @@
     }).then(function (buf) { tripsCache = { at: Date.now(), buf: new Uint8Array(buf) }; return tripsCache.buf; });
   }
   function getStatics() {
-    if (!statics) statics = Promise.all(["map/stops.json", "map/stop_history.json"].map(function (u) {
+    if (!statics) statics = Promise.all(["map/stops.json", "data/stop_history.json"].map(function (u) {
       return fetch(u).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
     }));
     return statics;
