@@ -34,13 +34,13 @@
     <label>Show route <select id="routepick"><option value="">all routes</option></select></label>
     <label>Direction <select id="dirpick" disabled><option value="">both directions</option></select></label>
     <label><input type="checkbox" id="estimate" checked> Estimate where buses are now</label>
-    <label><input type="checkbox" id="traffic"> Live traffic</label> <span id="trafficnote" class="note"></span>
+    <label><input type="checkbox" id="traffic"> Traffic on this route</label> <span id="trafficnote" class="note"></span>
     <span id="count" class="note"></span>
   </div>
   <div id="livemap" role="application" aria-label="Map of live bus positions"></div>
   <p id="check" class="note">Accuracy check: collecting.</p>
   <p class="note">Click a bus for its route, speed and next predicted stops; the popup follows the bus and updates by itself. Click empty map to clear the highlight. Times are Seattle local time.
-    Transit scheduling, geographic, and real-time data provided by permission of King County. Map: OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors. Traffic (when switched on): © TomTom.</p>
+    Transit scheduling, geographic, and real-time data provided by permission of King County. Map: OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors. Traffic (when switched on): © TomTom; shown along the chosen route only.</p>
   <p class="note"><a href="index.html">← Back to the pipeline page</a></p>
 </main>
 <script src="vendor/maplibre-gl.js"></script>

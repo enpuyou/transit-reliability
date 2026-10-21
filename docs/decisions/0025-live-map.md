@@ -137,6 +137,33 @@ it never moves backward (it waits for the estimate to catch up, catching up no f
 backward movement and a slightly better error (typical 136 m vs 155 m; 9 in 10 within 447 m vs 495 m; last
 report only: 318 m and 759 m). If the drawn bus ends up more than 800 m ahead of the estimate the estimate wins.
 
+## Traffic along the chosen route only (2026-10-21, replaces the region-wide tiles)
+
+The owner preferred traffic on the route being looked at, not the whole region. TomTom's tiles cannot be limited
+to one route, so the page now asks TomTom's per-road speed service ("flow segment data") through the relay at
+points every 450 m or so along the chosen route (both directions, or the chosen one; at most 120 points) and
+colours the road stretches it returns by current speed / normal speed: green 85% or more, yellow 65 to 85%,
+orange 40 to 65%, red under 40%, dark red closed. Tested on route 1 (2026-10-21, afternoon): 28 of 28 points had
+data, 18 stretches, slowest at 38% of its normal speed; one direction 18 points. Cost: one TomTom request per
+point per 90 s (the relay remembers each), against 2,500 free requests a day, so roughly 40 to 80 fresh route
+views a day; fine for personal use. Unverified: which direction of a two-way road TomTom answers for at a point.
+
+## A drawn bus that is ahead of its estimate slows instead of stopping (2026-10-21)
+
+The first "never backward" version froze the bus until the estimate caught up. Replay (`scripts/sim_backward.py`,
+120 trips): it was frozen 49% of the time (median freeze 33 s), and stood still 33% of the time while the real
+bus was moving. Now it slows in proportion to how far ahead it is (stopped at 400 m ahead): standing still 6% of
+the time while the real bus moves, typical error 142 m against 136 m for freezing, still never backward.
+
+## How often the next trip starts late, and missing trips (Tuesday 2026-10-20, from the block chain)
+
+Of 9,732 trips whose previous trip (same bus, same route) ran and which then appeared: first report more than
+1 min after the scheduled start 27.7%, more than 5 min 6.2%, more than 10 min 2.0% (route 49: 29.9%, 6.3%,
+2.4%). Of those over 5 min late, 80% had a bus that had gone quiet well before the start (it was waiting, or not
+reporting while it left); 20% came in late on the previous trip. When the previous trip was never seen (3.8% of
+chained trips), the next trip was missing too 84% of the time (325 of 385); after a seen previous trip, 0.6%.
+"First report" is when the bus shows up in the feed, which is close to, not exactly, when it leaves.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

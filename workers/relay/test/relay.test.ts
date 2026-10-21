@@ -42,44 +42,47 @@ describe("relay", () => {
   });
 });
 
-import { parseTile, trafficCacheSeconds, trafficTile } from "../src/relay";
+import { parsePoint, trafficCacheSeconds, trafficSegment } from "../src/relay";
 
-describe("parseTile", () => {
-  it("accepts a Seattle tile and rejects everything else", () => {
-    // z12 tile over downtown Seattle (656/1430) and the z15 Capitol Hill tile used in testing
-    expect(parseTile("/traffic/12/656/1430.png")).toEqual({ z: 12, x: 656, y: 1430 });
-    expect(parseTile("/traffic/15/5250/11442.png")).toEqual({ z: 15, x: 5250, y: 11442 });
-    expect(parseTile("/traffic/12/100/100.png")).toBeNull(); // not over Seattle
-    expect(parseTile("/traffic/3/1/2.png")).toBeNull(); // zoom too low
-    expect(parseTile("/traffic/18/1/2.png")).toBeNull(); // zoom too high
-    expect(parseTile("/traffic/12/99999/1430.png")).toBeNull(); // outside the tile grid
-    expect(parseTile("/traffic/12/656/1430.jpg")).toBeNull();
-    expect(parseTile("/traffic/12/656/../1430.png")).toBeNull();
+describe("parsePoint", () => {
+  it("accepts a point over Seattle (rounded) and rejects the rest", () => {
+    expect(parsePoint(new URLSearchParams("lat=47.61234&lon=-122.33456"))).toEqual({ lat: 47.6123, lon: -122.3346 });
+    expect(parsePoint(new URLSearchParams("lat=40.7&lon=-74"))).toBeNull(); // New York
+    expect(parsePoint(new URLSearchParams("lat=47.6"))).toBeNull(); // missing lon
+    expect(parsePoint(new URLSearchParams("lat=abc&lon=-122.3"))).toBeNull();
+    expect(parsePoint(new URLSearchParams("lat=&lon="))).toBeNull();
   });
 });
 
-describe("trafficTile", () => {
-  const tile = { z: 12, x: 656, y: 1430 };
+describe("trafficSegment", () => {
+  const p = { lat: 47.6123, lon: -122.3346 };
+  const answer = { flowSegmentData: { frc: "FRC4", currentSpeed: 30, freeFlowSpeed: 50, confidence: 0.9, roadClosure: false, coordinates: { coordinate: [{ latitude: 47.6, longitude: -122.3 }, { latitude: 47.61, longitude: -122.31 }] } } };
   it("is off until the key is set", async () => {
-    const res = await trafficTile({ ...env }, tile);
-    expect(res.status).toBe(503);
+    expect((await trafficSegment({ ...env }, p)).status).toBe(503);
   });
-  it("sends the key in a header, not in the web address, and sets our own cache rule", async () => {
+  it("sends the key in a header, returns a compact answer and sets our own cache rule", async () => {
     let seen = { url: "", key: "" };
     const fake = (async (url: string, init: RequestInit) => {
       seen = { url, key: (init.headers as Record<string, string>)["TomTom-Api-Key"] };
-      return new Response(new Uint8Array([137, 80]), { status: 200, headers: { "cache-control": "no-store" } });
+      return new Response(JSON.stringify(answer), { status: 200 });
     }) as unknown as typeof fetch;
-    const res = await trafficTile({ ...env, TOMTOM_KEY: "secret-value" }, tile, fake);
+    const res = await trafficSegment({ ...env, TOMTOM_KEY: "secret-value" }, p, fake);
     expect(seen.key).toBe("secret-value");
     expect(seen.url).not.toContain("secret-value");
-    expect(seen.url).toContain("/flow/relative0/12/656/1430.png?tileSize=512");
+    expect(seen.url).toContain("point=47.6123,-122.3346");
+    expect(await res.json()).toEqual({ frc: "FRC4", cur: 30, free: 50, conf: 0.9, closed: false, coords: [[-122.3, 47.6], [-122.31, 47.61]] });
     expect(res.headers.get("cache-control")).toBe("public, max-age=90");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
-  it("passes an upstream failure on without caching it", async () => {
+  it("says 'none' when TomTom has no road near the point", async () => {
+    const fake = (async () => new Response("too far", { status: 400 })) as unknown as typeof fetch;
+    const res = await trafficSegment({ ...env, TOMTOM_KEY: "k" }, p, fake);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ none: true });
+  });
+  it("passes another upstream failure on without caching it", async () => {
     const fake = (async () => new Response("no", { status: 403 })) as unknown as typeof fetch;
-    const res = await trafficTile({ ...env, TOMTOM_KEY: "k" }, tile, fake);
+    const res = await trafficSegment({ ...env, TOMTOM_KEY: "k" }, p, fake);
     expect(res.status).toBe(502);
     expect(res.headers.get("cache-control")).toBeNull();
   });

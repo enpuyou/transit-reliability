@@ -40,16 +40,20 @@ test("estimate moves a share of the recent speed forward, capped by age and by t
   assert.equal(E.estimate(rep, 10, 900, 1500), 100, "a report from the future does not move the bus back");
 });
 
-test("advance never moves the drawn bus backward and limits how fast it catches up", () => {
-  assert.equal(E.advance(null, 500, 0.1), 500, "first time: start at the estimate");
-  assert.equal(E.advance(500, 480, 0.1), 500, "estimate dropped a little: wait, do not go back");
-  assert.equal(E.advance(500, 510, 0.1), 502.5, "catching up is limited to 25 m/s");
-  assert.equal(E.advance(500, 501, 5), 501, "but never overshoots the estimate");
-  assert.equal(E.advance(2000, 500, 0.1), 500, "far ahead of the estimate: trust the estimate");
+test("advance never moves the drawn bus backward, slows instead of freezing, and limits how fast it catches up", () => {
+  assert.equal(E.advance(null, 500, 0.1, 10), 500, "first time: start at the estimate");
+  assert.equal(E.advance(500, 510, 0.1, 10), 502.5, "estimate ahead: catching up is limited to 25 m/s");
+  assert.equal(E.advance(500, 501, 5, 10), 501, "but never overshoots the estimate");
+  assert.equal(E.advance(2000, 500, 0.1, 10), 500, "far ahead of the estimate: trust the estimate");
+  // estimate fell behind by 20 m: the bus keeps going forward, a little slower than 7.5 m/s (75% of 10 m/s)
+  assert.ok(Math.abs(E.advance(500, 480, 1, 10) - (500 + 7.5 * (1 - 20 / 400))) < 1e-9);
+  assert.ok(E.advance(500, 480, 1, 10) > 500, "slows, does not freeze");
+  assert.equal(E.advance(500, 100, 1, 10), 500, "400 m ahead of the estimate: stopped");
+  assert.equal(E.advance(500, 480, 1, 0), 500, "a bus with no speed does not move");
   // over a stream of noisy estimates the drawn distance never decreases (unless it snaps back)
   let shown = null, last = -Infinity;
   for (const target of [100, 140, 120, 90, 200, 150, 160, 400, 380, 390]) {
-    shown = E.advance(shown, target, 1);
+    shown = E.advance(shown, target, 1, 8);
     assert.ok(shown >= last, `went backward: ${last} -> ${shown}`);
     last = shown;
   }

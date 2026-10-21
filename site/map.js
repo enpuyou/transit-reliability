@@ -106,8 +106,6 @@
   window.transitMap = map; // handy for debugging in the browser console
   map.on("error", function (e) {
     console.log("map error: " + (e && e.error && e.error.message ? e.error.message : e));
-    var note = document.getElementById("trafficnote");
-    if (e && e.sourceId === "traffic" && note && trafficOn && trafficOn.checked) note.textContent = "Traffic is not available right now.";
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
@@ -193,10 +191,10 @@
       var b = pos[id], t = Math.min(1, (now - b.t0) / GLIDE_MS);
       if (compensate && b.est && filter) {
         // keep moving the bus along its route at 75% of its recent speed since the report, but never backward:
-        // when a new report says the bus was slower than guessed, the drawn bus waits for the estimate to catch up
+        // when a new report says the bus was slower than guessed, the drawn bus slows down until the estimate catches up
         if (b.shownLine !== b.line) { b.shown = null; b.shownLine = b.line; }
         var dt = b.shownT == null ? 0 : (now - b.shownT) / 1000;
-        b.shown = Estimate.advance(b.shown, estDist(b, nowSec), dt); b.shownT = now;
+        b.shown = Estimate.advance(b.shown, estDist(b, nowSec), dt, b.vel); b.shownT = now;
         var e = Estimate.pointAt(b.line, b.shown);
         b.lon = e[0]; b.lat = e[1]; b.beam = e[2]; b.drawnEst = true;
         moving = true;
@@ -274,6 +272,7 @@
     selectedDir = dir || "";
     ensureStops();
     showStops();
+    loadRouteTraffic();
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -351,6 +350,77 @@
     refreshStopPopup();
   }
 
+  /* ---------- live traffic along the selected route (TomTom, through our relay) ---------- */
+  // The relay holds the TomTom key. From localhost, a relay running on this computer (npx wrangler dev, port 8787)
+  // is used when it answers, because it has the key in a local file even before the deployed relay is updated.
+  var trafficBase = null, trafficVersion = 0, trafficCache = {}, TRAFFIC_MS = 90000, MAX_POINTS = 120;
+  function getTrafficBase() {
+    if (trafficBase) return Promise.resolve(trafficBase);
+    if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1") { trafficBase = RELAY; return Promise.resolve(trafficBase); }
+    var local = "http://localhost:8787";
+    return fetch(local + "/traffic/segment?lat=47.6205&lon=-122.3212").then(function (r) { trafficBase = r.ok ? local : RELAY; return trafficBase; })
+      .catch(function () { trafficBase = RELAY; return trafficBase; });
+  }
+  /* Points every 450 m or so along the selected route's lines (both directions unless one is chosen), at most 120. */
+  function trafficPoints() {
+    var pts = [], seen = {};
+    Object.keys(shapes || {}).forEach(function (key) {
+      var parts = key.split("|");
+      if (parts[0] !== selected || (selectedDir && parts[1] !== selectedDir)) return;
+      shapes[key].forEach(function (line) {
+        var len = Estimate.length(line), step = Math.max(450, len / 40);
+        for (var d = 0; d <= len; d += step) {
+          var p = Estimate.pointAt(line, d), k = p[1].toFixed(4) + "," + p[0].toFixed(4);
+          if (!seen[k]) { seen[k] = true; pts.push([p[1], p[0]]); }
+        }
+      });
+    });
+    return pts.slice(0, MAX_POINTS);
+  }
+  function loadRouteTraffic() {
+    var src = map.getSource("route-traffic"), note = document.getElementById("trafficnote"), empty = { type: "FeatureCollection", features: [] };
+    if (!src) return;
+    if (!trafficOn || !trafficOn.checked) { trafficVersion++; src.setData(empty); if (note) note.textContent = ""; return; }
+    if (!selected) { trafficVersion++; src.setData(empty); if (note) note.textContent = "Choose a route to see the traffic along it."; return; }
+    var key = selected + "|" + selectedDir, hit = trafficCache[key];
+    if (hit && Date.now() - hit.at < TRAFFIC_MS) { src.setData(hit.data); if (note) note.textContent = hit.note; return; }
+    var version = ++trafficVersion, pts = trafficPoints(), route = selected;
+    if (note && !hit) note.textContent = "Loading traffic along route " + name(route) + "…";
+    getTrafficBase().then(function (base) {
+      var answers = [], next = 0;
+      function worker() {
+        if (next >= pts.length || version !== trafficVersion) return Promise.resolve();
+        var p = pts[next++];
+        return fetch(base + "/traffic/segment?lat=" + p[0].toFixed(5) + "&lon=" + p[1].toFixed(5))
+          .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+          .then(function (j) { answers.push(j); return worker(); });
+      }
+      var workers = []; for (var w = 0; w < 6; w++) workers.push(worker());
+      return Promise.all(workers).then(function () {
+        if (version !== trafficVersion) return; // the route changed while we were asking
+        var feats = [], seenSeg = {}, ok = 0, slowest = null;
+        answers.forEach(function (s) {
+          if (!s || s.none || !s.coords || s.coords.length < 2 || !(s.free > 0)) return;
+          ok++;
+          var k = s.coords[0].join(",") + ">" + s.coords[s.coords.length - 1].join(",");
+          if (seenSeg[k]) return;
+          seenSeg[k] = true;
+          var ratio = s.closed ? 0 : Math.min(1.2, s.cur / s.free);
+          if (slowest == null || ratio < slowest) slowest = ratio;
+          feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: s.coords }, properties: { ratio: ratio, closed: s.closed ? 1 : 0 } });
+        });
+        var data = { type: "FeatureCollection", features: feats };
+        var text = ok === 0 ? "No traffic information for route " + name(route) + " right now." :
+          "Traffic along route " + name(route) + " (TomTom, " + ok + " of " + pts.length + " points): green normal speed, yellow a little slow, orange slow, red very slow" +
+          (slowest != null ? "; the slowest stretch is moving at " + Math.round(slowest * 100) + "% of its normal speed" : "") + ". Refreshes every 90 seconds.";
+        trafficCache[key] = { at: Date.now(), data: data, note: text };
+        src.setData(data);
+        if (note) note.textContent = text;
+      });
+    });
+  }
+  setInterval(function () { if (!document.hidden) loadRouteTraffic(); }, TRAFFIC_MS);
+
   function fillRoutePicker(feed) {
     var ids = {};
     feed.vehicles.forEach(function (v) { if (v.routeId) ids[v.routeId] = true; });
@@ -395,20 +465,15 @@
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 0, "icon-size": 0.5, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
-    // Live traffic: TomTom's flow tiles are transparent PNGs coloured by how fast traffic moves compared with free flow.
-    // They come through our relay, which holds the TomTom key and remembers each tile for a minute and a half, so the
-    // key never reaches the browser. They sit under the route lines and buses. When this page is opened from
-    // localhost and a relay is running on this computer (npx wrangler dev, port 8787), that one is used, because it
-    // has the key in a local file even if the deployed relay does not have traffic yet.
-    function addTraffic(base) {
-      if (map.getSource("traffic")) return;
-      map.addSource("traffic", { type: "raster", tileSize: 512, minzoom: 9, maxzoom: 17, attribution: "Traffic © TomTom", tiles: [base + "/traffic/{z}/{x}/{y}.png"] });
-      map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
-    }
-    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-      var LOCAL = "http://localhost:8787";
-      fetch(LOCAL + "/traffic/12/656/1430.png").then(function (r) { addTraffic(r.ok ? LOCAL : RELAY); }).catch(function () { addTraffic(RELAY); });
-    } else addTraffic(RELAY);
+    // Live traffic along the selected route (filled in by loadRouteTraffic): each road stretch coloured by how its
+    // speed now compares with its normal speed. Under the stops and buses, over the highlighted route line.
+    map.addSource("route-traffic", { type: "geojson", data: { type: "FeatureCollection", features: [] }, attribution: "Traffic © TomTom" });
+    map.addLayer({ id: "route-traffic-casing", type: "line", source: "route-traffic", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 5, 16, 11] } });
+    map.addLayer({ id: "route-traffic", type: "line", source: "route-traffic", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-width": ["interpolate", ["linear"], ["zoom"], 11, 3, 16, 7],
+        "line-color": ["case", ["==", ["get", "closed"], 1], "#5a1414",
+          ["step", ["get", "ratio"], "#d63a2f", 0.4, "#f08a24", 0.65, "#f2c230", 0.85, "#2e9e4f"]] } });
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // stops of the selected route: small white rings with a dark outline, far smaller than a bus. Click one to see
     // its name, whether it is a timetable stop, and the next predicted arrivals.
@@ -480,9 +545,7 @@
   if (trafficOn) {
     trafficOn.disabled = false;
     trafficOn.addEventListener("change", function () {
-      if (map.getLayer("traffic")) map.setLayoutProperty("traffic", "visibility", trafficOn.checked ? "visible" : "none");
-      var note = document.getElementById("trafficnote");
-      if (note && !trafficOn.checked) note.textContent = "";
+      loadRouteTraffic();
     });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && timer) refresh(); });

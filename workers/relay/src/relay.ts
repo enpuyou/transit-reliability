@@ -39,39 +39,27 @@ export async function relay(env: RelayEnv, file: string, fetcher: typeof fetch =
   return new Response(upstream.body, { status: 200, headers });
 }
 
-// ---------- live traffic: TomTom flow tiles, fetched with our key and remembered here ----------
-// TomTom tells browsers not to cache its tiles (every map view would cost requests against the free allowance
-// and the key would sit in the page). We fetch each tile once, keep it for TRAFFIC_CACHE_SECONDS and hand it out
-// with our own cache rule. Only tiles over the Seattle area and zoom 9 to 17 are served, so the relay cannot be
-// used to spend the allowance on the rest of the world.
+// ---------- live traffic along a route: TomTom's per-road speed, fetched with our key and remembered here ----------
+// The map asks for the traffic at points along the route that is selected (not a whole-region picture). For each point
+// we ask TomTom's "flow segment data" for the road nearest it: the current speed, the speed with no traffic, and the
+// road's shape. TomTom tells browsers not to cache; we keep each answer for TRAFFIC_CACHE_SECONDS and hand it out with
+// our own cache rule, so the key stays here and many viewers share one request. Only points in the Seattle area are
+// served, so the relay cannot be used to spend the allowance (2,500 requests a day on the free tier) elsewhere.
 
-export const TRAFFIC_ZOOM = { min: 9, max: 17 };
 export const SEATTLE_BOX = { west: -122.7, east: -121.7, south: 47.2, north: 47.95 };
-const TILE_PATH = /^\/traffic\/(\d{1,2})\/(\d{1,6})\/(\d{1,6})\.png$/;
 
-export interface Tile {
-  z: number;
-  x: number;
-  y: number;
+export interface Point {
+  lat: number;
+  lon: number;
 }
 
-function tileWest(x: number, z: number): number {
-  return (x / 2 ** z) * 360 - 180;
-}
-function tileLat(y: number, z: number): number {
-  const n = Math.PI - (2 * Math.PI * y) / 2 ** z;
-  return (180 / Math.PI) * Math.atan(Math.sinh(n));
-}
-
-/** The tile named by a request path, or null if it is not a valid tile over the Seattle area. */
-export function parseTile(pathname: string): Tile | null {
-  const m = TILE_PATH.exec(pathname);
-  if (!m) return null;
-  const [z, x, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  if (z < TRAFFIC_ZOOM.min || z > TRAFFIC_ZOOM.max || x >= 2 ** z || y >= 2 ** z) return null;
-  const west = tileWest(x, z), east = tileWest(x + 1, z), north = tileLat(y, z), south = tileLat(y + 1, z);
-  const overlaps = east > SEATTLE_BOX.west && west < SEATTLE_BOX.east && north > SEATTLE_BOX.south && south < SEATTLE_BOX.north;
-  return overlaps ? { z, x, y } : null;
+/** The point named by ?lat=..&lon=.. (rounded to 4 decimals, about 11 m), or null if it is not over Seattle. */
+export function parsePoint(search: URLSearchParams): Point | null {
+  const lat = Number(search.get("lat")), lon = Number(search.get("lon"));
+  if (!search.get("lat") || !search.get("lon") || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const p = { lat: Math.round(lat * 1e4) / 1e4, lon: Math.round(lon * 1e4) / 1e4 };
+  const inside = p.lon > SEATTLE_BOX.west && p.lon < SEATTLE_BOX.east && p.lat > SEATTLE_BOX.south && p.lat < SEATTLE_BOX.north;
+  return inside ? p : null;
 }
 
 export function trafficCacheSeconds(env: RelayEnv): number {
@@ -79,14 +67,32 @@ export function trafficCacheSeconds(env: RelayEnv): number {
   return Number.isFinite(n) && n >= 30 && n <= 600 ? n : 90;
 }
 
-/** Fetch one TomTom traffic flow tile (512 px, "relative0" colours) and return it with our cache headers. */
-export async function trafficTile(env: RelayEnv, tile: Tile, fetcher: typeof fetch = fetch): Promise<Response> {
+export interface Segment {
+  frc: string;
+  cur: number; // km/h now
+  free: number; // km/h with no traffic
+  conf: number; // 0 to 1, how much TomTom trusts it
+  closed: boolean;
+  coords: [number, number][]; // [lon, lat] along the road
+}
+
+/** Ask TomTom for the road segment nearest a point; returns a compact JSON answer, or {"none":true} if there is none. */
+export async function trafficSegment(env: RelayEnv, p: Point, fetcher: typeof fetch = fetch): Promise<Response> {
   if (!env.TOMTOM_KEY) return new Response("traffic is not configured", { status: 503, headers: CORS_HEADERS });
-  const url = `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/${tile.z}/${tile.x}/${tile.y}.png?tileSize=512`;
+  const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${p.lat},${p.lon}&unit=KMPH`;
   const upstream = await fetcher(url, { headers: { "TomTom-Api-Key": env.TOMTOM_KEY } });
-  if (!upstream.ok) return new Response(`upstream status ${upstream.status}`, { status: 502, headers: CORS_HEADERS });
   const headers = new Headers(CORS_HEADERS);
-  headers.set("content-type", "image/png");
+  headers.set("content-type", "application/json");
+  if (upstream.status === 400) {
+    // "point too far from the nearest road" or similar: nothing to show here; remember it for the same time
+    headers.set("cache-control", `public, max-age=${trafficCacheSeconds(env)}`);
+    return new Response(JSON.stringify({ none: true }), { status: 200, headers });
+  }
+  if (!upstream.ok) return new Response(`upstream status ${upstream.status}`, { status: 502, headers: CORS_HEADERS });
+  const d = ((await upstream.json()) as { flowSegmentData?: Record<string, any> }).flowSegmentData;
+  if (!d) return new Response(JSON.stringify({ none: true }), { status: 200, headers });
+  const coords = ((d.coordinates?.coordinate ?? []) as { latitude: number; longitude: number }[]).map((c) => [c.longitude, c.latitude] as [number, number]);
+  const seg: Segment = { frc: String(d.frc ?? ""), cur: Number(d.currentSpeed), free: Number(d.freeFlowSpeed), conf: Number(d.confidence ?? 0), closed: Boolean(d.roadClosure), coords };
   headers.set("cache-control", `public, max-age=${trafficCacheSeconds(env)}`);
-  return new Response(upstream.body, { status: 200, headers });
+  return new Response(JSON.stringify(seg), { status: 200, headers });
 }

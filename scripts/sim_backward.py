@@ -57,9 +57,12 @@ def speed(hist):
     return None
 
 
-tot = {k: dict(back_m=0.0, secs=0, back_secs=0, errs=[]) for k in "ARB"}
+tot = {k: dict(back_m=0.0, secs=0, back_secs=0, errs=[]) for k in "ARBC"}
 n_trips = 0
 events = []
+hold = dict(secs=0, total=0, ahead=[], runs=[])
+run_len = 0
+stall = {"B": [0, 0], "C": [0, 0]}  # [stalled seconds, seconds with a bus moving > 3 m/s]
 for trip, fx in fixes.items():
     sh = shape_of.get(trip)
     if sh not in pts or len(pts[sh]) < 2:
@@ -84,7 +87,8 @@ for trip, fx in fixes.items():
     a_off = 0.0
     a_t0 = None
     b_shown = None
-    prev = {"A": None, "B": None, "R": None}
+    c_shown = None
+    prev = {"A": None, "B": None, "C": None, "R": None}
     for w in range(int(ts[0]) + LAG + 30, int(ts[-1]) + LAG - 30):
         while known + 1 < len(ts) and ts[known + 1] <= w - LAG:
             known += 1
@@ -106,13 +110,36 @@ for trip, fx in fixes.items():
             continue
         est = ds[known] + 0.75 * v * min(120, w - ts[known])
         a = est + (a_off * max(0.0, 1 - (w - a_t0) / 4) if a_t0 is not None else 0.0)
+        was = b_shown
+        was_c = c_shown
+        if c_shown is None:
+            c_shown = est
+        elif est > c_shown:
+            c_shown += min(est - c_shown, 25.0)
+        else:  # slow down in proportion to how far ahead of the estimate the bus is drawn, but keep going forward
+            c_shown += max(0.0, 0.75 * v * (1 - (c_shown - est) / 400.0))
         b_shown = (
             est
             if b_shown is None
             else (b_shown if est <= b_shown else b_shown + min(est - b_shown, 25.0))
         )
         r = ds[known]
-        for k, val in (("A", a), ("B", b_shown), ("R", r)):
+        held = was is not None and est < was
+        if held:
+            hold["secs"] += 1
+            hold["ahead"].append(was - est)
+            run_len += 1
+        else:
+            if run_len:
+                hold["runs"].append(run_len)
+            run_len = 0
+        hold["total"] += 1
+        if v > 3 and was is not None and was_c is not None:
+            stall["B"][1] += 1
+            stall["C"][1] += 1
+            stall["B"][0] += (b_shown - was) < 0.5
+            stall["C"][0] += (c_shown - was_c) < 0.5
+        for k, val in (("A", a), ("B", b_shown), ("C", c_shown), ("R", r)):
             tot[k]["secs"] += 1
             tot[k]["errs"].append(abs(val - tt))
             if prev[k] is not None and val < prev[k] - 0.5:
@@ -133,9 +160,26 @@ print(
 for k, name in (
     ("R", "last report only"),
     ("A", "estimate now (eases)"),
-    ("B", "estimate, never backward"),
+    ("B", "estimate, never backward, waits"),
+    ("C", "estimate, never backward, slows"),
 ):
     t = tot[k]
     print(
         f"{name:32}{t['back_secs'] / t['secs']:>15.1%}{t['back_m'] / (t['secs'] / 3600):>13.0f} m/h{pct(t['errs'], 0.5):>13.0f} m{pct(t['errs'], 0.9):>13.0f} m"
     )
+
+print()
+print("When the estimate falls BEHIND the drawn bus (version B), the bus waits where it is:")
+print(f"  share of the time the bus is waiting: {hold['secs'] / hold['total']:.1%}")
+if hold["runs"]:
+    print(
+        f"  length of one wait, seconds (median / 90th percentile / longest): {pct(hold['runs'], 0.5):.0f} / {pct(hold['runs'], 0.9):.0f} / {max(hold['runs'])}"
+    )
+    print(
+        f"  how far ahead of the estimate the drawn bus sits while waiting, metres (median / 90th percentile): {pct(hold['ahead'], 0.5):.0f} / {pct(hold['ahead'], 0.9):.0f}"
+    )
+print()
+print("While a bus is really moving (> 3 m/s), how often is the drawn bus standing still?")
+print(
+    f"  waits (B): {stall['B'][0] / stall['B'][1]:.1%}   slows instead (C): {stall['C'][0] / stall['C'][1]:.1%}"
+)

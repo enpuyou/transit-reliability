@@ -1275,27 +1275,28 @@ and ask what feeds the table and how often. That day the cause was our own check
 were hourly (see `docs/databricks_guide.md` section 8). The weather checks now read the landed files:
 `SELECT ... FROM read_files('/Volumes/workspace/transit_landing/raw/weather/dt={yesterday,today}/*.json', format => 'binaryFile')`.
 
-## Live traffic through the relay (decision 0025)
+## Live traffic along a route, through the relay (decision 0025)
 
-The map's "Live traffic" switch shows TomTom flow tiles. The page asks OUR relay (`/traffic/<zoom>/<x>/<y>.png`);
-the relay holds the TomTom key as a secret, fetches the tile, and remembers it for 90 seconds (TomTom itself
-says "do not cache"). The key never reaches the browser and never goes in the repository.
+The map's "Traffic on this route" switch colours the chosen route by how its roads' speed now compares with normal.
+The page asks OUR relay `/traffic/segment?lat=..&lon=..` at points along the route; the relay holds the TomTom key
+as a secret, asks TomTom for the nearest road's speed, and remembers each answer for 90 seconds (TomTom itself says
+"do not cache"). The key never reaches the browser and never goes in the repository.
 
 ```bash
 # local testing: put the key in a git-ignored file next to the Worker (wrangler reads it automatically)
 cd workers/relay && printf 'TOMTOM_KEY=your-key\n' > .dev.vars      # .dev.vars is in .gitignore
 npx wrangler dev --port 8787
-curl -s -D - -o /tmp/t.png http://localhost:8787/traffic/12/656/1430.png   # 200, image/png, cache-control: public, max-age=90
-# open http://localhost:8000/map.html and tick "Live traffic": from localhost the page uses the relay on
-# this computer (port 8787) for traffic when it is running, otherwise the deployed relay
+curl -s "http://localhost:8787/traffic/segment?lat=47.6205&lon=-122.3212"   # {"frc":..,"cur":..,"free":..,"coords":[..]}
+# open http://localhost:8000/map.html, choose a route, tick "Traffic on this route": from localhost the page uses
+# the relay on this computer (port 8787) when it is running, otherwise the deployed relay
 
 # production: store the key as a Worker secret (it prompts for the value; nothing is written to a file), then deploy
 cd workers/relay && npx wrangler secret put TOMTOM_KEY --name transit-relay && npx wrangler deploy
-curl -s -D - -o /dev/null https://transit-relay.youenpu.workers.dev/traffic/12/656/1430.png   # twice: the second shows cf-cache-status: HIT
+curl -s -D - -o /dev/null "https://transit-relay.youenpu.workers.dev/traffic/segment?lat=47.6205&lon=-122.3212"   # twice: cf-cache-status: HIT
 ```
 
-Only tiles over the Seattle area at zoom 9 to 17 are served (anything else is 404), so the relay cannot be used
-to spend the free allowance (50,000 tile requests a day) on the rest of the world.
+Only points over the Seattle area are served (anything else is 404). One route view costs about 20 to 60 TomTom
+requests (fewer when the relay has them remembered); the free tier allows 2,500 a day.
 
 ## Position estimate and its accuracy check (decision 0025)
 
