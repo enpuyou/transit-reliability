@@ -105,6 +105,28 @@ Median 34 s old (middle half 28 to 41 s, 5th to 95th percentile 18 to 51 s). A b
 that age; the rest (about 15 to 25 s) is transmission and processing inside the agency's system, which we
 cannot see (unverified cause). Our relay and polling add up to about 25 s more.
 
+## Live traffic (TomTom), 2026-10-21
+
+TomTom flow tiles (style `relative0`, 512 px) through the relay, which holds the key as a Worker secret and
+caches each tile 90 s. Why not call TomTom from the browser: the key would be public and TomTom marks tiles
+no-store, so every view would spend the allowance. Tiles are limited to the Seattle area and zoom 9 to 17.
+Coverage test (80 random bus stops, TomTom's flow segment API): 80 had data (68 local connecting streets, 6
+major roads, 3 secondary, 3 highways); at street zoom the raster tiles colour the whole street grid, at zoom 12
+only highways. Truly residential streets were not tested (bus stops are on connecting roads). Unverified: the
+terms for showing TomTom traffic over a non-TomTom map and for caching tiles; whether a free key can be
+restricted to a website. Google's traffic cannot be used (its terms bar extracting content for other maps).
+
+## Position estimate and accuracy check (2026-10-21)
+
+Each bus is drawn where it probably is now: last report moved forward along its route line at 75% of its recent
+speed, at most 120 s (`site/estimate.js`, tick box on the page, on by default). The line under the map compares
+each estimate with the bus's real position at that moment, found by interpolating between its reports by the
+GPS time stamp each carries, so late delivery does not matter. Assumption: the stamp is when the fix was taken,
+not when the server received it (unverified; evidence: at first stops, where buses wait for the schedule, 10% of
+departures were 29 s or more early and 5% 61 s or more, which would be rare if stamps ran 30 to 40 s late).
+A stopwatch check at a stop is the only fully independent test. Another assumption: the viewer's computer clock
+is right to a few seconds.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

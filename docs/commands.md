@@ -1239,7 +1239,7 @@ curl -s -D - -o /tmp/veh.pb http://localhost:8787/vehicles   # expect 200, acces
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8787/secret   # expect 404 (only listed paths are served)
 
 # 3. check the page's feed reader against the Python parser (same sample file)
-node --test site/test/gtfsrt.test.mjs site/test/heading.test.mjs
+node --test site/test/gtfsrt.test.mjs site/test/heading.test.mjs site/test/estimate.test.mjs
 
 # 4. look at the page locally. The page works with the live relay as it is, so step 2 is optional: open
 #    http://localhost:8000/map.html . Edit site/map.js or site/map.html and reload the page (Cmd-Shift-R)
@@ -1274,3 +1274,32 @@ check result is also in `workspace.transit_ops.check_results` (query by `run_ts`
 and ask what feeds the table and how often. That day the cause was our own check reading a daily table as if it
 were hourly (see `docs/databricks_guide.md` section 8). The weather checks now read the landed files:
 `SELECT ... FROM read_files('/Volumes/workspace/transit_landing/raw/weather/dt={yesterday,today}/*.json', format => 'binaryFile')`.
+
+## Live traffic through the relay (decision 0025)
+
+The map's "Live traffic" switch shows TomTom flow tiles. The page asks OUR relay (`/traffic/<zoom>/<x>/<y>.png`);
+the relay holds the TomTom key as a secret, fetches the tile, and remembers it for 90 seconds (TomTom itself
+says "do not cache"). The key never reaches the browser and never goes in the repository.
+
+```bash
+# local testing: put the key in a git-ignored file next to the Worker (wrangler reads it automatically)
+cd workers/relay && printf 'TOMTOM_KEY=your-key\n' > .dev.vars      # .dev.vars is in .gitignore
+npx wrangler dev --port 8787
+curl -s -D - -o /tmp/t.png http://localhost:8787/traffic/12/656/1430.png   # 200, image/png, cache-control: public, max-age=90
+# open http://localhost:8000/map.html?relay=http://localhost:8787 and tick "Live traffic"
+
+# production: store the key as a Worker secret (it prompts for the value; nothing is written to a file), then deploy
+cd workers/relay && npx wrangler secret put TOMTOM_KEY --name transit-relay && npx wrangler deploy
+curl -s -D - -o /dev/null https://transit-relay.youenpu.workers.dev/traffic/12/656/1430.png   # twice: the second shows cf-cache-status: HIT
+```
+
+Only tiles over the Seattle area at zoom 9 to 17 are served (anything else is 404), so the relay cannot be used
+to spend the free allowance (50,000 tile requests a day) on the rest of the world.
+
+## Position estimate and its accuracy check (decision 0025)
+
+"Estimate where buses are now" (on by default, a tick box on the map) draws each bus where it probably is now:
+its last report moved forward along its route at 75% of its recent speed (`site/estimate.js`). The line under
+the map ("Accuracy check") compares every estimate with where the bus really was, once the bus's later reports
+arrive, and shows the typical error of the estimate next to the typical error of just showing the last report.
+It needs about 3 minutes in the tab to fill in. Offline version on stored data: `uv run python scripts/lag_experiment.py`.

@@ -11,14 +11,9 @@
   var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick"), dirPick = document.getElementById("dirpick");
   var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null, routeStops = null, stopsAsked = false;
   var pos = {}, animating = false, lastFrame = 0;
-  // Live traffic (TomTom) needs a key. Open map.html?ttkey=YOURKEY once: it is kept in this browser only (never in
-  // the repository or the published site), so the switch below stays available on later visits.
-  var TT_KEY = "";
-  try {
-    var given = new URLSearchParams(location.search).get("ttkey");
-    if (given) localStorage.setItem("ttkey", given);
-    TT_KEY = localStorage.getItem("ttkey") || "";
-  } catch (e) { TT_KEY = new URLSearchParams(location.search).get("ttkey") || ""; }
+  var estimateOn = document.getElementById("estimate");
+  var OFFSET_MS = 4000;   // after a new report the drawn bus eases from where it was to the new estimate over this long
+  var checks = { est: [], raw: [] }, MAX_CHECKS = 800;
   var trafficOn = document.getElementById("traffic");
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
@@ -40,7 +35,7 @@
     if (p.ts) {
       var age = Math.max(0, Date.now() / 1000 - Number(p.ts));
       bits.push('<span class="m">position reported ' + seattle(Number(p.ts)) + " (" + ago(age) + " ago)" +
-        (age > 45 ? "; the bus has likely moved on since, a bus can cover about 100 m in 10 s" : "") + "</span>");
+        (Number(p.est) === 1 ? "; the dot is an estimate: the bus is moved forward along its route at 75% of its recent speed since then" : (age > 45 ? "; the bus has likely moved on since, a bus can cover about 100 m in 10 s" : "")) + "</span>");
     }
     if (p.heading != null && Number(p.heading) >= 0) bits.push("heading " + Heading.compass(Number(p.heading)));
     if (p.speed != null && p.speed !== "null") bits.push("speed " + Math.round(Number(p.speed) * 2.237) + " mph");
@@ -110,13 +105,17 @@
   var BLANK = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9ecef" } }] };
   var map = new maplibregl.Map({ container: "livemap", style: new URLSearchParams(location.search).get("base") === "none" ? BLANK : STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
   window.transitMap = map; // handy for debugging in the browser console
-  map.on("error", function (e) { console.log("map error: " + (e && e.error && e.error.message ? e.error.message : e)); });
+  map.on("error", function (e) {
+    console.log("map error: " + (e && e.error && e.error.message ? e.error.message : e));
+    var note = document.getElementById("trafficnote");
+    if (e && e.sourceId === "traffic" && note && trafficOn && trafficOn.checked) note.textContent = "Traffic is not available right now.";
+  });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
   /* ---------- bus positions: every bus glides from where it was drawn to where it now is ---------- */
-  function propsOf(v, heading) {
+  function propsOf(v, heading, est) {
     return { id: v.id || "", route: v.routeId || "", color: colour(v.routeId), label: name(v.routeId), speed: v.speed,
-      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId, heading: heading == null ? -1 : heading };
+      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId, heading: heading == null ? -1 : heading, est: est ? 1 : 0 };
   }
   /* The agency's own heading when the bus reports one (few do); otherwise read it off the route line. */
   function headingOf(v) {
@@ -130,20 +129,80 @@
       if (v.lat == null || v.lon == null || !v.id) return;
       seen[v.id] = true;
       var cur = pos[v.id];
-      if (!cur) { pos[v.id] = { lon: v.lon, lat: v.lat, fx: v.lon, fy: v.lat, tx: v.lon, ty: v.lat, t0: now, v: v, heading: headingOf(v) }; return; }
+      if (!cur) { cur = pos[v.id] = { lon: v.lon, lat: v.lat, fx: v.lon, fy: v.lat, tx: v.lon, ty: v.lat, t0: now, v: v, heading: headingOf(v), hist: [], preds: [], est: false, vel: null }; track(cur, v, now); return; }
       var snap = Math.abs(cur.lon - v.lon) > SNAP_DEG || Math.abs(cur.lat - v.lat) > SNAP_DEG;
       cur.fx = snap ? v.lon : cur.lon; cur.fy = snap ? v.lat : cur.lat;
       cur.tx = v.lon; cur.ty = v.lat; cur.t0 = now; cur.v = v; cur.heading = headingOf(v);
+      track(cur, v, now);
     });
     Object.keys(pos).forEach(function (id) { if (!seen[id]) delete pos[id]; });
     startAnimation();
   }
+  /* ---------- estimating where a bus is NOW (the report is about a minute old) ---------- */
+  function wallSeconds() { return Date.now() / 1000; }
+  function lineFor(v) {
+    var lines = shapes && shapes[v.routeId + "|" + v.directionId], best = null, bestOff = Infinity;
+    (lines || []).forEach(function (line) {
+      var p = Estimate.project(line, v.lon, v.lat);
+      if (p.off < bestOff) { bestOff = p.off; best = { line: line, dist: p.dist, off: p.off }; }
+    });
+    return best && best.off <= 150 ? best : null;
+  }
+  function estDist(b, nowSec) { return Estimate.estimate(b.rep, b.vel, nowSec, b.len); }
+  /* Called for every bus on every update. When the bus has a NEW report: (1) check the estimates we drew earlier
+     against where the bus really was at those moments (the report carries the time its GPS fix was taken, so a late
+     delivery does not matter), (2) remember the report, (3) work out its speed. */
+  function track(b, v, now) {
+    if (!shapes || !v.ts) return;
+    var fresh = !b.rep || v.ts !== b.rep.ts;
+    if (fresh) {
+      var hit = lineFor(v);
+      if (!hit) { b.est = false; b.rep = null; b.hist = []; b.preds = []; return; }
+      if (b.rep && b.line !== hit.line) { b.hist = []; b.preds = []; }
+      var prev = b.hist.length ? b.hist[b.hist.length - 1] : null;
+      b.line = hit.line; b.len = Estimate.length(hit.line);
+      if (prev && v.ts > prev.ts && v.ts - prev.ts <= 60) {
+        b.preds.forEach(function (q) {
+          if (q.at < prev.ts || q.at > v.ts) return;
+          var truth = prev.dist + (hit.dist - prev.dist) * (q.at - prev.ts) / (v.ts - prev.ts);
+          checks.est.push(Math.abs(q.est - truth)); checks.raw.push(Math.abs(q.raw - truth));
+        });
+        if (checks.est.length > MAX_CHECKS) { checks.est.splice(0, checks.est.length - MAX_CHECKS); checks.raw.splice(0, checks.raw.length - MAX_CHECKS); }
+      }
+      b.preds = b.preds.filter(function (q) { return q.at >= v.ts; });
+      b.rep = { ts: v.ts, dist: hit.dist };
+      b.hist.push(b.rep); if (b.hist.length > 5) b.hist.shift();
+      b.vel = Estimate.speed(b.hist);
+      // ease from where the bus is drawn now to the new estimate instead of jumping
+      if (b.est && b.vel != null) { var e = Estimate.pointAt(b.line, estDist(b, wallSeconds())); b.offLon = b.lon - e[0]; b.offLat = b.lat - e[1]; b.offT0 = now; }
+    }
+    b.est = b.vel != null && !!b.rep;
+    if (b.est) { var w = wallSeconds(); b.preds.push({ at: w, est: estDist(b, w), raw: b.rep.dist }); if (b.preds.length > 14) b.preds.shift(); }
+  }
+  function pct(list, p) { var a = list.slice().sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(p * (a.length - 1)))]; }
+  function metres(m) { return Math.round(m) + " m (" + Math.round(m * 3.281) + " ft)"; }
+  function showChecks() {
+    var el = document.getElementById("check");
+    if (!el) return;
+    var n = checks.est.length;
+    if (n < 30) { el.textContent = "Accuracy check: collecting (needs about 3 minutes; " + n + " comparisons so far). Each estimate is compared with where the bus really was, once its later reports arrive."; return; }
+    el.textContent = "Accuracy check, last " + n + " comparisons in this tab. Estimate off by a typical " + metres(pct(checks.est, 0.5)) + " (9 in 10 within " + metres(pct(checks.est, 0.9)) +
+      "). Showing just the last report would be off by a typical " + metres(pct(checks.raw, 0.5)) + " (9 in 10 within " + metres(pct(checks.raw, 0.9)) + ").";
+  }
+
   function step(now) {
-    var moving = false;
+    var moving = false, nowSec = wallSeconds(), compensate = !estimateOn || estimateOn.checked;
     Object.keys(pos).forEach(function (id) {
       var b = pos[id], t = Math.min(1, (now - b.t0) / GLIDE_MS);
-      b.lon = b.fx + (b.tx - b.fx) * t; b.lat = b.fy + (b.ty - b.fy) * t;
-      if (t < 1) moving = true;
+      if (compensate && b.est && filter) {
+        // keep moving the bus along its route at 75% of its recent speed since the report
+        var e = Estimate.pointAt(b.line, estDist(b, nowSec)), k = b.offT0 == null ? 0 : Math.max(0, 1 - (now - b.offT0) / OFFSET_MS);
+        b.lon = e[0] + (b.offLon || 0) * k; b.lat = e[1] + (b.offLat || 0) * k; b.beam = e[2]; b.drawnEst = true;
+        moving = true;
+      } else {
+        b.lon = b.fx + (b.tx - b.fx) * t; b.lat = b.fy + (b.ty - b.fy) * t; b.drawnEst = false;
+        if (t < 1) moving = true;
+      }
     });
     return moving;
   }
@@ -154,12 +213,12 @@
       if (!filter) return; // with every route selected there are too many buses to read: choose a route
       if (b.v.routeId !== filter) return;
       if (dirFilter && String(b.v.directionId) !== dirFilter) return;
-      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.heading) });
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst) });
     });
     var src = map.getSource("buses");
     if (src) src.setData({ type: "FeatureCollection", features: feats });
     countEl.textContent = filter
-      ? feats.length + " buses on this route. Positions are the agency's last reports, usually about a minute old."
+      ? feats.length + " buses on this route. " + (!estimateOn || estimateOn.checked ? "Each is placed where it probably is now (its last report is usually about a minute old)." : "Each is shown where it last reported, usually about a minute ago.")
       : "Choose a route to see its buses (" + running + " buses running right now).";
     if (tracked && pos[tracked.id]) tracked.popup.setLngLat([pos[tracked.id].lon, pos[tracked.id].lat]);
   }
@@ -234,7 +293,7 @@
     if (!tracked) return;
     var b = pos[tracked.id];
     if (!b) { tracked.head.innerHTML += '<br><span class="m">This bus is no longer in the feed.</span>'; return; }
-    var p = propsOf(b.v, b.heading);
+    var p = propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst);
     tracked.head.innerHTML = headHtml(p);
     loadPredictions(p, tracked.pred, true);
   }
@@ -334,13 +393,12 @@
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 0, "icon-size": 0.5, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
-    if (TT_KEY) {
-      // TomTom's traffic flow tiles are transparent PNGs coloured by how fast traffic moves compared with free flow;
-      // they sit under the route lines and buses. 512 px tiles mean fewer requests (free allowance: 50,000 a day).
-      map.addSource("traffic", { type: "raster", tileSize: 512, maxzoom: 22, attribution: "Traffic © TomTom",
-        tiles: ["https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?tileSize=512&key=" + encodeURIComponent(TT_KEY)] });
-      map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
-    }
+    // Live traffic: TomTom's flow tiles are transparent PNGs coloured by how fast traffic moves compared with free flow.
+    // They come through our relay, which holds the TomTom key and remembers each tile for a minute and a half, so the
+    // key never reaches the browser. They sit under the route lines and buses.
+    map.addSource("traffic", { type: "raster", tileSize: 512, minzoom: 9, maxzoom: 17, attribution: "Traffic © TomTom",
+      tiles: [RELAY + "/traffic/{z}/{x}/{y}.png"] });
+    map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // stops of the selected route: small white rings with a dark outline, far smaller than a bus. Click one to see
     // its name, whether it is a timetable stop, and the next predicted arrivals.
@@ -397,18 +455,24 @@
     if (!filter && tracked) tracked.popup.remove();
     setSelected(filter, "");
     if (filter) fitRoute(filter, "");
+    startAnimation();
     render();
   });
   dirPick.addEventListener("change", function () {
     dirFilter = dirPick.value;
     setSelected(filter, dirFilter);
     fitRoute(filter, dirFilter);
+    startAnimation();
     render();
   });
+  if (estimateOn) estimateOn.addEventListener("change", function () { startAnimation(); render(); });
+  setInterval(showChecks, 5000);
   if (trafficOn) {
-    trafficOn.disabled = !TT_KEY;
+    trafficOn.disabled = false;
     trafficOn.addEventListener("change", function () {
       if (map.getLayer("traffic")) map.setLayoutProperty("traffic", "visibility", trafficOn.checked ? "visible" : "none");
+      var note = document.getElementById("trafficnote");
+      if (note && !trafficOn.checked) note.textContent = "";
     });
   }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && timer) refresh(); });

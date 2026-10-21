@@ -21,3 +21,4 @@ site/data/
 # Node dependencies of any Worker
 node_modules/
 .wrangler/
+.dev.vars
