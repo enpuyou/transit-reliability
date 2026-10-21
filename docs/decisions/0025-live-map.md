@@ -51,6 +51,14 @@ wide, at least 5 trips). "Today so far" actuals are not shown (the daily job run
 - Highlighting a route also draws white arrows along it showing the flow in each direction. The popup says
   "heading <compass>" and "Toward <last stop of the trip>" (from the agency's prediction file).
 
+## Direction picker (built 2026-10-21)
+
+Choosing a route enables a second dropdown listing its directions by destination ("toward Downtown
+Seattle"), from `site/map/headsigns.json` (the sign text most trips of that direction show; one of 280
+route directions has none and shows "direction N"). Picking a direction shows only that direction's
+buses, highlights only its line, and zooms to it. Tested with the stand-in-browser script: route 1,
+both directions 5 buses, direction 1 only 3 buses.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

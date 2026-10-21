@@ -5,6 +5,8 @@
 
 - routes.json: route id -> route number. The live feed only carries the agency's internal id.
 - stops.json: stop id -> stop name.
+- headsigns.json: "route|direction" -> the destination sign text the trips of that direction show most
+  often (for the direction picker, e.g. "Downtown Seattle").
 - shapes.json: the route lines. Key "route|direction" -> list of lines (each a list of [lon, lat]):
   the shapes that at least 20% of that route direction's trips use, simplified to within about 8 m.
 - site/data/stop_history.json (local preview only): typical lateness per timetable stop. The daily
@@ -107,6 +109,14 @@ def main() -> None:
         f"SELECT stop_id, max_by(stop_name, feed_version) FROM {S}.gtfs_stops GROUP BY stop_id"
     )
     write(out / "stops.json", {str(r[0]): str(r[1]) for r in stops if r[1]})
+
+    heads = q(
+        f"""WITH fv AS (SELECT max(feed_version) AS v FROM {S}.gtfs_shapes),
+        t AS (SELECT route_id, direction_id, trip_headsign, count(*) AS n FROM {S}.gtfs_trips, fv
+              WHERE feed_version = fv.v AND trip_headsign IS NOT NULL GROUP BY 1, 2, 3)
+        SELECT route_id, direction_id, max_by(trip_headsign, n) FROM t GROUP BY 1, 2"""
+    )
+    write(out / "headsigns.json", {f"{r[0]}|{r[1]}": str(r[2]) for r in heads})
 
     lines: dict[tuple[str, str, str], list[tuple[float, float]]] = {}
     for route, direction, shape, lat, lon in q(shapes_sql()):

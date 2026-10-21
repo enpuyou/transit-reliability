@@ -8,8 +8,8 @@
   var RELAY = new URLSearchParams(location.search).get("relay") || "https://transit-relay.youenpu.workers.dev";
   var POLL_MS = 10000, GLIDE_MS = 9000, FRAME_MS = 100, SNAP_DEG = 0.01, STALE_S = 120, STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-  var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick");
-  var routes = {}, last = null, timer = null, filter = "", selected = "", shapes = null, tracked = null;
+  var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick"), dirPick = document.getElementById("dirpick");
+  var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null;
   var pos = {}, animating = false, lastFrame = 0;
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
@@ -135,6 +135,7 @@
     Object.keys(pos).forEach(function (id) {
       var b = pos[id];
       if (filter && b.v.routeId !== filter) return;
+      if (dirFilter && String(b.v.directionId) !== dirFilter) return;
       feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.heading) });
     });
     var src = map.getSource("buses");
@@ -152,9 +153,9 @@
   function lineFeatures() {
     var feats = [];
     Object.keys(shapes || {}).forEach(function (key) {
-      var route = key.split("|")[0];
+      var route = key.split("|")[0], dir = key.split("|")[1];
       shapes[key].forEach(function (line) {
-        feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: line }, properties: { route: route, color: colour(route) } });
+        feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: line }, properties: { route: route, dir: dir, color: colour(route) } });
       });
     });
     return { type: "FeatureCollection", features: feats };
@@ -167,16 +168,18 @@
     g.beginPath(); g.moveTo(n / 2, 3); g.lineTo(n - 8, n - 8); g.lineTo(n / 2, n - 17); g.lineTo(8, n - 8); g.closePath(); g.fill();
     return g.getImageData(0, 0, n, n);
   }
-  function setSelected(routeId) {
+  function setSelected(routeId, dir) {
     selected = routeId || "";
+    selectedDir = dir || "";
+    var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
-      if (map.getLayer(id)) map.setFilter(id, ["==", ["get", "route"], selected]);
+      if (map.getLayer(id)) map.setFilter(id, want);
     });
   }
-  function fitRoute(routeId) {
+  function fitRoute(routeId, dir) {
     var b = new maplibregl.LngLatBounds(), any = false;
     Object.keys(shapes || {}).forEach(function (key) {
-      if (key.split("|")[0] !== routeId) return;
+      if (key.split("|")[0] !== routeId || (dir && key.split("|")[1] !== dir)) return;
       shapes[key].forEach(function (line) { line.forEach(function (c) { b.extend(c); any = true; }); });
     });
     if (any) map.fitBounds(b, { padding: 40, maxZoom: 14, duration: 600 });
@@ -261,7 +264,7 @@
     busLayers.forEach(function (layer) {
       map.on("click", layer, function (e) {
         var p = e.features[0].properties;
-        setSelected(p.route);
+        if (!filter) setSelected(p.route, "");
         openPopup(p, e.lngLat);
       });
       map.on("mouseenter", layer, function () { map.getCanvas().style.cursor = "pointer"; });
@@ -269,16 +272,36 @@
     });
     map.on("click", function (e) {
       if (map.queryRenderedFeatures(e.point, { layers: busLayers }).length) return;
-      if (!filter) setSelected("");
+      if (!filter) setSelected("", "");
     });
     refresh();
     timer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
   });
 
+  function fillDirectionPicker(routeId) {
+    dirPick.length = 1;
+    dirPick.value = "";
+    dirFilter = "";
+    var dirs = Object.keys(shapes || {}).filter(function (k) { return k.split("|")[0] === routeId; })
+      .map(function (k) { return k.split("|")[1]; }).sort();
+    dirs.forEach(function (d) {
+      var o = document.createElement("option");
+      o.value = d; o.textContent = "toward " + (heads[routeId + "|" + d] || "direction " + d);
+      dirPick.appendChild(o);
+    });
+    dirPick.disabled = !routeId || dirs.length < 1;
+  }
   pick.addEventListener("change", function () {
     filter = pick.value;
-    setSelected(filter);
-    if (filter) fitRoute(filter);
+    fillDirectionPicker(filter);
+    setSelected(filter, "");
+    if (filter) fitRoute(filter, "");
+    render();
+  });
+  dirPick.addEventListener("change", function () {
+    dirFilter = dirPick.value;
+    setSelected(filter, dirFilter);
+    fitRoute(filter, dirFilter);
     render();
   });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && timer) refresh(); });
@@ -286,8 +309,9 @@
   // route lines and route numbers: the page still works (dots only, route ids) if these files are missing
   fetch("map/shapes.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
     shapes = j; var src = map.getSource("lines"); if (src && j) src.setData(lineFeatures());
-    Object.keys(pos).forEach(function (id) { pos[id].heading = headingOf(pos[id].v); }); render();
+    Object.keys(pos).forEach(function (id) { pos[id].heading = headingOf(pos[id].v); }); if (filter) fillDirectionPicker(filter); render();
   }).catch(function () {});
+  fetch("map/headsigns.json").then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) { heads = j; }).catch(function () {});
   fetch("map/routes.json").then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
     routes = j; if (last) { fillRoutePicker(last); render(); }
   }).catch(function () {});

@@ -1244,7 +1244,7 @@ node --test site/test/gtfsrt.test.mjs site/test/heading.test.mjs
 # 4. look at the page locally (needs step 2 running); the ?relay= part points the page at your local relay
 cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
 
-# 5. refresh the map's data files: route numbers, stop names, route lines (shapes.json), and a local
+# 5. refresh the map's data files: route numbers, stop names, destination names (headsigns.json), route lines (shapes.json), and a local
 #    copy of the typical-lateness history
 #    (needs the SQL warehouse running; the history should be refreshed daily, by hand for now)
 uv run python scripts/make_map_data.py --profile enpu
