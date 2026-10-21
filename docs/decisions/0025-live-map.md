@@ -40,6 +40,17 @@ wide, at least 5 trips). "Today so far" actuals are not shown (the daily job run
 - Tested with a script (stand-in browser objects, real relay and files): 331 lines, bus position
   moved start -> early -> halfway -> target as expected, popup followed and kept refreshing.
 
+## Direction (built 2026-10-21)
+
+- Each bus is an arrow pointing the way it is heading (a plain dot if unknown). The agency's feed carries a
+  heading for only 22 of 536 buses (checked 2026-10-21), so for the rest `site/heading.js` reads it off
+  the bus's route line, which runs in the direction of travel (`route|direction` picks the right line).
+  Where the agency does report a heading, that wins.
+- Checked against the 22 buses that do report one: 20 agree within 45 degrees live, 15 of 21 on the saved
+  sample. The disagreements looked like buses at terminals, waiting, or out of service (unverified).
+- Highlighting a route also draws white arrows along it showing the flow in each direction. The popup says
+  "heading <compass>" and "Toward <last stop of the trip>" (from the agency's prediction file).
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

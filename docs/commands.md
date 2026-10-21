@@ -1239,7 +1239,7 @@ curl -s -D - -o /tmp/veh.pb http://localhost:8787/vehicles   # expect 200, acces
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8787/secret   # expect 404 (only listed paths are served)
 
 # 3. check the page's feed reader against the Python parser (same sample file)
-node --test site/test/gtfsrt.test.mjs
+node --test site/test/gtfsrt.test.mjs site/test/heading.test.mjs
 
 # 4. look at the page locally (needs step 2 running); the ?relay= part points the page at your local relay
 cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
@@ -1250,7 +1250,7 @@ cd site && python3 -m http.server 8000     # then open http://localhost:8000/map
 uv run python scripts/make_map_data.py --profile enpu
 ```
 
-What to look for in step 4: thin route lines under the dots (click a bus: its whole route turns bold; click empty map to clear), dots over Seattle that glide to new positions every 10 seconds without you touching the page, an open popup that follows its bus, a green "Live: agency feed from <time>" banner, a route
+What to look for in step 4: thin route lines under the dots (click a bus: its whole route turns bold; click empty map to clear), arrows over Seattle (each pointing the way its bus is heading) that glide to new positions every 10 seconds without you touching the page, an open popup that follows its bus, a green "Live: agency feed from <time>" banner, a route
 picker filled with route numbers, a popup when you click a dot. If the banner is red, the page cannot
 reach the relay (check step 2 is running and the address after `?relay=`). The relay is deployed at
 `https://transit-relay.youenpu.workers.dev` (2026-10-21). Check it from outside:

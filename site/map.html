@@ -23,7 +23,7 @@
   <div class="wrap">
     <h1>Live bus map</h1>
     <p class="lede">Each dot is a King County Metro bus, as it last reported itself. The map updates by itself every 10 seconds
-      (buses glide to their new position); you never need to refresh. Thin lines are the routes; click a bus to highlight its whole route.
+      (buses glide to their new position); you never need to refresh. Thin lines are the routes. Each bus is an arrow pointing the way it is heading; click a bus to highlight its whole route, with arrows along the line showing which way traffic flows in each direction.
       This map shows <strong>where</strong> buses are; it does not say how late they are (the live feed carries no lateness).
       Lateness and history come from the daily numbers on the <a href="index.html">pipeline page</a>.</p>
   </div>
@@ -41,6 +41,7 @@
 </main>
 <script src="vendor/maplibre-gl.js"></script>
 <script src="gtfsrt.js"></script>
+<script src="heading.js"></script>
 <script src="map.js"></script>
 </body>
 </html>

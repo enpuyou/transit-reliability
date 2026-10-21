@@ -29,6 +29,7 @@
   function headHtml(p) {
     var bits = ["<b>Route " + esc(p.label) + "</b>"];
     if (p.ts) bits.push('<span class="m">last report ' + seattle(Number(p.ts)) + " (" + ago(Math.max(0, Date.now() / 1000 - Number(p.ts))) + " ago)</span>");
+    if (p.heading != null && Number(p.heading) >= 0) bits.push("heading " + Heading.compass(Number(p.heading)));
     if (p.speed != null && p.speed !== "null") bits.push("speed " + Math.round(Number(p.speed) * 2.237) + " mph");
     return bits.join("<br>");
   }
@@ -76,6 +77,7 @@
       var tp = next.filter(function (u) { return hist[keyOf(u)]; })[0];
       if (tp && shown.indexOf(tp) < 0) shown.push(tp);
       if (!shown.length) { el.textContent = "No upcoming stops in the agency's predictions."; return; }
+      var lastStop = trip.updates.length ? trip.updates[trip.updates.length - 1].stopId : null;
       var rows = shown.map(function (u) {
         var sched = u.arrDelay != null ? u.arrTime - u.arrDelay : null, b = sched ? bucket(sched) : null;
         var h = b && hist[keyOf(u)] && hist[keyOf(u)][b.key];
@@ -85,7 +87,7 @@
         return line;
       });
       var age = trip.feedTimestamp ? Date.now() / 1000 - trip.feedTimestamp : 0;
-      el.innerHTML = rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
+      el.innerHTML = (lastStop && stops[lastStop] ? "<b>Toward " + esc(stops[lastStop]) + "</b><hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>" : "") + rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
         '<div class="m" style="margin-top:6px">Predictions as of ' + hhmm(trip.feedTimestamp) + (age > 600 ? " — OUT OF DATE, ignore them" : "") +
         ". History is kept only for stops with a timetable time, and comes from past days only (" + ((res[1][1] || {}).first_day || "?") + " to " + ((res[1][1] || {}).last_day || "?") + "); our arrival times are estimates from GPS.</div>";
     }).catch(function (err) { if (!quiet) el.textContent = "Couldn't load predictions (" + err.message + ")."; });
@@ -95,9 +97,15 @@
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
   /* ---------- bus positions: every bus glides from where it was drawn to where it now is ---------- */
-  function propsOf(v) {
+  function propsOf(v, heading) {
     return { id: v.id || "", route: v.routeId || "", color: colour(v.routeId), label: name(v.routeId), speed: v.speed,
-      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId };
+      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId, heading: heading == null ? -1 : heading };
+  }
+  /* The agency's own heading when the bus reports one (few do); otherwise read it off the route line. */
+  function headingOf(v) {
+    if (v.bearing != null) return v.bearing;
+    if (!shapes) return -1;
+    return Heading.bearingOnLine(shapes[v.routeId + "|" + v.directionId], v.lon, v.lat, 150);
   }
   function receive(feed) {
     var now = performance.now(), seen = {};
@@ -105,10 +113,10 @@
       if (v.lat == null || v.lon == null || !v.id) return;
       seen[v.id] = true;
       var cur = pos[v.id];
-      if (!cur) { pos[v.id] = { lon: v.lon, lat: v.lat, fx: v.lon, fy: v.lat, tx: v.lon, ty: v.lat, t0: now, v: v }; return; }
+      if (!cur) { pos[v.id] = { lon: v.lon, lat: v.lat, fx: v.lon, fy: v.lat, tx: v.lon, ty: v.lat, t0: now, v: v, heading: headingOf(v) }; return; }
       var snap = Math.abs(cur.lon - v.lon) > SNAP_DEG || Math.abs(cur.lat - v.lat) > SNAP_DEG;
       cur.fx = snap ? v.lon : cur.lon; cur.fy = snap ? v.lat : cur.lat;
-      cur.tx = v.lon; cur.ty = v.lat; cur.t0 = now; cur.v = v;
+      cur.tx = v.lon; cur.ty = v.lat; cur.t0 = now; cur.v = v; cur.heading = headingOf(v);
     });
     Object.keys(pos).forEach(function (id) { if (!seen[id]) delete pos[id]; });
     startAnimation();
@@ -127,7 +135,7 @@
     Object.keys(pos).forEach(function (id) {
       var b = pos[id];
       if (filter && b.v.routeId !== filter) return;
-      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v) });
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.heading) });
     });
     var src = map.getSource("buses");
     if (src) src.setData({ type: "FeatureCollection", features: feats });
@@ -151,9 +159,17 @@
     });
     return { type: "FeatureCollection", features: feats };
   }
+  /* A small arrow pointing up (north), drawn white so the map can colour it per route (an "SDF" image). */
+  function arrowImage() {
+    var n = 48, c = document.createElement("canvas"); c.width = c.height = n;
+    var g = c.getContext("2d");
+    g.fillStyle = "#ffffff";
+    g.beginPath(); g.moveTo(n / 2, 3); g.lineTo(n - 8, n - 8); g.lineTo(n / 2, n - 17); g.lineTo(8, n - 8); g.closePath(); g.fill();
+    return g.getImageData(0, 0, n, n);
+  }
   function setSelected(routeId) {
     selected = routeId || "";
-    ["lines-casing", "lines-selected"].forEach(function (id) {
+    ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, ["==", ["get", "route"], selected]);
     });
   }
@@ -171,7 +187,7 @@
     if (!tracked) return;
     var b = pos[tracked.id];
     if (!b) { tracked.head.innerHTML += '<br><span class="m">This bus is no longer in the feed.</span>'; return; }
-    var p = propsOf(b.v);
+    var p = propsOf(b.v, b.heading);
     tracked.head.innerHTML = headHtml(p);
     loadPredictions(p, tracked.pred, true);
   }
@@ -227,21 +243,34 @@
       paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": 0.9 } });
     map.addLayer({ id: "lines-selected", type: "line", source: "lines", filter: ["==", ["get", "route"], ""], layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 5 } });
+    map.addImage("arrow", arrowImage(), { sdf: true, pixelRatio: 2 });
+    // arrows along the highlighted route, pointing the way traffic flows (the line runs in the direction of travel)
+    map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
+      layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 90, "icon-size": 0.45, "icon-allow-overlap": true, "icon-ignore-placement": true },
+      paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    map.addLayer({ id: "buses", type: "circle", source: "buses", paint: {
+    // a bus is an arrow pointing the way it is heading; a plain dot when its heading is unknown
+    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", filter: ["<", ["get", "heading"], 0], paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 8],
       "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.2 } });
-    map.on("click", "buses", function (e) {
-      var p = e.features[0].properties;
-      setSelected(p.route);
-      openPopup(p, e.lngLat);
+    map.addLayer({ id: "bus-arrows", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
+      "icon-image": "arrow", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true,
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.4, 14, 0.85] },
+      paint: { "icon-color": ["get", "color"], "icon-halo-color": "#ffffff", "icon-halo-width": 1.6 } });
+    var busLayers = ["bus-dots", "bus-arrows"];
+    busLayers.forEach(function (layer) {
+      map.on("click", layer, function (e) {
+        var p = e.features[0].properties;
+        setSelected(p.route);
+        openPopup(p, e.lngLat);
+      });
+      map.on("mouseenter", layer, function () { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", layer, function () { map.getCanvas().style.cursor = ""; });
     });
     map.on("click", function (e) {
-      if (map.queryRenderedFeatures(e.point, { layers: ["buses"] }).length) return;
+      if (map.queryRenderedFeatures(e.point, { layers: busLayers }).length) return;
       if (!filter) setSelected("");
     });
-    map.on("mouseenter", "buses", function () { map.getCanvas().style.cursor = "pointer"; });
-    map.on("mouseleave", "buses", function () { map.getCanvas().style.cursor = ""; });
     refresh();
     timer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
   });
@@ -257,6 +286,7 @@
   // route lines and route numbers: the page still works (dots only, route ids) if these files are missing
   fetch("map/shapes.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
     shapes = j; var src = map.getSource("lines"); if (src && j) src.setData(lineFeatures());
+    Object.keys(pos).forEach(function (id) { pos[id].heading = headingOf(pos[id].v); }); render();
   }).catch(function () {});
   fetch("map/routes.json").then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
     routes = j; if (last) { fillRoutePicker(last); render(); }
