@@ -85,6 +85,19 @@ smaller water-drop). The owner chose **a dot with a beam**: a disc in the route 
 like the Apple Maps location dot. A bus with no known heading is a plain dot. The other four were removed.
 The research found nothing on how Transit, Moovit or Citymapper draw vehicles (unverified).
 
+## Can the lag be compensated? (measured 2026-10-21, `scripts/lag_experiment.py`)
+
+On 250 trips from 2026-10-20 (46,000 reports), the error between where a bus is drawn and where it really was
+60 s after its report: leaving it at the last report is off by a median 823 ft (about 250 m), 90th percentile
+2,224 ft (about 680 m). Moving it forward along the route at 75% of its recent speed cuts that to median 407 ft
+(about 125 m) and 90th percentile 1,374 ft: about half. Full speed does worse than 75% (buses stop). It is not
+built: showing an estimated position needs a clear label, and the estimate is wrong at stops and on detours.
+Truth here is itself the next GPS report projected onto the scheduled route line.
+
+## Stops and routes (2026-10-21)
+
+All stops look the same (small white ring). While a route is chosen, every other route's line is hidden.
+
 ## Why a report is already old when the agency publishes it (measured 2026-10-20, 1.7 million reports)
 
 Median 34 s old (middle half 28 to 41 s, 5th to 95th percentile 18 to 51 s). A bus sends a new fix about every

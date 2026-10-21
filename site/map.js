@@ -208,6 +208,8 @@
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
     });
+    // with a route selected, hide every other route's line (only its own, bold, stays)
+    if (map.getLayer("lines-faint")) map.setLayoutProperty("lines-faint", "visibility", selected ? "none" : "visible");
   }
   function fitRoute(routeId, dir) {
     var b = new maplibregl.LngLatBounds(), any = false;
@@ -324,17 +326,16 @@
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 0, "icon-size": 0.5, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // stops of the selected route: tiny rings, far smaller than a bus. Timetable stops (the schedule holds buses to a time
-    // there) are filled dark; other stops are hollow. Same size so only the fill differs.
+    // stops of the selected route: small white rings with a dark outline, far smaller than a bus. Click one to see
+    // its name, whether it is a timetable stop, and the next predicted arrivals.
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 14, 3, 17, 4.8],
-      "circle-color": ["case", ["==", ["get", "tp"], 1], "#1d2330", "#ffffff"],
-      "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.2 } });
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 14, 3.2, 17, 4.8],
+      "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.3 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // A bus is a disc in its route colour with a white outline. When its heading is known a faint wedge (a "beam")
     // fans out in front of it, like the location dot in Apple Maps; with no known heading there is no beam.
-    var BODY = ["interpolate", ["linear"], ["zoom"], 9, 5, 12, 7, 15, 9.4, 17, 11];
-    var SIZE = ["interpolate", ["linear"], ["zoom"], 9, 0.9, 12, 1.27, 15, 1.7, 17, 2];
+    var BODY = ["interpolate", ["linear"], ["zoom"], 9, 4.5, 12, 6, 15, 7, 17, 8];
+    var SIZE = ["interpolate", ["linear"], ["zoom"], 9, 0.8, 12, 1.1, 15, 1.3, 17, 1.5];
     var disc = { "circle-radius": BODY, "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.8 };
     map.addLayer({ id: "bus-beam", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
       "icon-image": "beam", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-size": SIZE },
