@@ -164,6 +164,26 @@ reporting while it left); 20% came in late on the previous trip. When the previo
 chained trips), the next trip was missing too 84% of the time (325 of 385); after a seen previous trip, 0.6%.
 "First report" is when the bus shows up in the feed, which is close to, not exactly, when it leaves.
 
+## Is estimating better than showing the report? (deep dive, 2026-10-21, `scripts/lag_estimators.py`)
+
+Replay of 240 trips (120 each on 2026-10-16 and 2026-10-20), 160,767 moments every 5 s, with each report becoming
+visible when the agency first published it plus 12 s for our relay and page (newest visible report: median 57 s
+old, 90th percentile 73 s). Truth: the bus's own later reports, by their GPS time. Error along the route, metres:
+
+| Method | typical | 9 in 10 | 99 in 100 | worse than the report (by >25 m) | >200 m worse |
+|---|---|---|---|---|---|
+| last report (what the feed says) | 253 | 642 | 1305 | - | - |
+| recent speed x 75% (the map now) | 131 | 406 | 784 | 10% | 3.3% |
+| timetable pace (OneBusAway's idea) | 145 | 404 | 732 | 30% | 18.1% |
+| agency predictions | 136 | 438 | 974 | 29% | 12.1% |
+
+Moving buses: timetable pace is best (124 / 347), recent speed 141 / 383, report 335 / 733. Slow or stopped buses:
+recent speed is best (108 / 432); timetable pace pushes a stopped bus forward (185 / 447). Conclusion: estimating
+halves the error, and "recent speed" is the safest (rarely much worse than the report). Showing only the report is
+not neutral: it is always behind, by about a minute of travel, and a rider cannot see by how much. Research: the
+OneBusAway API (Seattle) keeps the last real fix (lastKnownLocation) apart from a projected position; we found no
+published accuracy comparison of such methods.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily
