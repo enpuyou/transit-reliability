@@ -28,7 +28,11 @@
 
   function headHtml(p) {
     var bits = ["<b>Route " + esc(p.label) + "</b>"];
-    if (p.ts) bits.push('<span class="m">last report ' + seattle(Number(p.ts)) + " (" + ago(Math.max(0, Date.now() / 1000 - Number(p.ts))) + " ago)</span>");
+    if (p.ts) {
+      var age = Math.max(0, Date.now() / 1000 - Number(p.ts));
+      bits.push('<span class="m">position reported ' + seattle(Number(p.ts)) + " (" + ago(age) + " ago)" +
+        (age > 45 ? "; the bus has likely moved on since, a bus can cover about 100 m in 10 s" : "") + "</span>");
+    }
     if (p.heading != null && Number(p.heading) >= 0) bits.push("heading " + Heading.compass(Number(p.heading)));
     if (p.speed != null && p.speed !== "null") bits.push("speed " + Math.round(Number(p.speed) * 2.237) + " mph");
     return bits.join("<br>");
@@ -135,16 +139,19 @@
     return moving;
   }
   function render() {
-    var feats = [];
+    var feats = [], running = Object.keys(pos).length;
     Object.keys(pos).forEach(function (id) {
       var b = pos[id];
-      if (filter && b.v.routeId !== filter) return;
+      if (!filter) return; // with every route selected there are too many buses to read: choose a route
+      if (b.v.routeId !== filter) return;
       if (dirFilter && String(b.v.directionId) !== dirFilter) return;
       feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.heading) });
     });
     var src = map.getSource("buses");
     if (src) src.setData({ type: "FeatureCollection", features: feats });
-    countEl.textContent = feats.length + " buses shown";
+    countEl.textContent = filter
+      ? feats.length + " buses on this route. Positions are the agency's last reports, usually about a minute old."
+      : "Choose a route to see its buses (" + running + " buses running right now).";
     if (tracked && pos[tracked.id]) tracked.popup.setLngLat([pos[tracked.id].lon, pos[tracked.id].lat]);
   }
   function frame(now) {
@@ -197,7 +204,7 @@
     stopsAsked = true;
     fetch("map/route_stops.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       routeStops = j; showStops();
-    }).catch(function () { stopsAsked = false; });
+    }).catch(function (e) { console.log("stops failed: " + e); stopsAsked = false; });
   }
 
   function setSelected(routeId, dir) {
@@ -286,10 +293,12 @@
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 90, "icon-size": 0.45, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // stops of the selected route: tiny hollow rings, far smaller than a bus; timetable stops a little bigger
+    // stops of the selected route: tiny rings, far smaller than a bus. Timetable stops (the bus has a scheduled time
+    // there) are filled dark; other stops are hollow. Same size so only the fill differs.
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["==", ["get", "tp"], 1], 2.2, 1.4], 14, ["case", ["==", ["get", "tp"], 1], 4, 2.8], 17, ["case", ["==", ["get", "tp"], 1], 6, 4.5]],
-      "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": ["case", ["==", ["get", "tp"], 1], 1.8, 1.1] } });
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 14, 3, 17, 4.8],
+      "circle-color": ["case", ["==", ["get", "tp"], 1], "#1d2330", "#ffffff"],
+      "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.2 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // a bus is a large filled disc in its route colour with a white outline; when we know its heading a white
     // arrow on the disc points the way it is going
@@ -345,6 +354,7 @@
   pick.addEventListener("change", function () {
     filter = pick.value;
     fillDirectionPicker(filter);
+    if (!filter && tracked) tracked.popup.remove();
     setSelected(filter, "");
     if (filter) fitRoute(filter, "");
     render();
