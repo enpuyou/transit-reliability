@@ -6,6 +6,7 @@ export interface RelayEnv {
 // Only these paths are served, so the relay cannot be used as an open proxy.
 export const FEEDS: Record<string, string> = {
   "/vehicles": "vehiclepositions.pb",
+  "/trips": "tripupdates.pb",
   "/alerts": "alerts.pb",
 };
 

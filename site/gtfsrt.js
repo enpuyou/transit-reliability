@@ -11,6 +11,15 @@
     do { byte = this.b[this.p++]; lo += (byte & 0x7f) * mul; mul *= 128; } while (byte & 0x80);
     return lo; // exact up to 2^53, plenty for ids, seconds and counts
   };
+  /* Signed 64-bit varint (a negative number takes 10 bytes). Exact for the small values we meet. */
+  Reader.prototype.svarint = function () {
+    var start = this.p, n = 0;
+    while (this.b[this.p++] & 0x80) n++;
+    if (n < 6) { var save = this.p; this.p = start; var v = this.varint(); this.p = save; return v; }
+    var big = 0n, shift = 0n;
+    for (var i = start; i <= start + n; i++) { big |= BigInt(this.b[i] & 0x7f) << shift; shift += 7n; }
+    return Number(BigInt.asIntN(64, big));
+  };
   Reader.prototype.skip = function (wire) {
     if (wire === 0) this.varint();
     else if (wire === 1) this.p += 8;
@@ -107,6 +116,72 @@
     return out;
   }
 
-  var api = { decodeVehicles: decodeVehicles };
+  function readEvent(r, end) {
+    var e = { delay: null, time: null };
+    each(r, end, function (f, w) {
+      if (w === 0 && f === 1) { e.delay = r.svarint(); return true; }
+      if (w === 0 && f === 2) { e.time = r.svarint(); return true; }
+      return false;
+    });
+    return e;
+  }
+  function readStopUpdate(r, end) {
+    var u = { stopSeq: null, stopId: null, arrTime: null, arrDelay: null, depTime: null, depDelay: null };
+    each(r, end, function (f, w) {
+      if (w === 0 && f === 1) { u.stopSeq = r.varint(); return true; }
+      if (w === 2) {
+        var len = r.varint(), stop = r.p + len;
+        if (f === 2) { var a = readEvent(r, stop); u.arrTime = a.time; u.arrDelay = a.delay; }
+        else if (f === 3) { var d = readEvent(r, stop); u.depTime = d.time; u.depDelay = d.delay; }
+        else if (f === 4) u.stopId = r.string(len);
+        r.p = stop;
+        return true;
+      }
+      return false;
+    });
+    return u;
+  }
+  function readTripUpdate(r, end) {
+    var t = { tripId: null, routeId: null, startDate: null, directionId: null, updates: [], timestamp: null };
+    each(r, end, function (f, w) {
+      if (w === 2) {
+        var len = r.varint(), stop = r.p + len;
+        if (f === 1) readTrip(r, stop, t);
+        else if (f === 2) t.updates.push(readStopUpdate(r, stop));
+        r.p = stop;
+        return true;
+      }
+      if (w === 0 && f === 4) { t.timestamp = r.varint(); return true; }
+      return false;
+    });
+    return t;
+  }
+
+  /** Find one trip's predicted stop times in the agency's trip-update file (null if it has none). */
+  function findTripUpdate(bytes, tripId) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), r = new Reader(u8), found = null, header = null;
+    each(r, u8.length, function (f, w) {
+      if (w !== 2) return false;
+      var len = r.varint(), stop = r.p + len;
+      if (f === 1) header = readHeader(r, stop);
+      else if (f === 2 && !found) {
+        each(r, stop, function (ef, ew) {
+          if (ew === 2 && ef === 3) {
+            var l2 = r.varint(), s2 = r.p + l2, t = readTripUpdate(r, s2);
+            if (t.tripId === tripId) found = t;
+            r.p = s2;
+            return true;
+          }
+          return false;
+        });
+      }
+      r.p = stop;
+      return true;
+    });
+    if (found) found.feedTimestamp = header;
+    return found;
+  }
+
+  var api = { decodeVehicles: decodeVehicles, findTripUpdate: findTripUpdate };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.GtfsRt = api;
 })(typeof window !== "undefined" ? window : globalThis);

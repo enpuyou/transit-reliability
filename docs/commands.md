@@ -1239,17 +1239,20 @@ curl -s -D - -o /tmp/veh.pb http://localhost:8787/vehicles   # expect 200, acces
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8787/secret   # expect 404 (only listed paths are served)
 
 # 3. check the page's feed reader against the Python parser (same sample file)
-node --test site/test/
+node --test site/test/gtfsrt.test.mjs
 
 # 4. look at the page locally (needs step 2 running); the ?relay= part points the page at your local relay
 cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
 
-# 5. refresh the route-number file (needs the SQL warehouse running; rarely needed)
+# 5. refresh the map's data files: route numbers, stop names, and the typical-lateness history
+#    (needs the SQL warehouse running; the history should be refreshed daily, by hand for now)
 uv run python scripts/make_map_data.py --profile enpu
 ```
 
 What to look for in step 4: dots over Seattle, a green "Live: agency feed from <time>" banner, a route
 picker filled with route numbers, a popup when you click a dot. If the banner is red, the page cannot
-reach the relay (check step 2 is running and the address after `?relay=`). Deploying the relay
-(`npx wrangler deploy` in `workers/relay`) creates a public web address: do it only on purpose, then put
-the printed address in `RELAY` at the top of `site/map.js`.
+reach the relay (check step 2 is running and the address after `?relay=`). The relay is deployed at
+`https://transit-relay.youenpu.workers.dev` (2026-10-21). Check it from outside:
+`curl -s -D - -o /dev/null https://transit-relay.youenpu.workers.dev/vehicles` should show 200,
+`access-control-allow-origin: *` and, on a second call within 15 s, `cf-cache-status: HIT`. Redeploy after
+changing it: `cd workers/relay && npx wrangler deploy`. Watch it: `npm run tail` there.

@@ -23,3 +23,19 @@ test("decodes the same buses as the Python parser", () => {
     close(v.lon, e.lon);
   });
 });
+
+test("finds a trip's predicted stop times, including negative delays", () => {
+  const { findTripUpdate } = createRequire(import.meta.url)("../gtfsrt.js");
+  const file = new Uint8Array(readFileSync(new URL("../../tests/fixtures/tripupdates.pb", import.meta.url)));
+  const exp = JSON.parse(readFileSync(new URL("./tripupdates_expected.json", import.meta.url), "utf8"));
+  assert.equal(findTripUpdate(file, "no-such-trip"), null);
+  for (const t of exp.trips) {
+    const got = findTripUpdate(file, t.tripId);
+    assert.equal(got.feedTimestamp, exp.header);
+    assert.deepEqual(
+      got.updates.map((u) => [u.stopSeq, u.stopId, u.arrTime, u.arrDelay, u.depTime, u.depDelay]),
+      // Python fills a missing prediction with zeros; the page reader says null
+      t.updates.map(([seq, id, at, ad, dt, dd]) => [seq, id, at || null, at ? ad : null, dt || null, dt ? dd : null]),
+    );
+  }
+});

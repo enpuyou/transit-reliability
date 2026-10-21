@@ -7,6 +7,7 @@ describe("feedFor", () => {
   it("serves only the listed paths", () => {
     expect(feedFor("/vehicles")).toBe("vehiclepositions.pb");
     expect(feedFor("/alerts")).toBe("alerts.pb");
+    expect(feedFor("/trips")).toBe("tripupdates.pb");
     expect(feedFor("/../secret")).toBeNull();
     expect(feedFor("/")).toBeNull();
   });

@@ -1,7 +1,7 @@
 # 0025: A live map of buses, with each bus's trip and history (proposed)
 
 Date: 2026-10-21
-Status: accepted 2026-10-21; milestone 1 and part of 2 built locally, not yet deployed.
+Status: accepted 2026-10-21. Relay deployed 2026-10-21 at https://transit-relay.youenpu.workers.dev (verified: 200 with the permission header, second request served from cache, other paths 404). Popup built; page not yet published (needs a push).
 
 ## Owner's answers (2026-10-21)
 
@@ -20,11 +20,22 @@ browser from live positions (history and typical times are static exports of pas
   speed. MapLibre is bundled in `site/vendor`; background tiles from OpenFreeMap.
 - `site/map/routes.json` (from `scripts/make_map_data.py`): internal route id to route number.
 
+## Popup (built 2026-10-21)
+
+Clicking a bus loads the agency's prediction file through the relay (`/trips`, 1.1 MB, remembered 15 s),
+finds that bus's trip in the browser, and shows the next three stops plus the next timetable stop that has
+history: agency predicted time, timetable time (= predicted time minus the feed's delay), and how late buses
+usually are there at that time of day (median, and the lateness 1 trip in 7 exceeds), from
+`site/map/stop_history.json` (28-day window; only stops with a timetable time, intervals under 2 minutes
+wide, at least 5 trips). "Today so far" actuals are not shown (the daily job runs at 4:45 am Pacific).
+
 ## Not built yet
 
-Deploy of the relay (needs the owner's go-ahead: new public endpoint), the real relay address in
-`map.js`, the agency prediction / scheduled time / history popup (milestones 3 and 4), route lines.
-Not seen in a browser yet: only the pieces were tested.
+- The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily
+  (add a step to the daily silver job and copy it in the publish workflow; needs a prod deploy).
+- Route lines, detour/weather overlays, a per-bus breadcrumb trail.
+- Not seen in a real browser: tested with a script that loads `map.js` with stand-in browser objects, the
+  real relay and the real data files, and clicks a live bus.
 
 ## What the owner asked for
 
