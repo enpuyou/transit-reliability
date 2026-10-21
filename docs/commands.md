@@ -1244,12 +1244,13 @@ node --test site/test/gtfsrt.test.mjs
 # 4. look at the page locally (needs step 2 running); the ?relay= part points the page at your local relay
 cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
 
-# 5. refresh the map's data files: route numbers, stop names, and the typical-lateness history
+# 5. refresh the map's data files: route numbers, stop names, route lines (shapes.json), and a local
+#    copy of the typical-lateness history
 #    (needs the SQL warehouse running; the history should be refreshed daily, by hand for now)
 uv run python scripts/make_map_data.py --profile enpu
 ```
 
-What to look for in step 4: dots over Seattle, a green "Live: agency feed from <time>" banner, a route
+What to look for in step 4: thin route lines under the dots (click a bus: its whole route turns bold; click empty map to clear), dots over Seattle that glide to new positions every 10 seconds without you touching the page, an open popup that follows its bus, a green "Live: agency feed from <time>" banner, a route
 picker filled with route numbers, a popup when you click a dot. If the banner is red, the page cannot
 reach the relay (check step 2 is running and the address after `?relay=`). The relay is deployed at
 `https://transit-relay.youenpu.workers.dev` (2026-10-21). Check it from outside:

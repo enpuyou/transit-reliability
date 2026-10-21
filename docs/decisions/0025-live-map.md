@@ -29,11 +29,22 @@ usually are there at that time of day (median, and the lateness 1 trip in 7 exce
 `site/map/stop_history.json` (28-day window; only stops with a timetable time, intervals under 2 minutes
 wide, at least 5 trips). "Today so far" actuals are not shown (the daily job runs at 4:45 am Pacific).
 
+## Route lines and live updates (built 2026-10-21)
+
+- `site/map/shapes.json` (421 KB, made by `scripts/make_map_data.py`): for each route direction, the
+  shapes at least 20% of its trips use (331 lines, 19,000 points after simplifying to within 8 m). Drawn
+  as thin lines under the buses; clicking a bus (or choosing a route) makes that route's lines bold.
+- The page asks the relay every 10 seconds by itself (the relay still asks the agency at most every 15 s),
+  and each bus glides from its old to its new position over 9 seconds, so movement looks continuous
+  instead of jumping. An open popup follows its bus and refreshes its predictions each update.
+- Tested with a script (stand-in browser objects, real relay and files): 331 lines, bus position
+  moved start -> early -> halfway -> target as expected, popup followed and kept refreshing.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily
   (add a step to the daily silver job and copy it in the publish workflow; needs a prod deploy).
-- Route lines, detour/weather overlays, a per-bus breadcrumb trail.
+- Detour/weather overlays, a per-bus breadcrumb trail, showing stops on the selected route.
 - Not seen in a real browser: tested with a script that loads `map.js` with stand-in browser objects, the
   real relay and the real data files, and clicks a live bus.
 

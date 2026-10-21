@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live bus map</title>
-<meta name="description" content="Where King County Metro buses are right now, updated about every 20 seconds.">
+<meta name="description" content="Where King County Metro buses are right now, updated automatically every 10 seconds.">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
 <style>
@@ -22,7 +22,8 @@
 <header class="top">
   <div class="wrap">
     <h1>Live bus map</h1>
-    <p class="lede">Each dot is a King County Metro bus, as it last reported itself. Positions refresh about every 20 seconds.
+    <p class="lede">Each dot is a King County Metro bus, as it last reported itself. The map updates by itself every 10 seconds
+      (buses glide to their new position); you never need to refresh. Thin lines are the routes; click a bus to highlight its whole route.
       This map shows <strong>where</strong> buses are; it does not say how late they are (the live feed carries no lateness).
       Lateness and history come from the daily numbers on the <a href="index.html">pipeline page</a>.</p>
   </div>
@@ -34,7 +35,7 @@
     <span id="count" class="note"></span>
   </div>
   <div id="livemap" role="application" aria-label="Map of live bus positions"></div>
-  <p class="note">Click a bus for its route, speed and the age of its last report. Times are Seattle local time.
+  <p class="note">Click a bus for its route, speed and next predicted stops; the popup follows the bus and updates by itself. Click empty map to clear the highlight. Times are Seattle local time.
     Transit scheduling, geographic, and real-time data provided by permission of King County. Map: OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors.</p>
   <p class="note"><a href="index.html">← Back to the pipeline page</a></p>
 </main>

@@ -1,13 +1,16 @@
 /* Live bus map. Every POLL_MS the browser asks the relay Worker for the agency's vehicle file, decodes it
-   (gtfsrt.js) and moves the dots. No Databricks involved: the page only talks to the relay and the map tiles. */
+   (gtfsrt.js) and glides each bus dot to its new position. Route lines come from map/shapes.json. An open
+   popup follows its bus and refreshes by itself. No Databricks involved: the page only talks to the relay,
+   the map tiles and files on this site. */
 (function () {
   "use strict";
   // Where the relay Worker lives. Override for local testing with  map.html?relay=http://localhost:8787
   var RELAY = new URLSearchParams(location.search).get("relay") || "https://transit-relay.youenpu.workers.dev";
-  var POLL_MS = 20000, STALE_S = 120, STYLE = "https://tiles.openfreemap.org/styles/liberty";
+  var POLL_MS = 10000, GLIDE_MS = 9000, FRAME_MS = 100, SNAP_DEG = 0.01, STALE_S = 120, STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
   var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick");
-  var routes = {}, last = null, timer = null, filter = "";
+  var routes = {}, last = null, timer = null, filter = "", selected = "", shapes = null, tracked = null;
+  var pos = {}, animating = false, lastFrame = 0;
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
   function colour(routeId) {
@@ -63,10 +66,10 @@
   function lateText(sec) { return Math.abs(sec) < 60 ? "on time" : minutes(sec) + (sec > 0 ? " late" : " early"); }
   function hhmm(unix) { return new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" }).format(new Date(unix * 1000)); }
 
-  function loadPredictions(p, el) {
+  function loadPredictions(p, el, quiet) {
     Promise.all([getTrips(), getStatics()]).then(function (res) {
       var trip = GtfsRt.findTripUpdate(res[0], p.trip), stops = res[1][0] || {}, hist = (res[1][1] || {}).h || {};
-      if (!trip) { el.textContent = "The agency has no prediction for this trip right now."; return; }
+      if (!trip) { if (!quiet || !el.querySelector("b")) el.textContent = "The agency has no prediction for this trip right now."; return; }
       var next = trip.updates.filter(function (u) { return u.stopSeq >= Number(p.stopSeq) && u.arrTime; });
       var keyOf = function (u) { return p.route + "|" + p.dir + "|" + u.stopId; };
       var shown = next.slice(0, 3);
@@ -85,31 +88,106 @@
       el.innerHTML = rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
         '<div class="m" style="margin-top:6px">Predictions as of ' + hhmm(trip.feedTimestamp) + (age > 600 ? " — OUT OF DATE, ignore them" : "") +
         ". History is kept only for stops with a timetable time, and comes from past days only (" + ((res[1][1] || {}).first_day || "?") + " to " + ((res[1][1] || {}).last_day || "?") + "); our arrival times are estimates from GPS.</div>";
-    }).catch(function (err) { el.textContent = "Couldn't load predictions (" + err.message + ")."; });
+    }).catch(function (err) { if (!quiet) el.textContent = "Couldn't load predictions (" + err.message + ")."; });
   }
 
   var map = new maplibregl.Map({ container: "livemap", style: STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
-  function toGeoJson(feed) {
-    var now = Date.now() / 1000;
-    return {
-      type: "FeatureCollection",
-      features: feed.vehicles.filter(function (v) {
-        return v.lat != null && v.lon != null && (!filter || v.routeId === filter);
-      }).map(function (v) {
-        return { type: "Feature", geometry: { type: "Point", coordinates: [v.lon, v.lat] },
-          properties: { route: v.routeId || "", color: colour(v.routeId), label: name(v.routeId), speed: v.speed, status: v.status,
-            stopSeq: v.stopSeq, age: v.ts ? now - v.ts : null, ts: v.ts, trip: v.tripId || "", dir: v.directionId } };
-      })
-    };
+  /* ---------- bus positions: every bus glides from where it was drawn to where it now is ---------- */
+  function propsOf(v) {
+    return { id: v.id || "", route: v.routeId || "", color: colour(v.routeId), label: name(v.routeId), speed: v.speed,
+      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId };
+  }
+  function receive(feed) {
+    var now = performance.now(), seen = {};
+    feed.vehicles.forEach(function (v) {
+      if (v.lat == null || v.lon == null || !v.id) return;
+      seen[v.id] = true;
+      var cur = pos[v.id];
+      if (!cur) { pos[v.id] = { lon: v.lon, lat: v.lat, fx: v.lon, fy: v.lat, tx: v.lon, ty: v.lat, t0: now, v: v }; return; }
+      var snap = Math.abs(cur.lon - v.lon) > SNAP_DEG || Math.abs(cur.lat - v.lat) > SNAP_DEG;
+      cur.fx = snap ? v.lon : cur.lon; cur.fy = snap ? v.lat : cur.lat;
+      cur.tx = v.lon; cur.ty = v.lat; cur.t0 = now; cur.v = v;
+    });
+    Object.keys(pos).forEach(function (id) { if (!seen[id]) delete pos[id]; });
+    startAnimation();
+  }
+  function step(now) {
+    var moving = false;
+    Object.keys(pos).forEach(function (id) {
+      var b = pos[id], t = Math.min(1, (now - b.t0) / GLIDE_MS);
+      b.lon = b.fx + (b.tx - b.fx) * t; b.lat = b.fy + (b.ty - b.fy) * t;
+      if (t < 1) moving = true;
+    });
+    return moving;
+  }
+  function render() {
+    var feats = [];
+    Object.keys(pos).forEach(function (id) {
+      var b = pos[id];
+      if (filter && b.v.routeId !== filter) return;
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v) });
+    });
+    var src = map.getSource("buses");
+    if (src) src.setData({ type: "FeatureCollection", features: feats });
+    countEl.textContent = feats.length + " buses shown";
+    if (tracked && pos[tracked.id]) tracked.popup.setLngLat([pos[tracked.id].lon, pos[tracked.id].lat]);
+  }
+  function frame(now) {
+    if (now - lastFrame >= FRAME_MS) { lastFrame = now; var moving = step(now); render(); if (!moving) { animating = false; return; } }
+    requestAnimationFrame(frame);
+  }
+  function startAnimation() { if (!animating) { animating = true; requestAnimationFrame(frame); } }
+
+  /* ---------- route lines ---------- */
+  function lineFeatures() {
+    var feats = [];
+    Object.keys(shapes || {}).forEach(function (key) {
+      var route = key.split("|")[0];
+      shapes[key].forEach(function (line) {
+        feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: line }, properties: { route: route, color: colour(route) } });
+      });
+    });
+    return { type: "FeatureCollection", features: feats };
+  }
+  function setSelected(routeId) {
+    selected = routeId || "";
+    ["lines-casing", "lines-selected"].forEach(function (id) {
+      if (map.getLayer(id)) map.setFilter(id, ["==", ["get", "route"], selected]);
+    });
+  }
+  function fitRoute(routeId) {
+    var b = new maplibregl.LngLatBounds(), any = false;
+    Object.keys(shapes || {}).forEach(function (key) {
+      if (key.split("|")[0] !== routeId) return;
+      shapes[key].forEach(function (line) { line.forEach(function (c) { b.extend(c); any = true; }); });
+    });
+    if (any) map.fitBounds(b, { padding: 40, maxZoom: 14, duration: 600 });
   }
 
-  function draw() {
-    if (!last || !map.getSource("buses")) return;
-    var data = toGeoJson(last);
-    map.getSource("buses").setData(data);
-    countEl.textContent = data.features.length + " buses shown";
+  /* ---------- the clicked bus: its popup follows it and refreshes with every update ---------- */
+  function refreshTracked() {
+    if (!tracked) return;
+    var b = pos[tracked.id];
+    if (!b) { tracked.head.innerHTML += '<br><span class="m">This bus is no longer in the feed.</span>'; return; }
+    var p = propsOf(b.v);
+    tracked.head.innerHTML = headHtml(p);
+    loadPredictions(p, tracked.pred, true);
+  }
+  function openPopup(p, lngLat) {
+    if (tracked) tracked.popup.remove();
+    var box = document.createElement("div");
+    box.style.minWidth = "260px";
+    var head = document.createElement("div"), pred = document.createElement("div");
+    head.innerHTML = headHtml(p);
+    pred.className = "m";
+    pred.textContent = "Loading the agency's predictions…";
+    box.appendChild(head); box.appendChild(pred);
+    var popup = new maplibregl.Popup({ offset: 10, maxWidth: "360px", closeOnClick: false }).setLngLat(lngLat).setDOMContent(box).addTo(map);
+    tracked = { id: p.id, popup: popup, head: head, pred: pred };
+    popup.on("close", function () { if (tracked && tracked.popup === popup) tracked = null; });
+    loadPredictions(p, pred, false);
   }
 
   function fillRoutePicker(feed) {
@@ -132,26 +210,35 @@
       last = GtfsRt.decodeVehicles(new Uint8Array(buf));
       var age = Date.now() / 1000 - last.timestamp;
       if (age > STALE_S) setState("warn", "The agency's feed is " + ago(age) + " old (as of " + seattle(last.timestamp) + ")");
-      else setState("good", "Live: agency feed from " + seattle(last.timestamp));
+      else setState("good", "Live, updates by itself: agency feed from " + seattle(last.timestamp));
       if (pick.length === 1) fillRoutePicker(last);
-      draw();
+      receive(last);
+      refreshTracked();
     }).catch(function (e) {
-      setState("bad", "Can't reach the live feed (" + e.message + "). Showing the last positions received" + (last ? " from " + seattle(last.timestamp) : "") + ".");
+      setState("bad", "Can't reach the live feed (" + e.message + "). Showing the last positions received" + (last ? " from " + seattle(last.timestamp) : "") + ". Trying again automatically.");
     });
   }
 
   map.on("load", function () {
+    map.addSource("lines", { type: "geojson", data: lineFeatures() });
+    map.addLayer({ id: "lines-faint", type: "line", source: "lines", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 1.6, "line-opacity": 0.4 } });
+    map.addLayer({ id: "lines-casing", type: "line", source: "lines", filter: ["==", ["get", "route"], ""], layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": 0.9 } });
+    map.addLayer({ id: "lines-selected", type: "line", source: "lines", filter: ["==", ["get", "route"], ""], layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 5 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "buses", type: "circle", source: "buses", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 8],
       "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.2 } });
     map.on("click", "buses", function (e) {
       var p = e.features[0].properties;
-      var box = document.createElement("div");
-      box.style.minWidth = "260px";
-      box.innerHTML = headHtml(p) + '<div class="m" id="pred">Loading the agency\'s predictions…</div>';
-      new maplibregl.Popup({ offset: 10, maxWidth: "360px" }).setLngLat(e.lngLat).setDOMContent(box).addTo(map);
-      loadPredictions(p, box.querySelector("#pred"));
+      setSelected(p.route);
+      openPopup(p, e.lngLat);
+    });
+    map.on("click", function (e) {
+      if (map.queryRenderedFeatures(e.point, { layers: ["buses"] }).length) return;
+      if (!filter) setSelected("");
     });
     map.on("mouseenter", "buses", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "buses", function () { map.getCanvas().style.cursor = ""; });
@@ -159,11 +246,19 @@
     timer = setInterval(function () { if (!document.hidden) refresh(); }, POLL_MS);
   });
 
-  pick.addEventListener("change", function () { filter = pick.value; draw(); });
+  pick.addEventListener("change", function () {
+    filter = pick.value;
+    setSelected(filter);
+    if (filter) fitRoute(filter);
+    render();
+  });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && timer) refresh(); });
 
-  // route numbers instead of internal ids; the page still works if this file is missing
+  // route lines and route numbers: the page still works (dots only, route ids) if these files are missing
+  fetch("map/shapes.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    shapes = j; var src = map.getSource("lines"); if (src && j) src.setData(lineFeatures());
+  }).catch(function () {});
   fetch("map/routes.json").then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) {
-    routes = j; if (last) { fillRoutePicker(last); draw(); }
+    routes = j; if (last) { fillRoutePicker(last); render(); }
   }).catch(function () {});
 })();
