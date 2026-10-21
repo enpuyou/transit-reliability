@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (SQL and result tables are kept on readable lines)
 """Does moving a bus forward along its route by its recent speed beat leaving it at its last report?
 
 For a sample of trips on one day: project each GPS report onto the route line (the pipeline's own function),
