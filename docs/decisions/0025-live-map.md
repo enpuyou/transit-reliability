@@ -127,6 +127,16 @@ departures were 29 s or more early and 5% 61 s or more, which would be rare if s
 A stopwatch check at a stop is the only fully independent test. Another assumption: the viewer's computer clock
 is right to a few seconds.
 
+## Buses going back and forth (2026-10-21)
+
+The first version of the estimate eased the drawn bus to each new estimate, so when a new report showed the
+bus had slowed more than the 75%-speed guess, the bus was pulled backward. Replay of 120 real trips with a 60 s
+report delay (`scripts/sim_backward.py`, same method as `scripts/lag_experiment.py`): the easing version
+moved backward 5.6% of the time (about 12.5 km of backward movement per bus-hour in total); drawing the bus so
+it never moves backward (it waits for the estimate to catch up, catching up no faster than 25 m/s) gave 0%
+backward movement and a slightly better error (typical 136 m vs 155 m; 9 in 10 within 447 m vs 495 m; last
+report only: 318 m and 759 m). If the drawn bus ends up more than 800 m ahead of the estimate the estimate wins.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

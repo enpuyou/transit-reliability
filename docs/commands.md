@@ -1286,7 +1286,8 @@ says "do not cache"). The key never reaches the browser and never goes in the re
 cd workers/relay && printf 'TOMTOM_KEY=your-key\n' > .dev.vars      # .dev.vars is in .gitignore
 npx wrangler dev --port 8787
 curl -s -D - -o /tmp/t.png http://localhost:8787/traffic/12/656/1430.png   # 200, image/png, cache-control: public, max-age=90
-# open http://localhost:8000/map.html?relay=http://localhost:8787 and tick "Live traffic"
+# open http://localhost:8000/map.html and tick "Live traffic": from localhost the page uses the relay on
+# this computer (port 8787) for traffic when it is running, otherwise the deployed relay
 
 # production: store the key as a Worker secret (it prompts for the value; nothing is written to a file), then deploy
 cd workers/relay && npx wrangler secret put TOMTOM_KEY --name transit-relay && npx wrangler deploy

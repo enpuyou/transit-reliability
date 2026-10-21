@@ -71,6 +71,18 @@
     return Math.min(lineLength, rep.dist + FACTOR * vel * age);
   }
 
-  var api = { project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
+  var CATCH_UP = 25;       // m/s: how fast a drawn bus may catch up to a higher estimate (a bus's top speed, about 56 mph)
+  var SNAP_BACK = 800;     // m: if the drawn bus is this far AHEAD of the estimate, trust the estimate (something changed)
+
+  /** The distance at which to draw the bus after `dtSec` more seconds: it never moves backward (it waits for the
+      estimate to catch up, which is calmer than easing it back), and it catches up no faster than CATCH_UP. */
+  function advance(shown, target, dtSec) {
+    if (shown == null) return target;
+    if (shown - target > SNAP_BACK) return target;
+    if (target <= shown) return shown;
+    return shown + Math.min(target - shown, CATCH_UP * Math.max(0, dtSec));
+  }
+
+  var api = { advance: advance, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Estimate = api;
 })(typeof window !== "undefined" ? window : globalThis);

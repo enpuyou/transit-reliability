@@ -39,3 +39,18 @@ test("estimate moves a share of the recent speed forward, capped by age and by t
   assert.equal(E.estimate({ ts: 0, dist: 1490 }, 10, 100, 1500), 1500, "never past the end of the line");
   assert.equal(E.estimate(rep, 10, 900, 1500), 100, "a report from the future does not move the bus back");
 });
+
+test("advance never moves the drawn bus backward and limits how fast it catches up", () => {
+  assert.equal(E.advance(null, 500, 0.1), 500, "first time: start at the estimate");
+  assert.equal(E.advance(500, 480, 0.1), 500, "estimate dropped a little: wait, do not go back");
+  assert.equal(E.advance(500, 510, 0.1), 502.5, "catching up is limited to 25 m/s");
+  assert.equal(E.advance(500, 501, 5), 501, "but never overshoots the estimate");
+  assert.equal(E.advance(2000, 500, 0.1), 500, "far ahead of the estimate: trust the estimate");
+  // over a stream of noisy estimates the drawn distance never decreases (unless it snaps back)
+  let shown = null, last = -Infinity;
+  for (const target of [100, 140, 120, 90, 200, 150, 160, 400, 380, 390]) {
+    shown = E.advance(shown, target, 1);
+    assert.ok(shown >= last, `went backward: ${last} -> ${shown}`);
+    last = shown;
+  }
+});

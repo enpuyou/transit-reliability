@@ -12,7 +12,6 @@
   var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null, routeStops = null, stopsAsked = false;
   var pos = {}, animating = false, lastFrame = 0;
   var estimateOn = document.getElementById("estimate");
-  var OFFSET_MS = 4000;   // after a new report the drawn bus eases from where it was to the new estimate over this long
   var checks = { est: [], raw: [] }, MAX_CHECKS = 800;
   var trafficOn = document.getElementById("traffic");
 
@@ -173,11 +172,9 @@
       b.rep = { ts: v.ts, dist: hit.dist };
       b.hist.push(b.rep); if (b.hist.length > 5) b.hist.shift();
       b.vel = Estimate.speed(b.hist);
-      // ease from where the bus is drawn now to the new estimate instead of jumping
-      if (b.est && b.vel != null) { var e = Estimate.pointAt(b.line, estDist(b, wallSeconds())); b.offLon = b.lon - e[0]; b.offLat = b.lat - e[1]; b.offT0 = now; }
     }
     b.est = b.vel != null && !!b.rep;
-    if (b.est) { var w = wallSeconds(); b.preds.push({ at: w, est: estDist(b, w), raw: b.rep.dist }); if (b.preds.length > 14) b.preds.shift(); }
+    if (b.est) { var w = wallSeconds(); b.preds.push({ at: w, est: b.shown != null ? b.shown : estDist(b, w), raw: b.rep.dist }); if (b.preds.length > 14) b.preds.shift(); }
   }
   function pct(list, p) { var a = list.slice().sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(p * (a.length - 1)))]; }
   function metres(m) { return Math.round(m) + " m (" + Math.round(m * 3.281) + " ft)"; }
@@ -195,11 +192,16 @@
     Object.keys(pos).forEach(function (id) {
       var b = pos[id], t = Math.min(1, (now - b.t0) / GLIDE_MS);
       if (compensate && b.est && filter) {
-        // keep moving the bus along its route at 75% of its recent speed since the report
-        var e = Estimate.pointAt(b.line, estDist(b, nowSec)), k = b.offT0 == null ? 0 : Math.max(0, 1 - (now - b.offT0) / OFFSET_MS);
-        b.lon = e[0] + (b.offLon || 0) * k; b.lat = e[1] + (b.offLat || 0) * k; b.beam = e[2]; b.drawnEst = true;
+        // keep moving the bus along its route at 75% of its recent speed since the report, but never backward:
+        // when a new report says the bus was slower than guessed, the drawn bus waits for the estimate to catch up
+        if (b.shownLine !== b.line) { b.shown = null; b.shownLine = b.line; }
+        var dt = b.shownT == null ? 0 : (now - b.shownT) / 1000;
+        b.shown = Estimate.advance(b.shown, estDist(b, nowSec), dt); b.shownT = now;
+        var e = Estimate.pointAt(b.line, b.shown);
+        b.lon = e[0]; b.lat = e[1]; b.beam = e[2]; b.drawnEst = true;
         moving = true;
       } else {
+        b.shown = null; b.shownT = null;
         b.lon = b.fx + (b.tx - b.fx) * t; b.lat = b.fy + (b.ty - b.fy) * t; b.drawnEst = false;
         if (t < 1) moving = true;
       }
@@ -395,10 +397,18 @@
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     // Live traffic: TomTom's flow tiles are transparent PNGs coloured by how fast traffic moves compared with free flow.
     // They come through our relay, which holds the TomTom key and remembers each tile for a minute and a half, so the
-    // key never reaches the browser. They sit under the route lines and buses.
-    map.addSource("traffic", { type: "raster", tileSize: 512, minzoom: 9, maxzoom: 17, attribution: "Traffic © TomTom",
-      tiles: [RELAY + "/traffic/{z}/{x}/{y}.png"] });
-    map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
+    // key never reaches the browser. They sit under the route lines and buses. When this page is opened from
+    // localhost and a relay is running on this computer (npx wrangler dev, port 8787), that one is used, because it
+    // has the key in a local file even if the deployed relay does not have traffic yet.
+    function addTraffic(base) {
+      if (map.getSource("traffic")) return;
+      map.addSource("traffic", { type: "raster", tileSize: 512, minzoom: 9, maxzoom: 17, attribution: "Traffic © TomTom", tiles: [base + "/traffic/{z}/{x}/{y}.png"] });
+      map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
+    }
+    if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+      var LOCAL = "http://localhost:8787";
+      fetch(LOCAL + "/traffic/12/656/1430.png").then(function (r) { addTraffic(r.ok ? LOCAL : RELAY); }).catch(function () { addTraffic(RELAY); });
+    } else addTraffic(RELAY);
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // stops of the selected route: small white rings with a dark outline, far smaller than a bus. Click one to see
     // its name, whether it is a timetable stop, and the next predicted arrivals.
