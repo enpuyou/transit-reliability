@@ -77,6 +77,23 @@ of trips) are not listed.
   at this stop": the prediction uses the bus's position and delay, and the dots are a median 65 seconds old
   (measured 2026-10-21: about 41 s of that is before the agency publishes the file).
 
+## Bus marker styles (2026-10-21)
+
+The first water-drop was too big and not liked, so there are five styles to choose from, all drawn by
+`site/markers.js` and compared side by side on `site/marker-options.html`: pointer (round body with a
+small triangle just in front, the default), badge (disc with an arrow inside), beam (disc with a faint
+wedge), chevron (arrowhead) and drop (smaller, shorter tip). Try one on the map with `?marker=<name>`.
+All share one body size (radius 5 px zoomed out to 11 px zoomed in, down from 6 to 13), so buses look
+alike. The research found nothing on how Transit, Moovit or Citymapper draw their vehicles (unverified),
+only general guidance that a direction marker should point the way the vehicle travels.
+
+## Why a report is already old when the agency publishes it (measured 2026-10-20, 1.7 million reports)
+
+Median 34 s old (middle half 28 to 41 s, 5th to 95th percentile 18 to 51 s). A bus sends a new fix about every
+18 s (median) and the agency writes a new file about every 20 s, which explains roughly 10 to 20 s of
+that age; the rest (about 15 to 25 s) is transmission and processing inside the agency's system, which we
+cannot see (unverified cause). Our relay and polling add up to about 25 s more.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

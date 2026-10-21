@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bus marker options</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin: 16px 0; }
+  .opt { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .opt h3 { margin: 0 0 4px; } .opt p { margin: 4px 0 8px; font-size: .9rem; color: var(--muted); }
+  canvas { display: block; border-radius: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><h1>Bus marker options</h1>
+<p class="lede">The same four buses (heading north, east, south, northwest) in each style, at the sizes the map uses when zoomed out, mid and in, on a light and a dark map. See one on the real map by adding <code>?marker=pointer</code> (or <code>pointer</code>, <code>badge</code>, <code>beam</code>, <code>chevron</code>, <code>drop</code>) to <a href="map.html">map.html</a>.</p></div></header>
+<main class="wrap"><div class="grid" id="grid"></div></main>
+<script src="markers.js"></script>
+<script>
+  var INFO = {
+    pointer: ["Dot with a pointer", "A round bus with a small triangle just in front of it: the closest to 'a circle with a little arrow'. Reads as a bus first, direction second."],
+    badge: ["Dot with an arrow inside", "A plain coloured disc with a small white arrow inside. Cleanest look; the arrow gets hard to read when zoomed far out."],
+    beam: ["Dot with a beam", "A plain disc with a faint wedge showing where it is heading, like the Apple Maps location dot."],
+    chevron: ["Arrowhead", "A navigation arrow, like a GPS puck. Smallest and clearest direction, but least like a bus."],
+    drop: ["Small drop", "The water-drop, now smaller with a shorter tip."]
+  };
+  var COLORS = ["#d1495b", "#2a7de1", "#2e8b57", "#8e44ad"], HEADINGS = [0, 90, 180, 315], SCALES = [0.9, 1.27, 1.7];
+  function tinted(img, color, halo) {
+    var base = document.createElement("canvas"); base.width = base.height = Markers.SIZE; base.getContext("2d").putImageData(img, 0, 0);
+    var out = document.createElement("canvas"); out.width = out.height = Markers.SIZE; var g = out.getContext("2d");
+    if (halo) { for (var a = 0; a < 6.3; a += 0.785) g.drawImage(base, Math.cos(a) * 2, Math.sin(a) * 2); g.globalCompositeOperation = "source-in"; g.fillStyle = "#ffffff"; g.fillRect(0, 0, 64, 64); g.globalCompositeOperation = "source-over"; }
+    var body = document.createElement("canvas"); body.width = body.height = Markers.SIZE; var b = body.getContext("2d");
+    b.drawImage(base, 0, 0); b.globalCompositeOperation = "source-in"; b.fillStyle = color; b.fillRect(0, 0, 64, 64);
+    g.drawImage(body, 0, 0); return out;
+  }
+  function disc(g, x, y, r, color) { g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fillStyle = color; g.fill(); g.lineWidth = 2; g.strokeStyle = "#fff"; g.stroke(); }
+  var grid = document.getElementById("grid");
+  Markers.KINDS.forEach(function (kind) {
+    var box = document.createElement("div"); box.className = "opt";
+    box.innerHTML = "<h3>" + INFO[kind][0] + " <span class='note'>?marker=" + kind + "</span></h3><p>" + INFO[kind][1] + "</p>";
+    ["#e9ecef", "#1f2430"].forEach(function (bg) {
+      var cv = document.createElement("canvas"); cv.width = 3 * 4 * 38 + 10; cv.height = 62; cv.style.width = cv.width + "px"; cv.style.height = "62px";
+      var g = cv.getContext("2d"); g.fillStyle = bg; g.fillRect(0, 0, cv.width, cv.height);
+      var img = Markers.image(kind);
+      SCALES.forEach(function (sc, si) {
+        HEADINGS.forEach(function (h, hi) {
+          var x = 22 + (si * 4 + hi) * 38, y = 31, color = COLORS[(si + hi) % 4], css = sc / 2 * 64;
+          if (kind === "badge") {
+            disc(g, x, y, 5.5 * sc / 0.9, color);
+            g.save(); g.translate(x, y); g.rotate(h * Math.PI / 180); g.drawImage(tinted(img, "#ffffff", false), -css / 2, -css / 2, css, css); g.restore();
+          } else if (kind === "beam") {
+            g.save(); g.translate(x, y); g.rotate(h * Math.PI / 180); g.globalAlpha = 0.45; g.drawImage(tinted(img, color, false), -css / 2, -css / 2, css, css); g.restore();
+            disc(g, x, y, 5.5 * sc / 0.9, color);
+          } else {
+            g.save(); g.translate(x, y); g.rotate(h * Math.PI / 180); g.drawImage(tinted(img, color, true), -css / 2, -css / 2, css, css); g.restore();
+          }
+        });
+      });
+      box.appendChild(cv);
+    });
+    grid.appendChild(box);
+  });
+</script>
+</body>
+</html>
