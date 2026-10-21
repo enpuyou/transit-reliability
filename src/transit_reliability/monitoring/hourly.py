@@ -11,7 +11,10 @@ come from measured behaviour:
   is about 11), so 15 minutes is an outage.
 """
 
+import datetime as dt
+
 from transit_reliability.audit.core import CheckSpec
+from transit_reliability.bronze.schema import volume_path
 
 PACIFIC_DATE = "to_date(from_utc_timestamp(current_timestamp(), 'America/Los_Angeles'))"
 BRONZE_SOURCES = ("vehicle_positions", "trip_updates", "alerts")
@@ -24,11 +27,29 @@ MAX_HOURS_SILVER_BEHIND = 30.0  # the daily job runs at 11:45 UTC
 MAX_DAYS_GOLD_BEHIND = 2
 MIN_TRIPS_PER_DAY = 4000  # weekdays have about 12,900, Saturday about 9,500
 MIN_DAYS_OF_SCHEDULE_LEFT = 14
-MAX_MINUTES_SINCE_WEATHER = 240.0  # observations arrive every 5 minutes and are fetched hourly
+LANDING_VOLUME = "workspace.transit_landing.raw"
+# the weather workflow runs hourly at :20; 4 hours is three missed runs
+MAX_MINUTES_SINCE_WEATHER_FETCH = 240.0
 MIN_WEATHER_STATIONS_3H = 2  # of three stations
+MAX_HOURS_WEATHER_SILVER_BEHIND = 30.0  # silver weather is rebuilt once a day by the silver job
 
 
-def hourly_checks(prefix: str) -> list[CheckSpec]:
+def weather_files(now: dt.datetime) -> str:
+    """The landed weather files of yesterday and today (UTC), as a table of path names.
+
+    Files are named `<fetch time in epoch ms>-<station>.json`, so the name says when the fetch happened.
+    Only two day folders are read to keep the check cheap.
+    """
+
+    days = ",".join(((now - dt.timedelta(days=n)).date().isoformat() for n in (1, 0)))
+    folder = volume_path(LANDING_VOLUME, "weather", "dt={" + days + "}", "*.json")
+    return f"read_files('{folder}', format => 'binaryFile')"
+
+
+def hourly_checks(prefix: str, now: dt.datetime | None = None) -> list[CheckSpec]:
+    files = weather_files(now or dt.datetime.now(dt.UTC))
+    fetched_at = "CAST(regexp_extract(path, '/([0-9]+)-[A-Z0-9]+\\\\.json$', 1) AS BIGINT) / 1000.0"
+    station = "regexp_extract(path, '-([A-Z0-9]+)\\\\.json$', 1)"
 
     def bronze(source: str) -> str:
         return f"workspace.{prefix}_bronze.{source}"
@@ -95,16 +116,22 @@ def hourly_checks(prefix: str) -> list[CheckSpec]:
             minimum=0,
         ),
         CheckSpec(
-            "weather_minutes_since_newest_observation",
-            f"SELECT (unix_timestamp(current_timestamp()) - unix_timestamp(max(observed_ts))) / 60.0 FROM {silver}.weather_observations",
-            "the weather fetch runs hourly from GitHub; a stale table means it, or the dispatcher, stopped",
-            maximum=MAX_MINUTES_SINCE_WEATHER,
+            "weather_minutes_since_last_fetch",
+            f"SELECT (unix_timestamp(current_timestamp()) - max({fetched_at})) / 60.0 FROM {files}",
+            "age of the newest landed weather file (the fetch runs hourly from GitHub, started by the Cloudflare dispatcher); a large value means the fetch stopped. Reads the landing files, not the daily silver table",
+            maximum=MAX_MINUTES_SINCE_WEATHER_FETCH,
         ),
         CheckSpec(
-            "weather_stations_reporting_last_3_hours",
-            f"SELECT count(DISTINCT station) FROM {silver}.weather_observations WHERE observed_ts >= current_timestamp() - INTERVAL 3 HOURS",
-            "at least two of the three Seattle-area stations should have reported recently",
+            "weather_stations_fetched_last_3_hours",
+            f"SELECT count(DISTINCT {station}) FROM {files} WHERE {fetched_at} >= unix_timestamp(current_timestamp()) - 3 * 3600",
+            "at least two of the three Seattle-area stations should have a landed file from the last 3 hours",
             minimum=MIN_WEATHER_STATIONS_3H,
+        ),
+        CheckSpec(
+            "weather_silver_hours_behind",
+            f"SELECT (unix_timestamp(current_timestamp()) - unix_timestamp(max(observed_ts))) / 3600.0 FROM {silver}.weather_observations",
+            "silver weather is rebuilt once a day by the silver job (11:45 UTC), so it is normally up to about a day old; more than 30 hours means a daily run was missed",
+            maximum=MAX_HOURS_WEATHER_SILVER_BEHIND,
         ),
         CheckSpec(
             "days_of_schedule_left",

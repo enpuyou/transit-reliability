@@ -311,6 +311,13 @@ the first line naming the exception. If it is a streaming failure, the useful li
 | GitHub workflow failed at upload: `no such directory` | `databricks fs cp` does not create missing folders | run `databricks fs mkdir` first (it creates parents and is idempotent) |
 | expired token reported as "file does not exist" | `fs cp` of a missing file hides the auth error | check access with `fs ls` on a folder that always exists before relying on `fs cp` |
 | first run took ~25 min with a long silent start | big backlog plus serverless startup/listing *(cause of the ~11 min delay not isolated)* | expect slow first run after a gap; measure before scheduling |
+| hourly check failed 2026-10-21 22:12 UTC: `weather_stations_reporting_last_3_hours = 0` (3 attempts, then a failure email) | the check read `silver.weather_observations`, which is rebuilt only once a day, but was written as if it were hourly-fresh; it passed only because a manual build had just run | read what the hourly job can truly see (the landed weather files, whose names carry the fetch time) and give the daily table a daily-sized limit (30 h) |
+
+**Lesson:** a freshness check must read data that is refreshed at least as often as the check runs. Before
+adding a check, ask "what writes this table, and how often?"; a new check should also be tested against
+a day when nothing was rebuilt by hand. Tests that only look at the SQL text cannot catch this; the run
+of the real SQL on the warehouse can.
+
 
 ### Not every mismatch is a bug
 

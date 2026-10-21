@@ -69,7 +69,7 @@ def test_hourly_checks_are_single_statements_with_a_rule_and_unique_names() -> N
     for c in checks:
         assert c.sql.lstrip().upper().startswith(("SELECT", "WITH")) and ";" not in c.sql
         assert c.minimum is not None or c.maximum is not None
-        assert "workspace.transit_" in c.sql
+        assert "workspace.transit_" in c.sql or "/Volumes/workspace/transit_landing/" in c.sql
     assert {"days_of_schedule_left", "scheduled_trips_today"} <= set(names)
     assert (
         "scheduled_trips_tomorrow" not in names
@@ -150,3 +150,23 @@ def test_the_rider_rule_checks_exist_and_use_the_given_day() -> None:
     drift = {c.name: c for c in drift_checks("transit", "2026-10-16")}
     check = drift["rider_rule_scored_share_of_non_last_timepoints"]
     assert "2026-10-16" in check.sql and check.minimum == 0.8
+
+
+def test_weather_checks_read_the_landing_files_not_the_daily_silver_table() -> None:
+    import datetime as dt
+
+    from transit_reliability.monitoring.hourly import hourly_checks
+
+    checks = {
+        c.name: c
+        for c in hourly_checks("transit", dt.datetime(2026, 10, 21, 22, 12, tzinfo=dt.UTC))
+    }
+    fetched = checks["weather_minutes_since_last_fetch"].sql
+    assert (
+        "/Volumes/workspace/transit_landing/raw/weather/dt={2026-10-20,2026-10-21}/*.json"
+        in fetched
+    )
+    assert "weather_observations" not in fetched
+    assert "weather_observations" not in checks["weather_stations_fetched_last_3_hours"].sql
+    # the daily table gets a daily-sized limit, not an hourly one
+    assert checks["weather_silver_hours_behind"].maximum == 30.0

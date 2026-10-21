@@ -1260,3 +1260,17 @@ reach the relay (check step 2 is running and the address after `?relay=`). The r
 `curl -s -D - -o /dev/null https://transit-relay.youenpu.workers.dev/vehicles` should show 200,
 `access-control-allow-origin: *` and, on a second call within 15 s, `cf-cache-status: HIT`. Redeploy after
 changing it: `cd workers/relay && npx wrangler deploy`. Watch it: `npm run tail` there.
+
+## When `hourly_checks` fails (worked example, 2026-10-21)
+
+```bash
+databricks jobs list-runs --job-id <monitor job id> --limit 10 --profile enpu      # which run, when
+databricks jobs get-run <job run id> --profile enpu                                 # tasks[].run_id
+databricks jobs get-run-output <TASK run id> --profile enpu                         # "N hourly check(s) failed: <name> = <value> (rule: ...)"
+```
+
+The job message is just "Workload failed"; the check name, value and rule are in the task output, and every
+check result is also in `workspace.transit_ops.check_results` (query by `run_ts`). Read the failing check's SQL
+and ask what feeds the table and how often. That day the cause was our own check reading a daily table as if it
+were hourly (see `docs/databricks_guide.md` section 8). The weather checks now read the landed files:
+`SELECT ... FROM read_files('/Volumes/workspace/transit_landing/raw/weather/dt={yesterday,today}/*.json', format => 'binaryFile')`.

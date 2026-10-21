@@ -11,6 +11,15 @@
   var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick"), dirPick = document.getElementById("dirpick");
   var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null, routeStops = null, stopsAsked = false;
   var pos = {}, animating = false, lastFrame = 0;
+  // Live traffic (TomTom) needs a key. Open map.html?ttkey=YOURKEY once: it is kept in this browser only (never in
+  // the repository or the published site), so the switch below stays available on later visits.
+  var TT_KEY = "";
+  try {
+    var given = new URLSearchParams(location.search).get("ttkey");
+    if (given) localStorage.setItem("ttkey", given);
+    TT_KEY = localStorage.getItem("ttkey") || "";
+  } catch (e) { TT_KEY = new URLSearchParams(location.search).get("ttkey") || ""; }
+  var trafficOn = document.getElementById("traffic");
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
   function colour(routeId) {
@@ -325,6 +334,13 @@
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 0, "icon-size": 0.5, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
+    if (TT_KEY) {
+      // TomTom's traffic flow tiles are transparent PNGs coloured by how fast traffic moves compared with free flow;
+      // they sit under the route lines and buses. 512 px tiles mean fewer requests (free allowance: 50,000 a day).
+      map.addSource("traffic", { type: "raster", tileSize: 512, maxzoom: 22, attribution: "Traffic © TomTom",
+        tiles: ["https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?tileSize=512&key=" + encodeURIComponent(TT_KEY)] });
+      map.addLayer({ id: "traffic", type: "raster", source: "traffic", layout: { visibility: trafficOn && trafficOn.checked ? "visible" : "none" }, paint: { "raster-opacity": 0.85 } }, "lines-faint");
+    }
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // stops of the selected route: small white rings with a dark outline, far smaller than a bus. Click one to see
     // its name, whether it is a timetable stop, and the next predicted arrivals.
@@ -389,6 +405,12 @@
     fitRoute(filter, dirFilter);
     render();
   });
+  if (trafficOn) {
+    trafficOn.disabled = !TT_KEY;
+    trafficOn.addEventListener("change", function () {
+      if (map.getLayer("traffic")) map.setLayoutProperty("traffic", "visibility", trafficOn.checked ? "visible" : "none");
+    });
+  }
   document.addEventListener("visibilitychange", function () { if (!document.hidden && timer) refresh(); });
 
   // route lines and route numbers: the page still works (dots only, route ids) if these files are missing
