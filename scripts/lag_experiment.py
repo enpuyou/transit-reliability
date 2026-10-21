@@ -4,9 +4,7 @@ For a sample of trips on one day: project each GPS report onto the route line (t
 then for each report i and horizon H, compare the true position about H seconds later with (a) the report
 itself and (b) the report plus recent speed x elapsed time (possibly damped)."""
 
-import statistics
 import sys
-from pathlib import Path
 
 sys.path.insert(0, "scripts")
 sys.path.insert(0, "src")
