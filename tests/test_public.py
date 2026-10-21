@@ -84,3 +84,15 @@ def test_day_buckets_are_seattle_days_and_the_pointer_lead_is_published() -> Non
         assert "America/Los_Angeles" in heavy[name], name
     assert "pointer_lead_feet" in heavy["distributions"]
     assert "pointer_lead_ft IS NOT NULL" in heavy["distributions"]
+
+
+def test_is_publish_hour_every_three_hours() -> None:
+    import datetime as dt
+
+    from transit_reliability.public.build import is_publish_hour
+
+    def at(hour: int) -> dt.datetime:
+        return dt.datetime(2026, 10, 21, hour, 12, tzinfo=dt.UTC)
+
+    assert [h for h in range(24) if is_publish_hour(at(h), 3)] == [0, 3, 6, 9, 12, 15, 18, 21]
+    assert all(is_publish_hour(at(h), 1) for h in range(24))

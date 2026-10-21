@@ -1147,7 +1147,8 @@ One-time setup: repository Settings -> Pages -> Source: "GitHub Actions" (or
 `https://<owner>.github.io/<repo>/` (here: https://enpuyou.github.io/transit-reliability/, live since 2026-10-20).
 
 Time zone: the page shows Seattle time everywhere (see decision 0018); raw JSON fields are UTC.
-Freshness: `data/site.json` is rebuilt hourly and `data/status.json` every 15 minutes (workflow
+Freshness: `data/site.json` is rebuilt every 3 hours (the monitor job runs hourly but its `publish_live` task
+exits at once except in UTC hours 0, 3, 6, ...; `--every-hours 3`; stale after 4.5 hours) and `data/status.json` every 15 minutes (workflow
 `publish_site.yml`, via `scripts/watchdog.py --json-out`). Run the probes yourself, locally:
 `uv run python scripts/watchdog.py --profile enpu --json-out site/data/status.json`. To see the page's
 failure messages, edit `checked_at` in `site/data/status.json` to two hours ago (stale probes) or set a
@@ -1222,3 +1223,33 @@ SELECT weather_class, count(*) FROM workspace.transit_silver.weather_hourly WHER
 SELECT * FROM workspace.transit_gold.weather_impact ORDER BY weather_class, day_type, band;
 ```
 The silver job parses new files daily (task `weather`) and rebuilds `weather_impact` (task `weather_impact`).
+
+## Live bus map (decision 0025)
+
+The page `site/map.html` asks the relay Worker (`workers/relay`) for the agency's bus file every 20
+seconds and draws the buses. Nothing here touches Databricks except the route-number file.
+
+```bash
+# 1. test the relay Worker's code
+cd workers/relay && npm install && npm run typecheck && npm test
+
+# 2. run the relay on your machine and look at what it returns
+npx wrangler dev --port 8787            # leave running; Ctrl-C to stop
+curl -s -D - -o /tmp/veh.pb http://localhost:8787/vehicles   # expect 200, access-control-allow-origin: *, ~50 KB
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8787/secret   # expect 404 (only listed paths are served)
+
+# 3. check the page's feed reader against the Python parser (same sample file)
+node --test site/test/
+
+# 4. look at the page locally (needs step 2 running); the ?relay= part points the page at your local relay
+cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
+
+# 5. refresh the route-number file (needs the SQL warehouse running; rarely needed)
+uv run python scripts/make_map_data.py --profile enpu
+```
+
+What to look for in step 4: dots over Seattle, a green "Live: agency feed from <time>" banner, a route
+picker filled with route numbers, a popup when you click a dot. If the banner is red, the page cannot
+reach the relay (check step 2 is running and the address after `?relay=`). Deploying the relay
+(`npx wrangler deploy` in `workers/relay`) creates a public web address: do it only on purpose, then put
+the printed address in `RELAY` at the top of `site/map.js`.

@@ -131,6 +131,16 @@ def export_site(
     return {name: len(rows) for name, rows in tables.items()}
 
 
+def is_publish_hour(now: dt.datetime, every_hours: int) -> bool:
+    """True when the website tables should be refreshed in this UTC hour.
+
+    The monitor job runs every hour but the tables only need refreshing every `every_hours`
+    (a job run costs compute). Hours 0, 3, 6, ... when `every_hours` is 3.
+    """
+
+    return every_hours <= 1 or now.hour % every_hours == 0
+
+
 def publish_site(spark: Any, prefix: str, state_volume: str, parts: str) -> None:
     """parts='live' refreshes the hourly sections; 'all' also the heavy daily ones."""
 

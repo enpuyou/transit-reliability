@@ -1,0 +1,112 @@
+/* A tiny reader for the agency's live bus-position file (GTFS-realtime, a binary "protobuf" format).
+   It reads only the fields the live map needs and skips the rest. Works in the browser (window.GtfsRt)
+   and in Node (module.exports) so it can be tested against the saved sample file. */
+(function (root) {
+  "use strict";
+
+  function Reader(buf) { this.b = buf; this.p = 0; this.dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength); }
+  Reader.prototype.more = function (end) { return this.p < end; };
+  Reader.prototype.varint = function () {
+    var lo = 0, mul = 1, byte;
+    do { byte = this.b[this.p++]; lo += (byte & 0x7f) * mul; mul *= 128; } while (byte & 0x80);
+    return lo; // exact up to 2^53, plenty for ids, seconds and counts
+  };
+  Reader.prototype.skip = function (wire) {
+    if (wire === 0) this.varint();
+    else if (wire === 1) this.p += 8;
+    else if (wire === 2) { var n = this.varint(); this.p += n; }
+    else if (wire === 5) this.p += 4;
+    else throw new Error("unsupported protobuf wire type " + wire);
+  };
+  Reader.prototype.float = function () { var v = this.dv.getFloat32(this.p, true); this.p += 4; return v; };
+  Reader.prototype.string = function (len) {
+    var s = new TextDecoder().decode(this.b.subarray(this.p, this.p + len)); this.p += len; return s;
+  };
+
+  function each(r, end, onField) {
+    while (r.more(end)) {
+      var tag = r.varint(), field = Math.floor(tag / 8), wire = tag % 8;
+      if (!onField(field, wire)) r.skip(wire);
+    }
+  }
+
+  function readTrip(r, end, v) {
+    each(r, end, function (f, w) {
+      if (w === 2 && (f === 1 || f === 3 || f === 5)) {
+        var s = r.string(r.varint());
+        if (f === 1) v.tripId = s; else if (f === 3) v.startDate = s; else v.routeId = s;
+        return true;
+      }
+      if (w === 0 && f === 6) { v.directionId = r.varint(); return true; }
+      return false;
+    });
+  }
+  function readPosition(r, end, v) {
+    each(r, end, function (f, w) {
+      if (w !== 5) return false;
+      var x = r.float();
+      if (f === 1) v.lat = x; else if (f === 2) v.lon = x; else if (f === 3) v.bearing = x; else if (f === 5) v.speed = x;
+      else return true;
+      return true;
+    });
+  }
+  function readDescriptor(r, end, v) {
+    each(r, end, function (f, w) {
+      if (w === 2 && (f === 1 || f === 2)) { var s = r.string(r.varint()); if (f === 1) v.id = s; else v.label = s; return true; }
+      return false;
+    });
+  }
+  function readVehicle(r, end) {
+    var v = { id: null, label: null, tripId: null, routeId: null, directionId: null, startDate: null,
+      lat: null, lon: null, bearing: null, speed: null, stopSeq: null, status: null, ts: null, stopId: null, occupancy: null };
+    each(r, end, function (f, w) {
+      if (w === 2) {
+        var len = r.varint(), stop = r.p + len;
+        if (f === 1) readTrip(r, stop, v);
+        else if (f === 2) readPosition(r, stop, v);
+        else if (f === 8) readDescriptor(r, stop, v);
+        else if (f === 7) { v.stopId = r.string(len); return true; }
+        else r.p = stop;
+        r.p = stop;
+        return true;
+      }
+      if (w === 0) {
+        var n = r.varint();
+        if (f === 3) v.stopSeq = n; else if (f === 4) v.status = n; else if (f === 5) v.ts = n; else if (f === 9) v.occupancy = n;
+        return true;
+      }
+      return false;
+    });
+    return v;
+  }
+  function readEntity(r, end) {
+    var vehicle = null;
+    each(r, end, function (f, w) {
+      if (w === 2 && f === 4) { var len = r.varint(); vehicle = readVehicle(r, r.p + len); return true; }
+      return false;
+    });
+    return vehicle;
+  }
+  function readHeader(r, end) {
+    var ts = null;
+    each(r, end, function (f, w) { if (w === 0 && f === 3) { ts = r.varint(); return true; } return false; });
+    return ts;
+  }
+
+  /** Decode a vehicle-position file. Returns { timestamp (unix seconds), vehicles: [...] }. */
+  function decodeVehicles(bytes) {
+    var r = new Reader(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)), out = { timestamp: null, vehicles: [] };
+    each(r, bytes.length === undefined ? bytes.byteLength : bytes.length, function (f, w) {
+      if (w !== 2) return false;
+      var len = r.varint(), stop = r.p + len;
+      if (f === 1) out.timestamp = readHeader(r, stop);
+      else if (f === 2) { var v = readEntity(r, stop); if (v) out.vehicles.push(v); }
+      r.p = stop;
+      return true;
+    });
+    return out;
+  }
+
+  var api = { decodeVehicles: decodeVehicles };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.GtfsRt = api;
+})(typeof window !== "undefined" ? window : globalThis);

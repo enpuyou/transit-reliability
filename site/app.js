@@ -1,10 +1,10 @@
-/* Transit pipeline transparency: renders data/site.json (hourly) and data/status.json (about every
+/* Transit pipeline transparency: renders data/site.json (every 3 hours) and data/status.json (about every
    15 minutes). No data is ever inserted as HTML; charts are Plotly (bundled in vendor/). */
 (function () {
   "use strict";
   var STATE_COLOR = { early: "var(--c2)", on_time: "var(--c3)", late: "var(--c5)", uncertain: "var(--c6)" };
   var PALETTE = ["--c1", "--c2", "--c3", "--c4", "--c5", "--c6"];
-  var STATUS_STALE_MIN = 45, DATA_STALE_H = 3, POLL_MS = 300000, TICK_MS = 15000;
+  var STATUS_STALE_MIN = 45, DATA_STALE_H = 4.5, POLL_MS = 300000, TICK_MS = 15000;
   var PROBE_LABELS = {
     landing_vehicle_positions_newest_file: "Collector: newest bus-position file",
     landing_trip_updates_newest_file: "Collector: newest prediction file",
@@ -370,7 +370,7 @@
       return { cls: "bad", text: "Pipeline problem detected (probes checked " + ago(checked, now) + "): " + failing.map(function (f) { return (PROBE_LABELS[f.name] || f.name) + " — " + f.detail; }).join("; ") + "." };
     }
     if (builtH > DATA_STALE_H) {
-      return { cls: "bad", text: "The live probes look healthy, but the charts and tables are " + dur((now - built) / 1000) + " old: their hourly refresh has stopped." };
+      return { cls: "bad", text: "The live probes look healthy, but the charts and tables are " + dur((now - built) / 1000) + " old: their 3-hourly refresh has stopped." };
     }
     if (dataFails.length) {
       return { cls: "bad", text: dataFails.length + " data check" + (dataFails.length > 1 ? "s were" : " was") + " failing when the tables were built (" + ago(built, now) + "): " + dataFails.map(function (c) { return c.check_name; }).join(", ") + "." };
@@ -397,7 +397,7 @@
         ]),
         el("div", { "class": "fcol" }, [
           el("h4", { text: "Charts and tables · built " + ago(built, now) }),
-          el("p", { text: "Refreshed hourly (data built " + stamp(built) + "). Checks at that time: " + c.pass + " pass, " + c.warn + " known-limit warnings, " + c.fail + " failing." + (newestBus ? " The newest bus position then was " + dur((built - newestBus) / 1000) + " before the build." : "") }),
+          el("p", { text: "Refreshed every 3 hours (data built " + stamp(built) + "). Checks at that time: " + c.pass + " pass, " + c.warn + " known-limit warnings, " + c.fail + " failing." + (newestBus ? " The newest bus position then was " + dur((built - newestBus) / 1000) + " before the build." : "") }),
           el("p", { "class": "note", text: "Between refreshes the charts do not change. If a number looks stuck, compare these two ages: old probes mean publishing stopped, a failing probe means the pipeline itself has a problem." })
         ])
       ]),

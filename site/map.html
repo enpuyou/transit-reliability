@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live bus map</title>
+<meta name="description" content="Where King County Metro buses are right now, updated about every 20 seconds.">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+<style>
+  #livemap { height: min(72vh, 680px); min-height: 360px; border: 1px solid var(--line); border-radius: 10px; margin: 12px 0 6px; }
+  .mapbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 10px 0 0; }
+  .mapbar .status { padding: 4px 10px; font-size: .9rem; }
+  .mapbar label { font-size: .9rem; color: var(--muted); }
+  .mapbar select { font: inherit; padding: 3px 6px; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
+  .maplibregl-popup-content { color: #1d2330; font: 14px/1.45 system-ui, sans-serif; }
+  .maplibregl-popup-content b { font-size: 1.05rem; }
+  .maplibregl-popup-content .m { color: #5d6676; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Live bus map</h1>
+    <p class="lede">Each dot is a King County Metro bus, as it last reported itself. Positions refresh about every 20 seconds.
+      This map shows <strong>where</strong> buses are; it does not say how late they are (the live feed carries no lateness).
+      Lateness and history come from the daily numbers on the <a href="index.html">pipeline page</a>.</p>
+  </div>
+</header>
+<main class="wrap">
+  <div class="mapbar">
+    <span id="state" class="status" aria-live="polite">Loading…</span>
+    <label>Show route <select id="routepick"><option value="">all routes</option></select></label>
+    <span id="count" class="note"></span>
+  </div>
+  <div id="livemap" role="application" aria-label="Map of live bus positions"></div>
+  <p class="note">Click a bus for its route, speed and the age of its last report. Times are Seattle local time.
+    Transit scheduling, geographic, and real-time data provided by permission of King County. Map: OpenFreeMap, © OpenMapTiles, data © OpenStreetMap contributors.</p>
+  <p class="note"><a href="index.html">← Back to the pipeline page</a></p>
+</main>
+<script src="vendor/maplibre-gl.js"></script>
+<script src="gtfsrt.js"></script>
+<script src="map.js"></script>
+</body>
+</html>

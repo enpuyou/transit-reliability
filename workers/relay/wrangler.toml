@@ -1,0 +1,16 @@
+name = "transit-relay"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# A read-only relay for the live map. Browsers may not read King County Metro's feed directly (the
+# server sends no CORS permission header), so the map page asks this Worker. The Worker fetches the
+# agency file only when its remembered copy is older than CACHE_SECONDS, so many viewers cost the
+# agency a few requests a minute. It decodes nothing (a free Worker has about 10 ms of CPU) and has no
+# cron, no secrets and no access to Databricks. Decision 0025.
+
+[observability]
+enabled = true
+
+[vars]
+KCM_BASE_URL = "https://s3.amazonaws.com/kcm-alerts-realtime-prod"
+CACHE_SECONDS = "15"

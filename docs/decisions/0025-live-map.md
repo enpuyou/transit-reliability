@@ -1,7 +1,30 @@
 # 0025: A live map of buses, with each bus's trip and history (proposed)
 
 Date: 2026-10-21
-Status: proposed (design only; nothing built). Needs the owner's answers to the questions at the end.
+Status: accepted 2026-10-21; milestone 1 and part of 2 built locally, not yet deployed.
+
+## Owner's answers (2026-10-21)
+
+Public; a second page on the existing site; the popup should show the agency's prediction, scheduled
+time, current location and our historical average at that stop; today's actuals are computed in the
+browser from live positions (history and typical times are static exports of past days).
+
+## Built so far
+
+- `workers/relay`: serves `/vehicles` and `/alerts` only (a fixed list, so it is not an open proxy), adds
+  the browser permission header, keeps each answer 15 seconds in Cloudflare's cache. Tested locally
+  against the real feed: 536 buses, 52 KB.
+- `site/gtfsrt.js`: a 100-line reader for the vehicle file, checked against the Python parser on the
+  saved sample (`site/test/`). Hand-written to avoid a 100 KB library.
+- `site/map.html`, `site/map.js`: dots by route, route filter, popup with route, last report time and
+  speed. MapLibre is bundled in `site/vendor`; background tiles from OpenFreeMap.
+- `site/map/routes.json` (from `scripts/make_map_data.py`): internal route id to route number.
+
+## Not built yet
+
+Deploy of the relay (needs the owner's go-ahead: new public endpoint), the real relay address in
+`map.js`, the agency prediction / scheduled time / history popup (milestones 3 and 4), route lines.
+Not seen in a browser yet: only the pieces were tested.
 
 ## What the owner asked for
 

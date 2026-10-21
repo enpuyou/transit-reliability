@@ -234,10 +234,22 @@ def publish_site() -> None:
     parser.add_argument("--schema-prefix", required=True)
     parser.add_argument("--state-volume", required=True)
     parser.add_argument("--parts", choices=["live", "all"], default="all")
+    parser.add_argument(
+        "--every-hours",
+        type=int,
+        default=1,
+        help="only refresh in UTC hours divisible by this (other hours exit at once)",
+    )
     args = parser.parse_args()
 
+    import datetime as dt
+
+    from transit_reliability.public.build import is_publish_hour
     from transit_reliability.public.build import publish_site as run
 
+    if not is_publish_hour(dt.datetime.now(dt.UTC), args.every_hours):
+        print(f"skipping: not a multiple-of-{args.every_hours} UTC hour")
+        return
     run(_spark_session(), args.schema_prefix, args.state_volume, args.parts)
 
 

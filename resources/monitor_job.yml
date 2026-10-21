@@ -39,6 +39,10 @@ resources:
               - ${var.state_volume}
               - --parts
               - live
+              # the checks run hourly; the website tables refresh every 3 hours (UTC 0, 3, 6, ...)
+              # to save compute. Other hours exit in seconds. See docs/runbook.md.
+              - --every-hours
+              - "3"
           environment_key: default
         - task_key: fail_if_checks_failed
           # runs only when hourly_checks failed: ends the whole run as FAILED so the failure email

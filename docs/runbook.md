@@ -118,7 +118,7 @@ silver job, so it also sends mail.
 
 | Layer | Where | Cadence | Reaches you by |
 |---|---|---|---|
-| Hourly checks | job `transit-reliability-prod-monitor` | hourly at :12 | Databricks email on failure |
+| Hourly checks | job `transit-reliability-prod-monitor` | hourly at :12 (its website-table refresh task runs only every 3rd hour, 2026-10-21) | Databricks email on failure |
 | Daily checks | last task `daily_checks` of the silver job | daily after 11:45 UTC | Databricks email on failure |
 | Results history | `workspace.transit_ops.check_results` | every run | SQL editor, proof report |
 | External watchdog | GitHub workflow `watchdog` | hourly at :20 | GitHub email on failure |

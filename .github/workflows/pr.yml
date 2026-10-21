@@ -50,3 +50,28 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  relay:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workers/relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workers/relay/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  site-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test site/test/
