@@ -11,9 +11,6 @@
   var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick"), dirPick = document.getElementById("dirpick");
   var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null, routeStops = null, stopsAsked = false;
   var pos = {}, animating = false, lastFrame = 0;
-  // bus marker style, see marker-options.html; try one with map.html?marker=chevron
-  var MARKER = new URLSearchParams(location.search).get("marker");
-  if (Markers.KINDS.indexOf(MARKER) < 0) MARKER = "pointer";
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
   function colour(routeId) {
@@ -321,7 +318,7 @@
     map.addLayer({ id: "lines-selected", type: "line", source: "lines", filter: ["==", ["get", "route"], ""], layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 5 } });
     map.addImage("arrow", Markers.image("chevron"), { sdf: true, pixelRatio: 2 });
-    map.addImage("marker", Markers.image(MARKER), { sdf: true, pixelRatio: 2 });
+    map.addImage("beam", Markers.image("beam"), { sdf: true, pixelRatio: 2 });
     // arrows along the highlighted route, pointing the way traffic flows (the line runs in the direction of travel)
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 0, "icon-size": 0.5, "icon-allow-overlap": true, "icon-ignore-placement": true },
@@ -334,27 +331,16 @@
       "circle-color": ["case", ["==", ["get", "tp"], 1], "#1d2330", "#ffffff"],
       "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.2 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // A bus is drawn in its route colour. With a known heading the marker style (MARKER) shows the direction; with
-    // an unknown heading it is a plain disc. Every style has the same body size so buses look alike when zoomed out.
+    // A bus is a disc in its route colour with a white outline. When its heading is known a faint wedge (a "beam")
+    // fans out in front of it, like the location dot in Apple Maps; with no known heading there is no beam.
     var BODY = ["interpolate", ["linear"], ["zoom"], 9, 5, 12, 7, 15, 9.4, 17, 11];
     var SIZE = ["interpolate", ["linear"], ["zoom"], 9, 0.9, 12, 1.27, 15, 1.7, 17, 2];
     var disc = { "circle-radius": BODY, "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.8 };
-    var heading = [">=", ["get", "heading"], 0];
-    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", filter: ["<", ["get", "heading"], 0], paint: disc });
-    var rotate = { "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-size": SIZE };
-    if (MARKER === "beam") {
-      // faint wedge under a disc
-      map.addLayer({ id: "bus-beam", type: "symbol", source: "buses", filter: heading, layout: Object.assign({ "icon-image": "marker" }, rotate), paint: { "icon-color": ["get", "color"], "icon-opacity": 0.45 } });
-      map.addLayer({ id: "bus-arrows", type: "circle", source: "buses", filter: heading, paint: disc });
-    } else if (MARKER === "badge") {
-      // disc with a white arrow on top
-      map.addLayer({ id: "bus-arrows", type: "circle", source: "buses", filter: heading, paint: disc });
-      map.addLayer({ id: "bus-badge-arrow", type: "symbol", source: "buses", filter: heading, layout: Object.assign({ "icon-image": "marker" }, rotate), paint: { "icon-color": "#ffffff" } });
-    } else {
-      map.addLayer({ id: "bus-arrows", type: "symbol", source: "buses", filter: heading, layout: Object.assign({ "icon-image": "marker" }, rotate),
-        paint: { "icon-color": ["get", "color"], "icon-halo-color": "#ffffff", "icon-halo-width": 1.6 } });
-    }
-    var busLayers = ["bus-dots", "bus-arrows"];
+    map.addLayer({ id: "bus-beam", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
+      "icon-image": "beam", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-size": SIZE },
+      paint: { "icon-color": ["get", "color"], "icon-opacity": 0.45 } });
+    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", paint: disc });
+    var busLayers = ["bus-dots"];
     busLayers.forEach(function (layer) {
       map.on("click", layer, function (e) {
         var p = e.features[0].properties;

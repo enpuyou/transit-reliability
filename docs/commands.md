@@ -1243,8 +1243,7 @@ node --test site/test/gtfsrt.test.mjs site/test/heading.test.mjs
 
 # 4. look at the page locally. The page works with the live relay as it is, so step 2 is optional: open
 #    http://localhost:8000/map.html . Edit site/map.js or site/map.html and reload the page (Cmd-Shift-R)
-#    to see the change; there is no build step. Add ?marker=pointer|badge|beam|chevron|drop to try a bus marker style (compare them all at
-#    http://localhost:8000/marker-options.html). Add ?base=none to skip the background map (used for
+#    to see the change; there is no build step. Add ?base=none to skip the background map (used for
 #    automated screenshots). Add ?relay=http://localhost:8787 to use your own local relay from step 2.
 cd site && python3 -m http.server 8000     # then open http://localhost:8000/map.html?relay=http://localhost:8787
 

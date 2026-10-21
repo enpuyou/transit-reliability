@@ -77,15 +77,13 @@ of trips) are not listed.
   at this stop": the prediction uses the bus's position and delay, and the dots are a median 65 seconds old
   (measured 2026-10-21: about 41 s of that is before the agency publishes the file).
 
-## Bus marker styles (2026-10-21)
+## Bus marker (2026-10-21)
 
-The first water-drop was too big and not liked, so there are five styles to choose from, all drawn by
-`site/markers.js` and compared side by side on `site/marker-options.html`: pointer (round body with a
-small triangle just in front, the default), badge (disc with an arrow inside), beam (disc with a faint
-wedge), chevron (arrowhead) and drop (smaller, shorter tip). Try one on the map with `?marker=<name>`.
-All share one body size (radius 5 px zoomed out to 11 px zoomed in, down from 6 to 13), so buses look
-alike. The research found nothing on how Transit, Moovit or Citymapper draw their vehicles (unverified),
-only general guidance that a direction marker should point the way the vehicle travels.
+Five styles were compared (round body with a pointer, disc with an arrow inside, disc with a beam, arrowhead,
+smaller water-drop). The owner chose **a dot with a beam**: a disc in the route colour with a white outline
+(radius 5 px zoomed out to 11 px zoomed in) and a faint wedge fanning out in front of it showing the heading,
+like the Apple Maps location dot. A bus with no known heading is a plain dot. The other four were removed.
+The research found nothing on how Transit, Moovit or Citymapper draw vehicles (unverified).
 
 ## Why a report is already old when the agency publishes it (measured 2026-10-20, 1.7 million reports)
 
