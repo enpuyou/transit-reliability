@@ -147,3 +147,12 @@ complete service dates (frequent pairs only, at least 10): `n_pairs`, `n_days`, 
 scheduled gap, median and 10th/90th percentile of actual over scheduled, median uncertainty, and
 `built_through`. Measured 2026-10-16 on frequent service: 2.8 percent bunched, 1.3 gapped, 94.1 regular,
 1.8 uncertain (point estimates: 3.3 and 1.5 percent).
+
+## `weather_impact` (built; decision 0024)
+
+**One row =** one weather class (dry, fog, rain), day type and time band. Table `transit_gold.weather_impact`:
+`n_hours` of that weather, `n_trips`, `n_scored` and the four rider-rule counts (`n_early`, `n_on_time`,
+`n_late`, `n_uncertain`), and from segment runs `n_runs`, `median_excess_s`, `share_over_schedule`. Trips are matched to
+the weather of the Seattle hour they were scheduled to start (from 4 am on). Compare classes within the same
+day type and band; shares are recomputed from counts. Association only. With few rainy hours the comparison is
+weak: check `n_hours` first (the website needs at least 24).

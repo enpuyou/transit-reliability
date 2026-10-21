@@ -1205,3 +1205,20 @@ and GPS reports, so the page never drifts from the code. The file has no vehicle
 distances along the route plus the route line's own coordinates (public timetable data). To explain a
 different trip use `--trip <trip_id> --day <date>` (the trip needs a middle timepoint with interpolated
 arrival and departure). The rendering code is `site/explainer.js`.
+
+## Weather data (decision 0024)
+
+```bash
+python3 scripts/fetch_weather.py --hours 6 --out /tmp/weather_out    # fetch locally and look at the files
+gh workflow run weather.yml -f hours=170                              # backfill the last week into the landing volume
+gh run list --workflow weather.yml --limit 5                          # the dispatcher starts it hourly at :20
+databricks fs ls dbfs:/Volumes/workspace/transit_landing/raw/weather/dt=$(date -u +%F) --profile enpu
+```
+```sql
+-- is weather arriving? (newest reading and stations reporting)
+SELECT station, max(observed_ts), count(*) FROM workspace.transit_silver.weather_observations GROUP BY 1;
+-- hours by class and the rainy ones
+SELECT weather_class, count(*) FROM workspace.transit_silver.weather_hourly WHERE n_obs >= 6 GROUP BY 1;
+SELECT * FROM workspace.transit_gold.weather_impact ORDER BY weather_class, day_type, band;
+```
+The silver job parses new files daily (task `weather`) and rebuilds `weather_impact` (task `weather_impact`).

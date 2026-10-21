@@ -312,3 +312,28 @@ def build_gold_headway_summary() -> None:
     from transit_reliability.gtfs_static.gold_headways import build_headway_summary
 
     build_headway_summary(_spark_session(), args.schema_prefix)
+
+
+def build_silver_weather() -> None:
+    """Parse landed weather files into observations and an hourly summary."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--landing-volume", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.weather.silver_weather import build_weather
+
+    build_weather(_spark_session(), args.schema_prefix, args.landing_volume)
+
+
+def build_gold_weather_impact() -> None:
+    """Compare reliability across dry, foggy and rainy hours."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.weather.gold_weather import build_weather_impact
+
+    build_weather_impact(_spark_session(), args.schema_prefix)

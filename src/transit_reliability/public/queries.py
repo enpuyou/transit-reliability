@@ -137,6 +137,13 @@ def _distribution_parts(prefix: str) -> list[str]:
         parts.append(
             f"SELECT 'headway_outcomes_by_band', {COMPLETE_DAY}, concat(band, '|{cls}'), {border}, CAST(count(*) AS DOUBLE) FROM {hp} WHERE {hwin} AND outcome = '{cls}' GROUP BY band"
         )
+    wh, wi = silver("weather_hourly"), gold("weather_impact")
+    border2 = "CASE band WHEN 'am_peak' THEN 0 WHEN 'midday' THEN 1 WHEN 'pm_peak' THEN 2 WHEN 'evening' THEN 3 ELSE 4 END"
+    parts += [
+        f"SELECT 'weather_hours_by_class', {COMPLETE_DAY}, weather_class, CASE weather_class WHEN 'dry' THEN 0 WHEN 'fog' THEN 1 ELSE 2 END, CAST(count(*) AS DOUBLE) FROM {wh} WHERE n_obs >= 6 GROUP BY weather_class",
+        f"SELECT 'weather_impact_on_time_share', {COMPLETE_DAY}, concat(band, '|', weather_class), {border2}, sum(n_on_time) / sum(n_scored) FROM {wi} WHERE day_type = 'weekday' GROUP BY band, weather_class",
+        f"SELECT 'weather_impact_hours', {COMPLETE_DAY}, concat(band, '|', weather_class), {border2}, CAST(sum(n_hours) AS DOUBLE) FROM {wi} WHERE day_type = 'weekday' GROUP BY band, weather_class",
+    ]
     for outcome in ("early", "on_time", "late", "uncertain"):
         for name, column in (
             ("on_time_by_day_common_lens", "n_common"),  # the arrival-only view
@@ -214,6 +221,7 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
     cr = ops("check_results")
     sg, srt = gold("segment_runs"), gold("segment_runtimes")
     hp_, hs_ = gold("headway_pairs"), gold("headway_summary")
+    wo_, wh_, wi_ = silver("weather_observations"), silver("weather_hourly"), gold("weather_impact")
     return {
         "bronze.vehicle_positions": (
             "bronze",
@@ -278,6 +286,18 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         "gold.headway_summary": (
             "gold",
             f"SELECT to_json(struct(route_short_name, direction_id, band, day_type, n_pairs, n_days, n_bunched, n_gapped, n_regular, n_uncertain, sched_headway_median_s, ratio_p50, median_uncertainty_s)) FROM {hs_} WHERE n_pairs >= 30 LIMIT 1",
+        ),
+        "silver.weather_observations": (
+            "silver",
+            f"SELECT to_json(struct(station, observed_ts, temp_c, wind_kmh, visibility_m, humidity_pct, text, precip_level, fog, codes)) FROM {wo_} WHERE observed_ts = (SELECT max(observed_ts) FROM {wo_}) LIMIT 1",
+        ),
+        "silver.weather_hourly": (
+            "silver",
+            f"SELECT to_json(struct(hour_start, pt_date, pt_hour, n_obs, n_stations, temp_c_avg, wind_kmh_avg, visibility_m_min, wet_share, fog_share, weather_class)) FROM {wh_} WHERE hour_start = (SELECT max(hour_start) FROM {wh_}) LIMIT 1",
+        ),
+        "gold.weather_impact": (
+            "gold",
+            f"SELECT to_json(struct(weather_class, day_type, band, n_hours, n_trips, n_scored, n_on_time, n_late, n_early, n_uncertain, n_runs, median_excess_s)) FROM {wi_} WHERE day_type = 'weekday' AND band = 'midday' ORDER BY weather_class LIMIT 1",
         ),
         "gold.prediction_accuracy": (
             "gold",

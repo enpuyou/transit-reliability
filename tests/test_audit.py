@@ -79,7 +79,7 @@ def test_every_catalog_check_is_a_named_single_select_and_names_are_unique() -> 
         for word in ("INSERT", "DELETE", "DROP", "MERGE", "UPDATE", "ALTER"):
             assert f" {word} " not in s.sql.upper(), (s.name, word)
         assert "workspace.transit_" in s.sql
-        assert "2026-10-16" in s.sql or s.name.startswith(("silver_", "quarantine_")), (
+        assert "2026-10-16" in s.sql or s.name.startswith(("silver_", "quarantine_", "weather_")), (
             s.name
         )  # date-bound checks must use the date given
 

@@ -233,6 +233,33 @@ TABLES = (
         "max(built_through)",
     ),
     TableInfo(
+        "silver",
+        "weather_observations",
+        "Readings from three Seattle-area weather stations about every 5 minutes: temperature, "
+        "wind, visibility, humidity, and what the station reports (rain, fog, clear).",
+        "one reading from one weather station at one moment",
+        "daily silver job (files fetched hourly from the National Weather Service)",
+        "max(observed_ts)",
+    ),
+    TableInfo(
+        "silver",
+        "weather_hourly",
+        "Those readings summarised per hour across the stations, with the hour labelled rain, fog "
+        "or dry (rain when over a quarter of readings that hour report precipitation).",
+        "one hour of weather in Seattle",
+        "daily silver job",
+        "max(hour_start)",
+    ),
+    TableInfo(
+        "gold",
+        "weather_impact",
+        "How reliability compares across dry, foggy and rainy hours, within the same time of day: "
+        "trips are matched to the weather in the hour they started.",
+        "one weather class in one time band on one day type",
+        "daily silver job",
+        "current_timestamp()",
+    ),
+    TableInfo(
         "ops",
         "check_results",
         "Every monitoring check ever run: value, rule, verdict, and the SQL to rerun it.",
@@ -270,6 +297,10 @@ GLOSSARY = {
     "leaves a long wait for the next rider; a gap is the opposite (more than twice the scheduled "
     "gap). Spacing is estimated from GPS, so a pair is only called bunched or a gap when the whole "
     "estimated range says so.",
+    "Weather class": "Each hour is labelled rain, fog or dry from what three Seattle-area weather "
+    "stations report. The service does not give rain amounts, only whether it is raining and how "
+    "hard (light, moderate, heavy). Rain is called when over a quarter of the hour's readings "
+    "report precipitation.",
     "DBU": "Databricks Unit: the measure of compute used. The free plan has an undisclosed daily "
     "limit.",
 }

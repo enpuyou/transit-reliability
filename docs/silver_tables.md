@@ -216,3 +216,12 @@ Feet short of this stop that the bus still was when the feed's next-stop pointer
 stop AND the pointer was ignored because it moved at or before the GPS lower bound of the arrival.
 NULL when the pointer was used or was not in conflict. Rows built before 2026-10-20 have NULL until
 rebuilt. Typical value 76 ft (median, 2026-10-17); a few thousand feet means the pointer ran far ahead.
+
+## `weather_observations` and `weather_hourly` (built; decision 0024)
+
+**`weather_observations`. One row =** one reading from one weather station (KSEA, KBFI or KRNT) at one
+moment, about every 5 minutes, deduplicated by (station, `observed_ts`). Columns: `temp_c`, `wind_kmh`,
+`gust_kmh` (mostly empty), `visibility_m`, `humidity_pct`, `pressure_pa`, `text` (for example "Light Rain"),
+`precip_level` (0 none, 1 light, 2 moderate, 3 heavy), `fog`, `codes`, `source_file`. No rain amounts exist
+in the source. **`weather_hourly`. One row =** one UTC hour across the stations: `n_obs`, `n_stations`, averages,
+`wet_share`, `fog_share`, `weather_class` (rain, fog, dry), and `pt_date` / `pt_hour` for joining trips.

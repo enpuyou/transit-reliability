@@ -385,6 +385,40 @@ def headways(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def weather(prefix: str) -> list[CheckSpec]:
+    """Weather tables are unique per station and time, and the impact table matches an independent recount."""
+
+    obs, hourly = (
+        _t(prefix, "silver", "weather_observations"),
+        _t(prefix, "silver", "weather_hourly"),
+    )
+    tp, wi = _t(prefix, "gold", "trip_performance"), _t(prefix, "gold", "weather_impact")
+    start = "from_utc_timestamp(t.scheduled_start, 'America/Los_Angeles')"
+    return [
+        CheckSpec(
+            "weather_observation_duplicate_keys",
+            f"SELECT count(*) - count(DISTINCT station, observed_ts) FROM {obs}",
+            "each hourly fetch overlaps the last, so duplicates must be removed: one row per station and observation time",
+            maximum=0,
+        ),
+        CheckSpec(
+            "weather_hours_without_observations",
+            f"SELECT count(*) FROM {hourly} WHERE n_obs < 1 OR n_stations < 1",
+            "an hour row exists only because observations exist",
+            maximum=0,
+        ),
+        CheckSpec(
+            "weather_impact_scored_equals_independent_recount",
+            (
+                f"SELECT abs((SELECT sum(n_scored) FROM {wi}) - (SELECT sum(t.n_rider_early + t.n_rider_on_time + t.n_rider_late + t.n_rider_uncertain) FROM {tp} t "
+                f"WHERE hour({start}) >= 4 AND EXISTS (SELECT 1 FROM {hourly} w WHERE w.n_obs >= 6 AND w.pt_date = to_date({start}) AND w.pt_hour = hour({start}))))"
+            ),
+            "every scored timepoint of a trip that started in an hour with weather is counted exactly once in the impact table (recounted with EXISTS instead of a join)",
+            maximum=0,
+        ),
+    ]
+
+
 def all_checks(prefix: str, day: str) -> list[CheckSpec]:
     return [replace(c, severity="warn") if c.name in KNOWN_LIMITS else c for c in _all(prefix, day)]
 
@@ -398,4 +432,5 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *gold(prefix, day),
         *segments(prefix, day),
         *headways(prefix, day),
+        *weather(prefix),
     ]

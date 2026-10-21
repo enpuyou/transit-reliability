@@ -24,6 +24,8 @@ MAX_HOURS_SILVER_BEHIND = 30.0  # the daily job runs at 11:45 UTC
 MAX_DAYS_GOLD_BEHIND = 2
 MIN_TRIPS_PER_DAY = 4000  # weekdays have about 12,900, Saturday about 9,500
 MIN_DAYS_OF_SCHEDULE_LEFT = 14
+MAX_MINUTES_SINCE_WEATHER = 240.0  # observations arrive every 5 minutes and are fetched hourly
+MIN_WEATHER_STATIONS_3H = 2  # of three stations
 
 
 def hourly_checks(prefix: str) -> list[CheckSpec]:
@@ -91,6 +93,18 @@ def hourly_checks(prefix: str) -> list[CheckSpec]:
             f"SELECT datediff(max(service_date), {PACIFIC_DATE}) FROM {silver}.scheduled_trips",
             "the daily job expands trips through the day after its run, so the newest expanded date must never be behind today in Seattle (0 = through today, 1 = through tomorrow); a negative value means the daily job missed a run",
             minimum=0,
+        ),
+        CheckSpec(
+            "weather_minutes_since_newest_observation",
+            f"SELECT (unix_timestamp(current_timestamp()) - unix_timestamp(max(observed_ts))) / 60.0 FROM {silver}.weather_observations",
+            "the weather fetch runs hourly from GitHub; a stale table means it, or the dispatcher, stopped",
+            maximum=MAX_MINUTES_SINCE_WEATHER,
+        ),
+        CheckSpec(
+            "weather_stations_reporting_last_3_hours",
+            f"SELECT count(DISTINCT station) FROM {silver}.weather_observations WHERE observed_ts >= current_timestamp() - INTERVAL 3 HOURS",
+            "at least two of the three Seattle-area stations should have reported recently",
+            minimum=MIN_WEATHER_STATIONS_3H,
         ),
         CheckSpec(
             "days_of_schedule_left",
