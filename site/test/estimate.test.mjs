@@ -58,3 +58,11 @@ test("advance never moves the drawn bus backward, slows instead of freezing, and
     last = shown;
   }
 });
+
+test("slice returns the stretch of line between two distances, turning corners", () => {
+  const part = E.slice(line, 800, 1200);
+  assert.ok(Math.abs(part[0][0] - east(800)) < 1e-6, "starts 800 m along");
+  assert.deepEqual(part[1], line[2], "includes the corner it passes");
+  assert.ok(Math.abs(part[part.length - 1][1] - north(200)) < 1e-6, "ends 1200 m along, on the northward stretch");
+  assert.equal(E.slice(line, 100, 300).length, 2, "no corner in between: just the two ends");
+});

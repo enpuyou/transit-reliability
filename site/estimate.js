@@ -51,6 +51,17 @@
     return [last[0], last[1], 0];
   }
 
+  /** The coordinates of the line between distances d1 and d2 (d1 <= d2), for drawing the movement we estimated. */
+  function slice(line, d1, d2) {
+    var kx = scale(line), acc = 0, out = [pointAt(line, d1).slice(0, 2)];
+    for (var i = 0; i + 1 < line.length; i++) {
+      acc += Math.hypot((line[i + 1][0] - line[i][0]) * kx, (line[i + 1][1] - line[i][1]) * M_PER_DEG_LAT);
+      if (acc > d1 && acc < d2) out.push([line[i + 1][0], line[i + 1][1]]);
+    }
+    out.push(pointAt(line, d2).slice(0, 2));
+    return out;
+  }
+
   /** Recent speed in m/s from reports [{ts, dist}] oldest to newest, or null if there is not enough to go on. */
   function speed(hist) {
     if (!hist || hist.length < 2) return null;
@@ -88,6 +99,6 @@
     return shown + Math.max(0, FACTOR * (vel || 0) * (1 - (shown - target) / AHEAD_SCALE)) * dt;
   }
 
-  var api = { advance: advance, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
+  var api = { advance: advance, slice: slice, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Estimate = api;
 })(typeof window !== "undefined" ? window : globalThis);

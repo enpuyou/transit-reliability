@@ -101,7 +101,7 @@
   }
 
   // ?base=none draws no background map (used for automated screenshots, where the tile server is not reachable)
-  var BLANK = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9ecef" } }] };
+  var BLANK = { version: 8, glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf", sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9ecef" } }] };
   var map = new maplibregl.Map({ container: "livemap", style: new URLSearchParams(location.search).get("base") === "none" ? BLANK : STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
   window.transitMap = map; // handy for debugging in the browser console
   map.on("error", function (e) {
@@ -217,6 +217,18 @@
     });
     var src = map.getSource("buses");
     if (src) src.setData({ type: "FeatureCollection", features: feats });
+    // what we know next to what we guess: where each estimated bus really last reported (hollow circle, with how
+    // long ago) and the movement we estimated since then (dashed line along the route)
+    var ghosts = [], nowSec = wallSeconds();
+    if (filter) Object.keys(pos).forEach(function (id) {
+      var b = pos[id];
+      if (!b.drawnEst || !b.rep || b.v.routeId !== filter || (dirFilter && String(b.v.directionId) !== dirFilter)) return;
+      var at = Estimate.pointAt(b.line, b.rep.dist), age = Math.max(0, Math.round(nowSec - b.rep.ts)), color = colour(b.v.routeId);
+      ghosts.push({ type: "Feature", geometry: { type: "Point", coordinates: [at[0], at[1]] }, properties: { color: color, label: age + " s ago" } });
+      if (b.shown - b.rep.dist > 15) ghosts.push({ type: "Feature", geometry: { type: "LineString", coordinates: Estimate.slice(b.line, b.rep.dist, b.shown) }, properties: { color: color } });
+    });
+    var gsrc = map.getSource("bus-ghosts");
+    if (gsrc) gsrc.setData({ type: "FeatureCollection", features: ghosts });
     countEl.textContent = filter
       ? feats.length + " buses on this route. " + (!estimateOn || estimateOn.checked ? "Each is placed where it probably is now (its last report is usually about a minute old)." : "Each is shown where it last reported, usually about a minute ago.")
       : "Choose a route to see its buses (" + running + " buses running right now).";
@@ -480,6 +492,15 @@
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 14, 3.2, 17, 4.8],
       "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.3 } });
+    map.addSource("bus-ghosts", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "bus-trail", type: "line", source: "bus-ghosts", filter: ["==", ["geometry-type"], "LineString"],
+      paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-opacity": 0.8, "line-dasharray": [1, 1.4] } });
+    map.addLayer({ id: "bus-ghost", type: "circle", source: "bus-ghosts", filter: ["==", ["geometry-type"], "Point"],
+      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 3, 16, 5.5], "circle-color": "#ffffff", "circle-opacity": 0.9,
+        "circle-stroke-color": ["get", "color"], "circle-stroke-width": 1.8 } });
+    map.addLayer({ id: "bus-ghost-age", type: "symbol", source: "bus-ghosts", minzoom: 13, filter: ["==", ["geometry-type"], "Point"],
+      layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-allow-overlap": false },
+      paint: { "text-color": "#1d2330", "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // A bus is a disc in its route colour with a white outline. When its heading is known a faint wedge (a "beam")
     // fans out in front of it, like the location dot in Apple Maps; with no known heading there is no beam.
