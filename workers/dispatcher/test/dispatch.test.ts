@@ -10,8 +10,9 @@ describe("schedule", () => {
   it("maps each cron to a workflow file and ignores unknown crons", () => {
     expect(workflowFor("*/15 * * * *")).toBe("publish_site.yml");
     expect(workflowFor("5 * * * *")).toBe("watchdog.yml");
+    expect(workflowFor("20 * * * *")).toBe("weather.yml");
     expect(workflowFor("* * * * *")).toBeUndefined();
-    expect(Object.keys(SCHEDULE)).toHaveLength(2);
+    expect(Object.keys(SCHEDULE)).toHaveLength(3);
   });
 });
 

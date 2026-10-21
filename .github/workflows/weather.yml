@@ -1,0 +1,57 @@
+name: weather
+
+# Fetch recent National Weather Service observations for three Seattle-area stations and land them in
+# the Databricks volume (Databricks blocks most outbound internet, so the fetch happens here). Started
+# hourly at :20 by the Cloudflare dispatcher (GitHub's own schedule is unreliable, decision 0020); the
+# schedule below is only a fallback. The service keeps about 7 days, so a missed run is recovered by the
+# next. Run by hand with a larger `hours` (for example 170) to backfill after an outage.
+# Needs repo secrets DATABRICKS_HOST and DATABRICKS_TOKEN (same as the other workflows).
+
+on:
+  schedule:
+    - cron: "23 */3 * * *" # fallback only
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "How many hours back to fetch (default 6; the service keeps about 170)"
+        required: false
+        default: "6"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weather
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LANDING: dbfs:/Volumes/workspace/transit_landing/raw/weather
+      HOURS: ${{ inputs.hours || '6' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+
+      - name: Check secrets are configured
+        run: |
+          test -n "$DATABRICKS_HOST" || { echo "DATABRICKS_HOST secret is missing"; exit 1; }
+          test -n "$DATABRICKS_TOKEN" || { echo "DATABRICKS_TOKEN secret is missing"; exit 1; }
+
+      - name: Fetch observations
+        run: python3 scripts/fetch_weather.py --hours "$HOURS" --out weather_out
+
+      - name: Upload to the landing volume
+        run: |
+          day="$(date -u +%F)"
+          databricks fs mkdir "$LANDING/dt=$day"
+          for f in weather_out/*.json; do
+            databricks fs cp "$f" "$LANDING/dt=$day/$(basename "$f")" --overwrite
+          done
+          databricks fs ls "$LANDING/dt=$day" | tail -3

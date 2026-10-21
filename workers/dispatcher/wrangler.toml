@@ -8,7 +8,7 @@ compatibility_date = "2026-10-01"
 # asking GitHub to run a workflow through the API starts it at once. All the work stays in the GitHub
 # workflows; this Worker only sends the request. Keep the crons in sync with SCHEDULE in src/dispatch.ts.
 [triggers]
-crons = ["*/15 * * * *", "5 * * * *"]
+crons = ["*/15 * * * *", "5 * * * *", "20 * * * *"]
 
 [observability]
 enabled = true

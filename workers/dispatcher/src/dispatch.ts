@@ -16,6 +16,7 @@ export interface DispatchResult {
 export const SCHEDULE: Record<string, string> = {
   "*/15 * * * *": "publish_site.yml", // live probes and the site, every 15 minutes
   "5 * * * *": "watchdog.yml", // alerting watchdog, hourly at :05
+  "20 * * * *": "weather.yml", // National Weather Service observations into the landing volume, hourly at :20
 };
 
 export function workflowFor(cron: string): string | undefined {
