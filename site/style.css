@@ -77,3 +77,18 @@ dt { font-weight: 600; } dd { margin: 0; color: var(--muted); }
 details.nums { margin-top: 4px; font-size: .85rem; }
 .numwrap { max-height: 280px; overflow: auto; margin-top: 6px; }
 @media (max-width: 760px) { .fgrid { grid-template-columns: 1fr; } }
+
+.how { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+.how-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.how-steps button { font: inherit; font-size: .88rem; padding: 5px 10px; border-radius: 16px; border: 1px solid var(--line); background: transparent; color: var(--fg); cursor: pointer; }
+.how-steps button.on { background: var(--accent); color: var(--card); border-color: var(--accent); }
+.how svg { width: 100%; height: auto; display: block; }
+.how-text { margin: 10px 0 4px; max-width: 80ch; }
+.how-text p { margin: 6px 0; }
+.how-text ul { margin: 6px 0 6px 18px; padding: 0; }
+.how-eq { font-family: ui-monospace, Menlo, monospace; font-size: .85rem; background: var(--soft); border-radius: 6px; padding: 6px 10px; margin: 6px 0; overflow-x: auto; }
+.how-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; font-size: .9rem; }
+.how-ctl input[type=range] { flex: 1 1 240px; }
+.how-nav { display: flex; gap: 8px; margin-top: 8px; }
+.how-nav button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.how-nav button:disabled { opacity: .35; cursor: default; }

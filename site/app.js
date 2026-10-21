@@ -320,7 +320,7 @@
       if (EXTRA[layer.id]) EXTRA[layer.id](data).forEach(function (n) { kids.push(n); });
       host.appendChild(el("section", { id: id, "class": "layer" }, kids));
     });
-    ["lineage-section", "jobs-section", "cost-section", "limits-section", "glossary-section"].forEach(function (s) {
+    ["how-section", "lineage-section", "jobs-section", "cost-section", "limits-section", "glossary-section"].forEach(function (s) {
       var h = document.querySelector("#" + s + " h2");
       if (h) toc.appendChild(el("a", { href: "#" + s, text: h.textContent.split(":")[0] }));
     });

@@ -1188,3 +1188,20 @@ Cloudflare dashboard: Workers & Pages -> transit-dispatcher -> Logs. A failed di
 token missing, expired or without Actions permission; 404: wrong workflow file name or repo) throws, so
 the invocation is shown as failed. Rotate the token with `npx wrangler secret put GITHUB_TOKEN --name transit-dispatcher`.
 `npm run typecheck && npm test` in `workers/dispatcher` run in CI with the other checks.
+
+## Regenerate the website's worked example (arrival and departure explainer)
+
+The "How we work out when a bus arrived and left" section of the website is drawn from `site/example.json`:
+one real trip (route 49, 2026-10-16) worked through step by step. Regenerate it, for example after the
+inference rules change, with the SQL warehouse running:
+
+```bash
+uv run python scripts/make_site_example.py --profile enpu          # writes site/example.json
+# the last lines print the hand-calculated estimates next to the values stored by the pipeline: they must match
+cd site && python3 -m http.server 8000                              # preview at http://localhost:8000
+```
+The script runs the pipeline's own functions (`arrivals/infer.py`) on that trip's real route line, stops
+and GPS reports, so the page never drifts from the code. The file has no vehicle id; positions appear as
+distances along the route plus the route line's own coordinates (public timetable data). To explain a
+different trip use `--trip <trip_id> --day <date>` (the trip needs a middle timepoint with interpolated
+arrival and departure). The rendering code is `site/explainer.js`.

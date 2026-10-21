@@ -34,6 +34,12 @@
 
   <div id="layers"></div>
 
+  <section id="how-section">
+    <h2>How we work out when a bus arrived and left</h2>
+    <p>The agency never tells us "the bus reached this stop at 4:25". We work it out from the bus's GPS reports, using the timetable's map of the route. This walks through one real trip, route 49 on 2026-10-16, step by step. Every number below comes from running the pipeline's own calculation on that trip (a single anonymous trip, no vehicle identifier).</p>
+    <div id="how" class="how"><p class="note">Loading the example…</p></div>
+  </section>
+
   <section id="lineage-section">
     <h2>How tables depend on each other</h2>
     <p>This graph is not drawn by hand: Databricks records which tables each job read and wrote, and this shows those records for the last 30 days.</p>
@@ -75,10 +81,11 @@
 
 <footer class="wrap foot">
   <p id="attribution"></p>
-  <p>Data source: King County Metro public GTFS and GTFS-realtime feeds. This is an independent hobby project, not an official King County or Metro product. Charts use the open-source Plotly.js library (MIT licence, bundled in vendor/). Aggregate numbers and masked samples only: vehicle identifiers are hashed and coordinates rounded to about 1 km.</p>
+  <p>Data source: King County Metro public GTFS and GTFS-realtime feeds. This is an independent hobby project, not an official King County or Metro product. Charts use the open-source Plotly.js library (MIT licence, bundled in vendor/). Aggregate numbers and masked samples only (plus one worked example of a single anonymous trip): vehicle identifiers are hashed and coordinates rounded to about 1 km.</p>
   <p id="generated"></p>
 </footer>
 <script src="vendor/plotly-basic.min.js"></script>
 <script src="app.js"></script>
+<script src="explainer.js"></script>
 </body>
 </html>
