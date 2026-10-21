@@ -39,3 +39,16 @@ test("finds a trip's predicted stop times, including negative delays", () => {
     );
   }
 });
+
+test("lists the predicted arrivals at a stop the same as the Python parser", () => {
+  const { arrivalsAtStop } = createRequire(import.meta.url)("../gtfsrt.js");
+  const file = new Uint8Array(readFileSync(new URL("../../tests/fixtures/tripupdates.pb", import.meta.url)));
+  const exp = JSON.parse(readFileSync(new URL("./arrivals_expected.json", import.meta.url), "utf8"));
+  for (const [stop, rows] of Object.entries(exp.stops)) {
+    const got = arrivalsAtStop(file, stop);
+    assert.equal(got.feedTimestamp, exp.header);
+    const norm = (list) => list.map((a) => [a.time, a.tripId, a.routeId, a.delay]).sort((x, y) => x[0] - y[0] || String(x[1]).localeCompare(String(y[1])));
+    assert.deepEqual(norm(got.arrivals), rows);
+  }
+  assert.deepEqual(arrivalsAtStop(file, "no-such-stop").arrivals, []);
+});

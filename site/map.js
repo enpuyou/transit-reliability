@@ -171,6 +171,19 @@
     });
     return { type: "FeatureCollection", features: feats };
   }
+  /* A water-drop: a round body with a pointed tip that points up (north). The body is centred in the image so
+     rotating it spins it around the bus's position; the tip shows the heading. Drawn white so the map colours it per route. */
+  function dropImage() {
+    var n = 64, c = document.createElement("canvas"); c.width = c.height = n;
+    var g = c.getContext("2d"), cx = n / 2, cy = n / 2, r = 15, tip = 3, alpha = Math.acos(r / (cy - tip));
+    g.fillStyle = "#ffffff";
+    g.beginPath();
+    g.moveTo(cx, tip);
+    g.lineTo(cx + r * Math.sin(alpha), cy - r * Math.cos(alpha));
+    g.arc(cx, cy, r, -Math.PI / 2 + alpha, -Math.PI / 2 - alpha + 2 * Math.PI, false);
+    g.closePath(); g.fill();
+    return g.getImageData(0, 0, n, n);
+  }
   /* A small arrow pointing up (north), drawn white so the map can colour it per route (an "SDF" image). */
   function arrowImage() {
     var n = 48, c = document.createElement("canvas"); c.width = c.height = n;
@@ -250,6 +263,43 @@
     loadPredictions(p, pred, false);
   }
 
+  /* ---------- a stop: when the next buses are predicted to arrive (the agency's prediction, not the dots) ---------- */
+  var stopTracked = null;
+  function arrivalsHtml(p, trips, names) {
+    var res = GtfsRt.arrivalsAtStop(trips, p.id), now = Date.now() / 1000;
+    var list = res.arrivals.filter(function (a) {
+      return a.time >= now - 30 && (!selected || a.routeId === selected) && (!selectedDir || String(a.directionId) === selectedDir);
+    }).slice(0, 4);
+    var title = "<b>" + esc(names[p.id] || "stop " + p.id) + "</b>";
+    var kind = Number(p.tp) === 1 ? "Timetable stop: the schedule holds buses to a set time here." : "Regular stop: its scheduled time is calculated between timetable stops.";
+    var rows = list.map(function (a) {
+      var mins = Math.max(0, Math.round((a.time - now) / 60));
+      var when = mins <= 0 ? "arriving now" : "in " + mins + " min";
+      return "<b>" + when + "</b> (" + hhmm(a.time) + ") route " + esc(name(a.routeId)) + (a.delay != null ? ", " + lateText(a.delay) : "");
+    });
+    var body = rows.length ? "Agency's predicted arrivals:<br>" + rows.join("<br>") : "No predicted arrivals here right now.";
+    var age = res.feedTimestamp ? now - res.feedTimestamp : 0;
+    return title + '<br><span class="m">' + kind + '</span><div style="margin-top:6px">' + body + "</div>" +
+      '<div class="m" style="margin-top:6px">Predictions as of ' + (res.feedTimestamp ? hhmm(res.feedTimestamp) : "?") + (age > 600 ? " (OUT OF DATE)" : "") +
+      ". They use each bus's position and delay, so they are better for catching a bus than the dots, which are about a minute old.</div>";
+  }
+  function refreshStopPopup() {
+    if (!stopTracked) return;
+    Promise.all([getTrips(), getStatics()]).then(function (res) {
+      if (stopTracked) stopTracked.el.innerHTML = arrivalsHtml(stopTracked.p, res[0], res[1][0] || {});
+    }).catch(function () {});
+  }
+  function openStopPopup(p, lngLat) {
+    if (stopTracked) stopTracked.popup.remove();
+    var el = document.createElement("div");
+    el.style.minWidth = "240px";
+    el.textContent = "Loading predictions…";
+    var popup = new maplibregl.Popup({ offset: 8, maxWidth: "320px" }).setLngLat(lngLat).setDOMContent(el).addTo(map);
+    stopTracked = { p: p, el: el, popup: popup };
+    popup.on("close", function () { if (stopTracked && stopTracked.popup === popup) stopTracked = null; });
+    refreshStopPopup();
+  }
+
   function fillRoutePicker(feed) {
     var ids = {};
     feed.vehicles.forEach(function (v) { if (v.routeId) ids[v.routeId] = true; });
@@ -274,6 +324,7 @@
       if (pick.length === 1) fillRoutePicker(last);
       receive(last);
       refreshTracked();
+      refreshStopPopup();
     }).catch(function (e) {
       setState("bad", "Can't reach the live feed (" + e.message + "). Showing the last positions received" + (last ? " from " + seattle(last.timestamp) : "") + ". Trying again automatically.");
     });
@@ -288,27 +339,28 @@
     map.addLayer({ id: "lines-selected", type: "line", source: "lines", filter: ["==", ["get", "route"], ""], layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": ["get", "color"], "line-width": 5 } });
     map.addImage("arrow", arrowImage(), { sdf: true, pixelRatio: 2 });
+    map.addImage("drop", dropImage(), { sdf: true, pixelRatio: 2 });
     // arrows along the highlighted route, pointing the way traffic flows (the line runs in the direction of travel)
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 90, "icon-size": 0.45, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // stops of the selected route: tiny rings, far smaller than a bus. Timetable stops (the bus has a scheduled time
+    // stops of the selected route: tiny rings, far smaller than a bus. Timetable stops (the schedule holds buses to a time
     // there) are filled dark; other stops are hollow. Same size so only the fill differs.
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 14, 3, 17, 4.8],
       "circle-color": ["case", ["==", ["get", "tp"], 1], "#1d2330", "#ffffff"],
       "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.2 } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // a bus is a large filled disc in its route colour with a white outline; when we know its heading a white
-    // arrow on the disc points the way it is going
-    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 5, 12, 8, 15, 11, 17, 13],
-      "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.2 } });
+    // a bus is a water-drop in its route colour whose pointed tip shows the way it is heading; a plain disc of
+    // the same size when the heading is unknown
+    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", filter: ["<", ["get", "heading"], 0], paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 6, 12, 8.5, 15, 11, 17, 13],
+      "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
     map.addLayer({ id: "bus-arrows", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
-      "icon-image": "arrow", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true,
-      "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.2, 12, 0.32, 15, 0.46, 17, 0.55] },
-      paint: { "icon-color": "#ffffff" } });
+      "icon-image": "drop", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true,
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.85, 12, 1.2, 15, 1.55, 17, 1.85] },
+      paint: { "icon-color": ["get", "color"], "icon-halo-color": "#ffffff", "icon-halo-width": 2 } });
     var busLayers = ["bus-dots", "bus-arrows"];
     busLayers.forEach(function (layer) {
       map.on("click", layer, function (e) {
@@ -319,15 +371,7 @@
       map.on("mouseenter", layer, function () { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", layer, function () { map.getCanvas().style.cursor = ""; });
     });
-    map.on("click", "route-stops", function (e) {
-      var p = e.features[0].properties;
-      getStatics().then(function (res) {
-        var nameOf = (res[0] || {})[p.id] || "stop " + p.id;
-        new maplibregl.Popup({ offset: 8, maxWidth: "280px" }).setLngLat(e.lngLat)
-          .setHTML("<b>" + esc(nameOf) + "</b><br>" + (Number(p.tp) === 1 ? '<span class="m">Timetable stop: buses are scheduled to be here at a set time.</span>' : '<span class="m">Stop (no timetable time of its own).</span>') + '<br><span class="m">stop id ' + esc(p.id) + "</span>")
-          .addTo(map);
-      });
-    });
+    map.on("click", "route-stops", function (e) { openStopPopup(e.features[0].properties, e.lngLat); });
     map.on("mouseenter", "route-stops", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "route-stops", function () { map.getCanvas().style.cursor = ""; });
     map.on("click", function (e) {

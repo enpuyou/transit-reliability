@@ -63,10 +63,19 @@ both directions 5 buses, direction 1 only 3 buses.
 
 `site/map/route_stops.json` (292 KB, loaded the first time a route is selected): for each route direction
 the stops of one representative trip per main pattern (9,132 stop entries over 280 route directions), with
-a flag for stops that have a timetable time. Selecting a route (dropdown, or clicking a bus) draws them as
+a flag for timetable stops (timepoints). Every stop has a scheduled time (checked 2026-10-21: 0 of 1.13 million stop times lack one); only 19% are timepoints, where the schedule holds buses to the time and our history is kept. Selecting a route (dropdown, or clicking a bus) draws them as
 rings along the line; choosing a direction narrows them; clicking a stop names it. Checked 2026-10-21:
 every listed stop lies within 200 m of its route line. A branch's stops that no main pattern uses (under 20%
 of trips) are not listed.
+
+## Water-drop buses and stop arrivals (built 2026-10-21)
+
+- Each bus with a known heading is a water-drop in its route colour whose pointed tip shows the way it is
+  going (a plain disc when the heading is unknown). Checked by drawing the icon alone at four headings.
+- Clicking a stop lists the next four predicted arrivals there (route, minutes away, minutes late), read from
+  the agency's trip-update file, refreshing with every update. This is the answer to "can I catch the bus
+  at this stop": the prediction uses the bus's position and delay, and the dots are a median 65 seconds old
+  (measured 2026-10-21: about 41 s of that is before the agency publishes the file).
 
 ## Not built yet
 

@@ -182,6 +182,36 @@
     return found;
   }
 
-  var api = { decodeVehicles: decodeVehicles, findTripUpdate: findTripUpdate };
+  /** Every predicted arrival at one stop in the agency's trip-update file:
+      [{ tripId, routeId, directionId, time (unix s), delay (s, or null) }] sorted by time. */
+  function arrivalsAtStop(bytes, stopId) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), r = new Reader(u8), out = [], header = null;
+    each(r, u8.length, function (f, w) {
+      if (w !== 2) return false;
+      var len = r.varint(), stop = r.p + len;
+      if (f === 1) header = readHeader(r, stop);
+      else if (f === 2) {
+        each(r, stop, function (ef, ew) {
+          if (ew === 2 && ef === 3) {
+            var l2 = r.varint(), s2 = r.p + l2, t = readTripUpdate(r, s2);
+            t.updates.forEach(function (u) {
+              if (u.stopId === stopId && (u.arrTime || u.depTime)) {
+                out.push({ tripId: t.tripId, routeId: t.routeId, directionId: t.directionId, time: u.arrTime || u.depTime, delay: u.arrTime ? u.arrDelay : u.depDelay });
+              }
+            });
+            r.p = s2;
+            return true;
+          }
+          return false;
+        });
+      }
+      r.p = stop;
+      return true;
+    });
+    out.sort(function (a, b) { return a.time - b.time; });
+    return { feedTimestamp: header, arrivals: out };
+  }
+
+  var api = { decodeVehicles: decodeVehicles, findTripUpdate: findTripUpdate, arrivalsAtStop: arrivalsAtStop };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.GtfsRt = api;
 })(typeof window !== "undefined" ? window : globalThis);
