@@ -93,7 +93,11 @@
     }).catch(function (err) { if (!quiet) el.textContent = "Couldn't load predictions (" + err.message + ")."; });
   }
 
-  var map = new maplibregl.Map({ container: "livemap", style: STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
+  // ?base=none draws no background map (used for automated screenshots, where the tile server is not reachable)
+  var BLANK = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9ecef" } }] };
+  var map = new maplibregl.Map({ container: "livemap", style: new URLSearchParams(location.search).get("base") === "none" ? BLANK : STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
+  window.transitMap = map; // handy for debugging in the browser console
+  map.on("error", function (e) { console.log("map error: " + (e && e.error && e.error.message ? e.error.message : e)); });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
   /* ---------- bus positions: every bus glides from where it was drawn to where it now is ---------- */
@@ -282,19 +286,20 @@
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 90, "icon-size": 0.45, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
     map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // stops of the selected route: a white dot with a route-coloured ring; timetable stops (timepoints) are bigger
+    // stops of the selected route: tiny hollow rings, far smaller than a bus; timetable stops a little bigger
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["==", ["get", "tp"], 1], 3.5, 2], 16, ["case", ["==", ["get", "tp"], 1], 8, 5.5]],
-      "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": ["case", ["==", ["get", "tp"], 1], 3, 2] } });
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["==", ["get", "tp"], 1], 2.2, 1.4], 14, ["case", ["==", ["get", "tp"], 1], 4, 2.8], 17, ["case", ["==", ["get", "tp"], 1], 6, 4.5]],
+      "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": ["case", ["==", ["get", "tp"], 1], 1.8, 1.1] } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    // a bus is an arrow pointing the way it is heading; a plain dot when its heading is unknown
-    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", filter: ["<", ["get", "heading"], 0], paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 8],
-      "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.2 } });
+    // a bus is a large filled disc in its route colour with a white outline; when we know its heading a white
+    // arrow on the disc points the way it is going
+    map.addLayer({ id: "bus-dots", type: "circle", source: "buses", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 5, 12, 8, 15, 11, 17, 13],
+      "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.2 } });
     map.addLayer({ id: "bus-arrows", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
       "icon-image": "arrow", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true,
-      "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.4, 14, 0.85] },
-      paint: { "icon-color": ["get", "color"], "icon-halo-color": "#ffffff", "icon-halo-width": 1.6 } });
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 9, 0.2, 12, 0.32, 15, 0.46, 17, 0.55] },
+      paint: { "icon-color": "#ffffff" } });
     var busLayers = ["bus-dots", "bus-arrows"];
     busLayers.forEach(function (layer) {
       map.on("click", layer, function (e) {
