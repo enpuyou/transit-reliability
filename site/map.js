@@ -9,7 +9,7 @@
   var POLL_MS = 10000, GLIDE_MS = 9000, FRAME_MS = 100, SNAP_DEG = 0.01, STALE_S = 120, STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
   var stateEl = document.getElementById("state"), countEl = document.getElementById("count"), pick = document.getElementById("routepick"), dirPick = document.getElementById("dirpick");
-  var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null;
+  var routes = {}, last = null, timer = null, filter = "", dirFilter = "", selected = "", selectedDir = "", shapes = null, heads = {}, tracked = null, routeStops = null, stopsAsked = false;
   var pos = {}, animating = false, lastFrame = 0;
 
   function setState(cls, text) { stateEl.className = "status " + cls; stateEl.textContent = text; }
@@ -168,9 +168,39 @@
     g.beginPath(); g.moveTo(n / 2, 3); g.lineTo(n - 8, n - 8); g.lineTo(n / 2, n - 17); g.lineTo(8, n - 8); g.closePath(); g.fill();
     return g.getImageData(0, 0, n, n);
   }
+  /* ---------- the stops of the selected route (file is fetched the first time a route is selected) ---------- */
+  function stopFeatures() {
+    var feats = [], seen = {};
+    if (!selected || !routeStops) return { type: "FeatureCollection", features: feats };
+    Object.keys(routeStops).forEach(function (key) {
+      var parts = key.split("|");
+      if (parts[0] !== selected || (selectedDir && parts[1] !== selectedDir)) return;
+      routeStops[key].forEach(function (st) {
+        if (seen[st[0]]) return;
+        seen[st[0]] = true;
+        feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [st[1], st[2]] },
+          properties: { id: st[0], tp: st[3], color: colour(selected) } });
+      });
+    });
+    return { type: "FeatureCollection", features: feats };
+  }
+  function showStops() {
+    var src = map.getSource("route-stops");
+    if (src) src.setData(stopFeatures());
+  }
+  function ensureStops() {
+    if (stopsAsked || !selected) return;
+    stopsAsked = true;
+    fetch("map/route_stops.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      routeStops = j; showStops();
+    }).catch(function () { stopsAsked = false; });
+  }
+
   function setSelected(routeId, dir) {
     selected = routeId || "";
     selectedDir = dir || "";
+    ensureStops();
+    showStops();
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -251,6 +281,11 @@
     map.addLayer({ id: "lines-flow", type: "symbol", source: "lines", filter: ["==", ["get", "route"], ""],
       layout: { "symbol-placement": "line", "symbol-spacing": 90, "icon-image": "arrow", "icon-rotate": 90, "icon-size": 0.45, "icon-allow-overlap": true, "icon-ignore-placement": true },
       paint: { "icon-color": "#ffffff", "icon-opacity": 0.95 } });
+    map.addSource("route-stops", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    // stops of the selected route: a white dot with a route-coloured ring; timetable stops (timepoints) are bigger
+    map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, ["case", ["==", ["get", "tp"], 1], 3.5, 2], 16, ["case", ["==", ["get", "tp"], 1], 8, 5.5]],
+      "circle-color": "#ffffff", "circle-stroke-color": ["get", "color"], "circle-stroke-width": ["case", ["==", ["get", "tp"], 1], 3, 2] } });
     map.addSource("buses", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     // a bus is an arrow pointing the way it is heading; a plain dot when its heading is unknown
     map.addLayer({ id: "bus-dots", type: "circle", source: "buses", filter: ["<", ["get", "heading"], 0], paint: {
@@ -270,8 +305,19 @@
       map.on("mouseenter", layer, function () { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", layer, function () { map.getCanvas().style.cursor = ""; });
     });
+    map.on("click", "route-stops", function (e) {
+      var p = e.features[0].properties;
+      getStatics().then(function (res) {
+        var nameOf = (res[0] || {})[p.id] || "stop " + p.id;
+        new maplibregl.Popup({ offset: 8, maxWidth: "280px" }).setLngLat(e.lngLat)
+          .setHTML("<b>" + esc(nameOf) + "</b><br>" + (Number(p.tp) === 1 ? '<span class="m">Timetable stop: buses are scheduled to be here at a set time.</span>' : '<span class="m">Stop (no timetable time of its own).</span>') + '<br><span class="m">stop id ' + esc(p.id) + "</span>")
+          .addTo(map);
+      });
+    });
+    map.on("mouseenter", "route-stops", function () { map.getCanvas().style.cursor = "pointer"; });
+    map.on("mouseleave", "route-stops", function () { map.getCanvas().style.cursor = ""; });
     map.on("click", function (e) {
-      if (map.queryRenderedFeatures(e.point, { layers: busLayers }).length) return;
+      if (map.queryRenderedFeatures(e.point, { layers: busLayers.concat(["route-stops"]) }).length) return;
       if (!filter) setSelected("", "");
     });
     refresh();

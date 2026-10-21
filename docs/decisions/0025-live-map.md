@@ -59,11 +59,20 @@ route directions has none and shows "direction N"). Picking a direction shows on
 buses, highlights only its line, and zooms to it. Tested with the stand-in-browser script: route 1,
 both directions 5 buses, direction 1 only 3 buses.
 
+## Stops of the selected route (built 2026-10-21)
+
+`site/map/route_stops.json` (292 KB, loaded the first time a route is selected): for each route direction
+the stops of one representative trip per main pattern (9,132 stop entries over 280 route directions), with
+a flag for stops that have a timetable time. Selecting a route (dropdown, or clicking a bus) draws them as
+rings along the line; choosing a direction narrows them; clicking a stop names it. Checked 2026-10-21:
+every listed stop lies within 200 m of its route line. A branch's stops that no main pattern uses (under 20%
+of trips) are not listed.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily
   (add a step to the daily silver job and copy it in the publish workflow; needs a prod deploy).
-- Detour/weather overlays, a per-bus breadcrumb trail, showing stops on the selected route.
+- Detour/weather overlays, a per-bus breadcrumb trail, 
 - Not seen in a real browser: tested with a script that loads `map.js` with stand-in browser objects, the
   real relay and the real data files, and clicks a live bus.
 

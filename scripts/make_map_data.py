@@ -7,6 +7,9 @@
 - stops.json: stop id -> stop name.
 - headsigns.json: "route|direction" -> the destination sign text the trips of that direction show most
   often (for the direction picker, e.g. "Downtown Seattle").
+- route_stops.json: "route|direction" -> the stops of that route direction, each [stop id, lon, lat,
+  1 if it has a timetable time else 0], in trip order. Taken from one representative trip for each of the
+  main patterns (the same ones shapes.json draws), so a branching route lists the stops of every branch.
 - shapes.json: the route lines. Key "route|direction" -> list of lines (each a list of [lon, lat]):
   the shapes that at least 20% of that route direction's trips use, simplified to within about 8 m.
 - site/data/stop_history.json (local preview only): typical lateness per timetable stop. The daily
@@ -86,6 +89,19 @@ def shapes_sql() -> str:
       ORDER BY r.route_id, r.direction_id, r.shape_id, s.shape_pt_sequence"""
 
 
+def route_stops_sql() -> str:
+    return f"""WITH fv AS (SELECT max(feed_version) AS v FROM {S}.gtfs_shapes),
+      t AS (SELECT route_id, direction_id, shape_id, count(*) AS n, min(trip_id) AS trip_id
+            FROM {S}.gtfs_trips, fv WHERE feed_version = fv.v GROUP BY 1, 2, 3),
+      r AS (SELECT *, n / sum(n) OVER (PARTITION BY route_id, direction_id) AS share FROM t)
+      SELECT r.route_id, r.direction_id, r.shape_id, st.stop_sequence, st.stop_id, p.stop_lat, p.stop_lon,
+             coalesce(st.timepoint, 0)
+      FROM r JOIN {S}.gtfs_stop_times st ON st.trip_id = r.trip_id
+      JOIN {S}.gtfs_stops p ON p.stop_id = st.stop_id AND p.feed_version = st.feed_version, fv
+      WHERE st.feed_version = fv.v AND r.share >= {SHAPE_MIN_SHARE}
+      ORDER BY r.route_id, r.direction_id, r.shape_id, st.stop_sequence"""
+
+
 def write(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, separators=(",", ":"), sort_keys=True))
     print(f"wrote {path}: {path.stat().st_size:,} bytes")
@@ -117,6 +133,18 @@ def main() -> None:
         SELECT route_id, direction_id, max_by(trip_headsign, n) FROM t GROUP BY 1, 2"""
     )
     write(out / "headsigns.json", {f"{r[0]}|{r[1]}": str(r[2]) for r in heads})
+
+    route_stops: dict[str, list[list[object]]] = {}
+    seen: dict[str, set[str]] = {}
+    for route, direction, _shape, _seq, stop, lat, lon, tp in q(route_stops_sql()):
+        key = f"{route}|{direction}"
+        if stop in seen.setdefault(key, set()):
+            continue  # a stop shared by two patterns of the same route direction is listed once
+        seen[key].add(stop)
+        route_stops.setdefault(key, []).append(
+            [str(stop), round(float(lon), 5), round(float(lat), 5), int(tp)]
+        )
+    write(out / "route_stops.json", route_stops)
 
     lines: dict[tuple[str, str, str], list[tuple[float, float]]] = {}
     for route, direction, shape, lat, lon in q(shapes_sql()):
