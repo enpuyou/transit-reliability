@@ -14,6 +14,8 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -22,9 +24,13 @@ from transit_reliability.monitoring.watchdog import (  # noqa: E402
     MAX_INGEST_RUN_AGE_MIN,
     MAX_LANDING_AGE_MIN,
     MAX_MONITOR_RUN_AGE_MIN,
+    RELAY_URL,
     Finding,
     job_finding,
     landing_finding,
+    relay_memory_finding,
+    relay_traffic_finding,
+    relay_vehicles_finding,
     silver_finding,
     status_payload,
     summary_markdown,
@@ -96,6 +102,33 @@ def main() -> int:
     guarded(
         "silver_job_daily_run", lambda: silver_finding(job_runs(args.profile, "-prod-silver"), now)
     )
+
+    # the live map's relay on Cloudflare: bus file, trip memory, traffic (decision 0025)
+    def fetch(path: str) -> tuple[int, bytes]:
+        req = urllib.request.Request(
+            RELAY_URL + path, headers={"User-Agent": "transit-reliability watchdog"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as error:
+            return error.code, b""
+
+    def vehicles() -> Finding:
+        status, body = fetch("/vehicles")
+        return relay_vehicles_finding(status, len(body))
+
+    def memory() -> Finding:
+        status, body = fetch("/memory/status")
+        return relay_memory_finding(json.loads(body) if status == 200 else None, now)
+
+    def traffic() -> Finding:
+        status, body = fetch("/traffic/segment?lat=47.6205&lon=-122.3212")
+        return relay_traffic_finding(status, json.loads(body) if status == 200 else None)
+
+    guarded("relay_vehicles", vehicles)
+    guarded("relay_trip_memory", memory)
+    guarded("relay_traffic", traffic)
 
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)

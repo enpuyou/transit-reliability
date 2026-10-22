@@ -170,3 +170,38 @@ def test_weather_checks_read_the_landing_files_not_the_daily_silver_table() -> N
     assert "weather_observations" not in checks["weather_stations_fetched_last_3_hours"].sql
     # the daily table gets a daily-sized limit, not an hourly one
     assert checks["weather_silver_hours_behind"].maximum == 30.0
+
+
+def test_relay_findings() -> None:
+    import datetime as dt
+
+    from transit_reliability.monitoring.watchdog import (
+        relay_memory_finding,
+        relay_traffic_finding,
+        relay_vehicles_finding,
+    )
+
+    now = dt.datetime(2026, 10, 22, 19, 0, tzinfo=dt.UTC)
+    assert relay_vehicles_finding(200, 52_000).ok
+    assert not relay_vehicles_finding(200, 120).ok  # an error page, not the bus file
+    assert not relay_vehicles_finding(502, 0).ok
+    assert relay_memory_finding({"lastRun": now.timestamp() - 40, "running": 600}, now).ok
+    assert not relay_memory_finding({"lastRun": now.timestamp() - 600}, now).ok  # the alarm stopped
+    assert not relay_memory_finding(None, now).ok
+    assert relay_traffic_finding(200, {"frc": "FRC5"}).ok
+    assert relay_traffic_finding(200, {"none": True}).ok
+    assert not relay_traffic_finding(503, None).ok  # key not set
+
+
+def test_a_run_that_ended_in_an_internal_error_counts_as_finished_and_failed() -> None:
+    import datetime as dt
+
+    from transit_reliability.monitoring.watchdog import job_finding
+
+    now = dt.datetime(2026, 10, 22, 19, 0, tzinfo=dt.UTC)
+    run = {
+        "start_time": int((now - dt.timedelta(hours=7)).timestamp() * 1000),
+        "state": {"life_cycle_state": "INTERNAL_ERROR", "result_state": "FAILED"},
+    }
+    f = job_finding("silver_job_daily_run", [run], now, max_age_min=24 * 60.0)
+    assert not f.ok and "FAILED" in f.detail and "no finished run" not in f.detail

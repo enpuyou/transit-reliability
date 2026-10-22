@@ -16,8 +16,13 @@ MAX_INGEST_RUN_AGE_MIN = 75.0  # runs start every 30 min
 MAX_MONITOR_RUN_AGE_MIN = 90.0  # runs start every 60 min
 SILVER_DUE_UTC = dt.time(13, 30)  # the daily silver job starts 11:45 UTC and takes about 10 min
 _DONE = "TERMINATED"
+_FINISHED = {_DONE, "INTERNAL_ERROR", "SKIPPED"}
 PACIFIC = ZoneInfo("America/Los_Angeles")
 SILVER_STARTS_UTC = dt.time(11, 45)  # the daily job's cron
+# the live map's relay (decision 0025)
+RELAY_URL = "https://transit-relay.youenpu.workers.dev"
+MIN_VEHICLE_FILE_BYTES = 1000  # the agency's file is about 50 KB; an error page is tiny
+MAX_MEMORY_SILENCE_S = 180  # the trip memory wakes every 30 s
 
 
 def pacific(moment: dt.datetime) -> str:
@@ -68,7 +73,9 @@ def job_finding(
     age = (now - _started(runs[0])).total_seconds() / 60.0
     if age > max_age_min:
         return Finding(name, False, f"newest run started {age:.0f} min ago (limit {max_age_min:g})")
-    finished = [r for r in runs if r["state"].get("life_cycle_state") == _DONE]
+    # a run that ended in an internal error or was skipped has finished (it is not still running)
+    # (the 2026-10-22 daily run ended INTERNAL_ERROR and was shown as "no finished run yet")
+    finished = [r for r in runs if r["state"].get("life_cycle_state") in _FINISHED]
     if not finished:
         return Finding(name, False, "no finished run yet")
     result = finished[0]["state"].get("result_state")
@@ -114,3 +121,38 @@ def status_payload(findings: Sequence[Finding], now: dt.datetime) -> dict[str, A
         "checked_at": now.isoformat(),
         "findings": [{"name": f.name, "ok": f.ok, "detail": f.detail} for f in findings],
     }
+
+
+def relay_vehicles_finding(status: int, size: int) -> Finding:
+    """The relay hands out the agency's bus file (the live map cannot work without it)."""
+
+    ok = status == 200 and size >= MIN_VEHICLE_FILE_BYTES
+    return Finding("relay_vehicles", ok, f"HTTP {status}, {size:,} bytes")
+
+
+def relay_memory_finding(payload: Mapping[str, Any] | None, now: dt.datetime) -> Finding:
+    """The trip memory woke up recently (it should every 30 s)."""
+
+    name = "relay_trip_memory"
+    if not payload or not payload.get("lastRun"):
+        return Finding(
+            name, False, "no wake-up recorded (the memory has not started or lost its state)"
+        )
+    silence = max(0.0, now.timestamp() - float(payload["lastRun"]))
+    detail = (
+        f"last wake-up {silence:.0f} s ago (limit {MAX_MEMORY_SILENCE_S}), "
+        f"{payload.get('running', '?')} trips running, "
+        f"{payload.get('finishedKept', '?')} finished trips kept"
+    )
+    return Finding(name, silence <= MAX_MEMORY_SILENCE_S, detail)
+
+
+def relay_traffic_finding(status: int, payload: Mapping[str, Any] | None) -> Finding:
+    """Traffic along a route works (the TomTom key is set and TomTom answers)."""
+
+    ok = status == 200 and payload is not None and ("frc" in payload or payload.get("none") is True)
+    return Finding(
+        "relay_traffic",
+        ok,
+        f"HTTP {status}" + ("" if ok else " (key missing, TomTom down, or quota used up)"),
+    )
