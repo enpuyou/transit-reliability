@@ -77,3 +77,22 @@ def test_venue_names_match_whatever_the_capitals() -> None:
     assert venue_seats("accesso ShoWare Center") == 7000
     assert venue_seats("The 5th Avenue Theatre") == 2100
     assert venue_seats("Tractor") is None
+
+
+def test_venue_and_event_sql() -> None:
+    from transit_reliability.events.gold_events import (
+        event_impact_sql,
+        event_routes_sql,
+        venue_routes_sql,
+    )
+    from transit_reliability.events.silver_events import venues_sql
+
+    assert "GROUP BY venue_id" in venues_sql("transit")
+    assert "<= 400" in venue_routes_sql("transit") and "collect_set(n.stop_id)" in venue_routes_sql(
+        "transit"
+    )
+    assert "JOIN workspace.transit_gold.venue_routes" in event_routes_sql("transit")
+    impact = event_impact_sql("transit")
+    assert (
+        "'before'" in impact and "'after'" in impact and "d.local_date IS NULL" in impact
+    )  # baseline excludes event days

@@ -202,8 +202,10 @@ resources:
               - ${var.landing_volume}
           environment_key: default
         - task_key: event_routes
+          # venue_routes, event_routes and event_impact (decision 0026)
           depends_on:
             - task_key: events
+            - task_key: segment_runs
           python_wheel_task:
             package_name: transit_reliability
             entry_point: build_gold_event_routes

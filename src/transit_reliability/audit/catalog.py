@@ -429,6 +429,12 @@ def events(prefix: str) -> list[CheckSpec]:
             maximum=0,
         ),
         CheckSpec(
+            "venues_duplicate_ids",
+            f"SELECT count(*) - count(DISTINCT venue_id) FROM {_t(prefix, 'silver', 'venues')}",
+            "one row per venue",
+            maximum=0,
+        ),
+        CheckSpec(
             "event_routes_duplicate_keys",
             f"SELECT count(*) - count(DISTINCT event_id, route_id) FROM {er}",
             "one row per event and route",
