@@ -217,7 +217,28 @@ def main() -> None:
               WHERE feed_version = fv.v AND trip_headsign IS NOT NULL GROUP BY 1, 2, 3)
         SELECT route_id, direction_id, max_by(trip_headsign, n) FROM t GROUP BY 1, 2"""
     )
-    write(out / "headsigns.json", {f"{r[0]}|{r[1]}": str(r[2]) for r in heads})
+    headsigns = {f"{r[0]}|{r[1]}": str(r[2]) for r in heads}
+    # Some routes show the same sign both ways for part of the trip (route 2: "Downtown Seattle" in both
+    # directions). Then name each direction by where its most common trip really ends: its last stop.
+    ends = q(
+        f"""WITH fv AS (SELECT max(feed_version) AS v FROM {S}.gtfs_shapes),
+        t AS (SELECT route_id, direction_id, shape_id, count(*) AS n, min(trip_id) AS trip_id FROM {S}.gtfs_trips, fv
+              WHERE feed_version = fv.v GROUP BY 1, 2, 3),
+        top AS (SELECT route_id, direction_id, max_by(trip_id, n) AS trip_id FROM t GROUP BY 1, 2)
+        SELECT top.route_id, top.direction_id, max_by(p.stop_name, st.stop_sequence)
+        FROM top JOIN {S}.gtfs_stop_times st ON st.trip_id = top.trip_id, fv
+        JOIN {S}.gtfs_stops p ON p.stop_id = st.stop_id AND p.feed_version = st.feed_version
+        WHERE st.feed_version = fv.v GROUP BY 1, 2"""
+    )
+    last_stop = {f"{r[0]}|{r[1]}": str(r[2]) for r in ends}
+    same = [
+        k
+        for k in headsigns
+        if headsigns.get(f"{k.split('|')[0]}|{1 - int(k.split('|')[1])}") == headsigns[k]
+    ]
+    for key in same:  # decided first, then replaced, so both directions of such a route change
+        headsigns[key] = last_stop.get(key, headsigns[key])
+    write(out / "headsigns.json", headsigns)
 
     route_stops: dict[str, list[list[object]]] = {}
     seen: dict[str, set[str]] = {}
