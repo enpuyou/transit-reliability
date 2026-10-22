@@ -1,182 +1,141 @@
-# Machine learning design (Phase 7)
+# Machine learning design (Phase 7): reproduce the leading systems, then see how we do
 
-Written 2026-10-22, before any model is trained. It replaces `docs/ml_plan.md` as the plan of record (that
-file keeps the first reasoning). Plain language: a **feature** is one piece of information a model may look
-at; a **label** is the answer it learns to give; a **baseline** is a simple rule a model must beat to be worth
-anything.
+Rewritten 2026-10-22 after the owner's direction: **we do not invent prediction problems; we reproduce
+well-known published or deployed machine learning for transit on our Seattle data, compare with what they
+report and with simple baselines, then try stronger models.** "Will this trip run?" is dropped (no industry
+precedent found). Research behind this: `docs/ml_industry_research.md`. Plain language: a **feature** is one
+piece of information a model may look at; a **baseline** is a simple rule a model must beat; **leakage** is a
+model seeing the future by accident.
 
-## 1. What we are training for, in order
+## 1. The method
 
-| # | Question | Who it helps | Kind of model | When |
-|---|---|---|---|---|
-| A | **When will this bus reach that stop?** (5, 15 and 30 minutes ahead) | riders, the live map | regression with a range (quantiles) | first model, data ready about 2026-11-03 |
-| B | **Will this trip run at all?** (asked 30, 15 and 5 minutes before its start) | riders waiting at a terminal; the map's departures panel | yes/no (classification) | can start now: 8 complete days, a clear signal |
-| C | Will these two buses end up bunched downstream? | frequent-route riders, agency dispatch | yes/no | after A |
-| D | What explains delay (weather, events, incidents, bunching, time of day)? | the write-up | simple, readable models; association not cause | after rain and a few weeks of events |
+For each reproduction target: (1) take the published or deployed system, with its own data, features, model,
+split and scoring as far as they are public; (2) rebuild it on our data as faithfully as our data allows,
+and write down every difference; (3) score it the way the source did (so numbers can be compared) **and** the
+way agencies score (window score, section 4); (4) add the baselines we already have; (5) then try stronger
+models and features and record what each adds. A result of "could not reproduce the published gain" is a
+finding, not a failure: **TriMet itself tried to copy TransLink's model and wrote that its models "did not
+produce significantly improved vehicle predictions over non-predicted systems" and were not ready for
+production** (TriMet IMI report summary, link in section 9), while TransLink reported 74 percent less error
+in its own pilot.
 
-A is the design doc's main model. **B is new**, from this week's finding: about 2 to 3 percent of trips on
-tracked routes do not run, 95 percent of those are never announced, and a missing trip is followed by another
-84 percent of the time. A rider cannot see that coming today; a model can.
+## 2. The reproduction ladder
 
-Not in scope: anything that needs data we do not have (ridership, crowding), and a "magic" model that beats
-the agency by a lot (see section 7).
+| # | Target (source) | What it predicts | Their method (what is public) | Our version | What we lack or change | Their reported result |
+|---|---|---|---|---|---|---|
+| R0 | **Evaluation harness**: WMATA's accuracy definition and Transit app's open ETA benchmark | any ETA, scored the agency way | share of predictions inside a window by minutes-ahead bucket; early counts worse than late | score the agency (KCM), the baselines and every model with it | check the Transit benchmark's exact buckets by reading its code (listing only seen so far) | defines the standard |
+| R1 | **TransLink ML ETA, as copied by TriMet** (open code: `OpenTransitTools/transitcast`, `pytransitcast`) | bus arrival at later stops, from segment travel times | features: schedule (month, weekday, hour, minute, holiday, scheduled arrival, scheduled time between stops, schedule deviation), weather (rain, snow, temperature, dew point, humidity, pressure, wind, cloud cover, UV, visibility, drizzle), previous passage (how long the last bus took on this segment, how long ago), speed and traffic (INRIX speeds: current speed, travel time, age of the speed) | the same groups: schedule from GTFS; weather from our NWS stations (no rain amount, no snow, UV or cloud); previous passage from our own earlier buses; "traffic" from the speed of buses that just passed (no INRIX) | no INRIX or road traffic history (TomTom live only, not stored) | TransLink: error down 74 percent (pilot, own claim); **TriMet: no significant gain** |
+| R2 | **BusTr, Google Maps** (Barnes et al., KDD 2020) | delay of a bus over a short piece of its trajectory | neural sequence model with embedded route, location cells and time of week, plus numeric traffic and schedule inputs; trained and tested by week | gradient-boosted trees and a small neural network with embeddings (route, stop, time of week) on the same kind of inputs; their ablations repeated (take out the real-time signal, route id, location, time of week) | Google's road traffic forecasts; we substitute the speed of recent buses and weather | MAPE 13.2 percent against 35.6 for "car traffic time only", 22.9 for linear regression, 31.5 for DeepTTE; ablations: without real-time traffic +16 percent error, without route ids +3, without all location +69, without time of week +5 |
+| R3 | **BusTime, University College Dublin** (Liu et al., 2020; code public) | travel time from the trip start, then from every stop passed, to every later stop | five models on one route's GPS: "delay" (carry the current delay), k-nearest-neighbours, kernel regression, additive model, LSTM; stop-based sampling; **trips sorted by time, first 80 percent train, last 20 percent test**; MAE, MAPE, RMSE | the same five models on our data for one long frequent route and then for all routes, plus XGBoost and LightGBM | our reports are 20 s apart, theirs about 30 s; we have weeks, they had two months | LSTM best (MAE about 86 s, MAPE about 14 percent on 1,000 trips); "delay" cheapest but not accurate |
+| R4 | **Cross-network generalisation** (Aemmer et al., 2024, University of Washington and SINTEF, Seattle and Trondheim open feeds) | bus travel time on routes or segments the model never saw | built on open GTFS-realtime only; four months from two cities | train on some routes, test on held-out routes (cold start for a new route) | need the paper's exact protocol (full text not read yet); Trondheim data not collected, so Seattle-only | deep learning generalises within a network, as little as 1 percent loss on held-out routes |
+| R5 | **Bunching prediction** (Porto incremental probabilistic model; TriMet bunching causes) | will two buses be bunched at a later timepoint | regression and probabilistic models on the gap and recent trend; research says bunching is mostly made at the route start | predict bunched, gapped or regular at a downstream timepoint from the current gaps and trend (our headway tables), trees and logistic regression; first look at first-stop departure gaps | no holding or dispatch control to test | Porto: up to 68 percent less bunching in simulation only |
+| R6 | **Dwell and delay prediction** (Deutsche Bahn, XGBoost) | extra time spent at a stop | gradient-boosted trees on station and time features | predict dwell at stops from our dwell estimates | our dwell is a GPS estimate, rough | mean error about 0.48 min; underestimates peak delays |
+| R7 | **Runtime tuning** (Optibus Predictive Runtimes) | realistic run time per route piece and time of day | historical GPS and optimisation | from `gold.segment_runtimes`: what on-time would have been if the timetable used last week's median or 85th-percentile running times | counterfactual only; no real change to a timetable | vendor claims only |
+| R8 | **Connection probability** (Deutsche Bahn Navigator, Bahnvorhersage) | will a rider make a transfer | delay predictions turned into a probability that the next vehicle has not left | between two bus trips at a shared stop, from the distribution of delays | optional, rider-facing; needs a transfer definition | no benefit numbers published |
 
-## 2. Question A: arrival time at a downstream stop
+Not reproduced, and why: crowding and occupancy (no passenger counters), predictive maintenance (no engine
+data), ridership forecasting (no counts), electric-bus range (no data), Google and DeepMind's road-network
+traffic model (no road graph or car traffic), trip-cancellation prediction (no fixed-route precedent).
 
-**One example** = a bus, a moment *t* (the "as of" time), a stop ahead on its trip, and a horizon (the stop is
-due about 5, 15 or 30 minutes after *t*). The same structure as `gold.prediction_errors`, which already holds
-2.4 million scored agency predictions at 5 minutes, 1.6 million at 15 and 0.7 million at 30 for 2026-10-14 to
-10-21, so the training table extends a table we trust instead of starting fresh.
+## 3. Data, shared by all rungs
 
-**Label:** how late the bus will be at that stop (our estimated arrival minus the timetable), in seconds. The
-model predicts the *change* from the lateness it has now, which is easier and keeps it honest.
+- **One training table** extending `gold.prediction_errors` (2.4 million scored agency predictions at 5 minutes
+  ahead, 1.6 million at 15, 0.7 million at 30, for 2026-10-14 to 10-21). One row = a bus, a moment *t*, a later
+  stop, with a label. Label quality: our arrival estimate from GPS; only stops whose interval is at most 60
+  seconds wide are used (about 55,000 timepoint arrivals a weekday); errors under about 30 s are noise.
+- **Feature groups** (each knows its source and whether it can be computed live on the map): now (lateness,
+  trend, speed, age of report), trip so far, route memory (past days only), this exact trip's habit, neighbours
+  (gap to the buses ahead and behind), the bus's previous trip, the agency's own prediction, disruption (skipped
+  stops, detours, collisions and fires nearby), context (hour, weekday, weather, large events nearby).
+- **Volume:** sampled (for example one moment every 2 minutes per trip) to a few million rows.
+- **As of t** (leakage rule, section 6) applies to every feature.
 
-**Label quality:** the "truth" is our own arrival estimate from GPS, with an interval. Training and scoring use
-only stops whose interval is at most 60 seconds wide (about 55,000 timepoint arrivals a weekday), and errors
-below about 30 seconds are treated as noise.
+## 4. How we score (decided before any result)
 
-**Output:** a single best guess plus a range: the 10th and 90th percentile ("arrives 5:12 to 5:16, usually
-5:14"). A range that is right 80 percent of the time is more useful to a rider than one number.
+- **Two scoring languages.** (a) The source's own metric, so we can compare with their paper: MAPE for BusTr,
+  MAE, MAPE and RMSE for Dublin. (b) The agency window score (R0): WMATA's rule, a bus 0 to 3 minutes away must
+  arrive within 1 minute early to 1 minute late, a bus 12 to 30 minutes away within 4 minutes early to 6 minutes
+  late. Average error and window score can disagree; we report both.
+- **Chronological split only.** Earlier days train, the newest week tests (Dublin and BusTr both do this); a
+  validation week before it is used for choices; the test week is touched once per model version; a rolling
+  check moves the window forward a week at a time.
+- **Same rows for everyone.** Models and baselines are scored on exactly the same examples.
+- **Baselines (measured 2026-10-14 to 10-21, truth interval at most 60 s, typical / bad error in seconds):**
+  5 minutes ahead: KCM 61 / 167, "stays as late as now" 56 / 150, timetable 139 / 421; 15 minutes: 94 / 250,
+  92 / 242, 152 / 450; 30 minutes: 129 / 343, 129 / 346, 169 / 501. The simple rule already matches the agency.
+- **Is a gain real?** Confidence by resampling whole days of trips, not rows. Following BusTr, repeat neural
+  training several times and report the spread (their 20 runs and t-tests; one DeepTTE variant failed to
+  converge in 37 percent of runs).
+- **Ablation tables** like BusTr's: remove one feature group at a time and report the loss in accuracy.
+- **Slices:** by horizon, hour, frequent or not, weather, with or without disruptions. A model that wins on
+  average and loses at rush hour is not a win.
 
-### Features (all must be known **at time t**; see section 5)
+## 5. Models, from simple to strong
 
-| Group | Features | Why it should help | Source |
-|---|---|---|---|
-| Now | lateness at the last stop passed; how it changed over the last 2-3 timepoints; speed; stopped or moving; age of the newest report | delay persists and trends | silver.stop_visits, vehicle_positions |
-| Trip so far | share of the trip done, stops and distance left, scheduled time left | room for delay to change | scheduled_stop_times |
-| Route memory | typical and 85th-percentile running time of the coming segments at this time of day and day type (past days only), how often they run over | some stretches are always slow at 5 pm | gold.segment_runs, computed per training window |
-| This exact trip | how late this trip usually is at that stop (past days) | trips have habits | the per-trip history built for the map |
-| Neighbours | gap to the bus ahead and behind; is the bus ahead late | bunching: a bus right behind another runs fast | positions of other buses on the route |
-| Block | did this bus's previous trip run, how late did it finish | lateness carries over from trip to trip | gold.trip_delivery, stop_visits |
-| Agency | the agency's own prediction and how it changed | the model can learn when the agency is wrong | silver.trip_update_snapshots |
-| Disruption | skipped stops ahead; detour alert on the route; a collision or fire near the coming stops in the last hour | the timetable is wrong in these cases | trip_update_snapshots, alerts, gold.incident_routes |
-| Context | hour, day of week, holiday; weather this hour; a large event near the coming stops in the next or last 2 hours | traffic and crowds | weather_hourly, gold.event_routes |
-| Identity | route, direction | the basic shape of each route | |
+1. **Baselines:** timetable, "stays as late as now" (Dublin's "delay"), historical average by route, stop and
+   hour, and the agency's own prediction.
+2. **Classic:** linear regression and a generalised additive model (R3), k-nearest-neighbours and kernel
+   regression (R3), random forest.
+3. **Gradient-boosted trees: XGBoost, LightGBM, CatBoost.** The main workhorse. They handle mixed information
+   and missing values, train on a few million rows in minutes on one machine, show which features mattered, and
+   can give a range with quantile versions. Exportable as plain trees for the browser.
+4. **Neural networks:** a small network with embeddings for route, stop and time of week (BusTr's idea); an
+   LSTM or GRU over a bus's recent stops (Dublin's best); if time allows, a small transformer. Tuning with a
+   proper search (Optuna) on the validation week only.
+5. **Ensembles:** average or stack the best of each family.
 
-**Baselines, scored on exactly the same rows** (already computed in `gold.prediction_errors`, 2026-10-14 to 10-21,
-truth intervals at most 60 s):
+**Compute:** Databricks Free Edition serverless; we have not confirmed whether a GPU is available (assume not).
+Trees on millions of rows are comfortable on CPU; neural networks are limited to small sizes and sampled data.
+The daily quota is unpublished, so training runs are measured and kept off the daily schedule at first.
+**Tracking:** MLflow (the workspace API answers; nothing recorded yet): each run records the data window, feature
+list, settings, code version and scores. Reproduced numbers are written to `docs/ml_results.md` with dates.
 
-| Horizon | Agency: typical / bad (90th pct) error | "Stays as late as now": typical / bad | Timetable: typical / bad |
-|---|---|---|---|
-| 5 min | 61 s / 167 s | 56 s / 150 s | 139 s / 421 s |
-| 15 min | 94 s / 250 s | 92 s / 242 s | 152 s / 450 s |
-| 30 min | 129 s / 343 s | 129 s / 346 s | 169 s / 501 s |
+## 6. Not fooling ourselves
 
-The simple rule "the bus stays as late as it is now" is already as good as the agency (slightly better at 5 and
-15 minutes; the agency is at least as good as it only 45 to 50 percent of the time). That is the bar.
+- **"As of t" means visible at t, not stamped before t.** Bus reports reach us a median 57 s after their GPS
+  time. Every feature is built from data whose *publication* time (first appearance in the feed, kept in bronze)
+  is at or before t; an arrival estimate only counts as known once the later report that fixes it was published.
+- **History features use only days before the example's day.** A test checks, for a sample of rows, that every
+  feature timestamp is at or before t; the build fails otherwise.
+- **The agency's own prediction as an input** can leak the answer once a bus has passed (a question raised on
+  the NSW open-data forum, unverified); we use only the prediction visible at t, and test with and without it.
+- **Overlapping examples from the same trip** must never straddle train and test.
 
-**Model:** gradient-boosted trees (LightGBM): handles mixed information, missing values and non-linear effects,
-trains in minutes on a few million rows on one machine, and says which features mattered. Three quantile
-models (10th, 50th, 90th percentile) per horizon, or one model with horizon as a feature (decided by the first
-experiment).
+## 7. Feasibility and honest expectations
 
-## 3. Question B: will this trip run?
+- **Data:** about 8 complete days now; three weeks for a first honest result (about 2026-11-03); weather,
+  events and incidents need more weeks. Early rungs (R0, R3, the R1 and R2 pipelines on one route) can start now.
+- **The agency is a hard baseline**: independent papers do not show an outsider beating an agency's live
+  predictions; wins are vendors beating older systems, and TriMet's copy did not win. A tie, with honest
+  ranges and a clear account of when the agency is wrong, is a real result.
+- **Weather, events, 911:** no evidence of large gains in the literature; we test each by ablation and report
+  small or zero effects plainly.
+- **Three weeks of one city is thin**; every table says so and gives sample sizes.
 
-**One example** = a scheduled trip and a moment 30, 15 or 5 minutes before its scheduled start (on tracked
-routes only). **Label:** did it run (a bus reported on it), from `gold.trip_delivery`. About 2 to 3 percent of
-examples are "did not run", so this is a rare-event problem: accuracy is meaningless (always saying "it runs"
-is 97 percent accurate); the measures are how many missing trips we catch (recall) and how many of our
-warnings are right (precision).
+## 8. Order of work
 
-**Features at that moment:** the previous trip of the same bus (is it running now, how late, did it finish,
-did it go quiet early, did it never appear); whether the agency has named a bus for this trip; trips of this
-route already missing today; cancellations and skipped stops on the route today; hour, day type, route; the
-block's earlier trips.
+1. R0: the scoring harness, with the agency and baselines scored on the same rows (now).
+2. The training table and the leakage test (now).
+3. R3: the five Dublin models plus XGBoost and LightGBM on one route, chronological 80/20 (now; needs little data).
+4. R1 and R2 pipelines on the same table, first with one route, then all routes (about 2026-11-03 for honest numbers).
+5. Ablations; neural models; R4 (held-out routes).
+6. R5, R6, R7, R8.
+7. Write-up and a scorecard page on the site, dated, with sample sizes.
+8. If a model clearly wins and uses only live features, export it for the map.
 
-**Baselines:** the rule the map uses now ("previous trip never showed up": 84 percent of such trips did not run
-on 2026-10-20) and "no bus named yet". The model is worth it only if it catches more missing trips at the same
-precision, or warns earlier.
+## 9. Sources
 
-**Model:** logistic regression first (readable), then gradient-boosted trees; probabilities checked for
-calibration ("70 percent likely to run" should come true about 70 percent of the time).
-
-## 4. How we judge (decided now, before any result, so we cannot move the goalposts)
-
-- **Split by time, never at random.** Train on earlier days, test on the newest week. Random splits leak:
-  two moments of the same trip a minute apart look alike. Model choices (features, settings) use a
-  validation week before the test week; the test week is touched once per model version.
-- **Rolling check:** repeat with the window moved forward a week at a time (train weeks 1-2, test 3; train
-  2-3, test 4) to see if gains hold.
-- **A: measures:** median and 90th-percentile absolute error per horizon; the share of predictions within 60 s;
-  for the range, how often the truth falls inside the 10th-90th (should be about 80 percent) and how wide it is.
-- **B: measures:** precision and recall at a few warning thresholds, the area under the precision-recall curve,
-  and calibration.
-- **Same rows for everyone.** Model and baselines are scored on exactly the same examples.
-- **Is a gain real?** Confidence intervals by resampling whole trip-days (not single rows, which are not
-  independent). A gain smaller than its interval is reported as "no clear gain".
-- **Where it wins or loses:** by horizon, time of day, route type (frequent or not), weather, with and without
-  disruptions. A model that wins on average but loses badly at rush hour is not shipped.
-- **Ablation:** add feature groups one at a time and record what each adds. Often one group does most of the
-  work; that is a finding.
-- **Promotion rule:** a new model replaces the current one only if it is better on the newest week and not
-  worse at any horizon.
-
-## 5. Not fooling ourselves (leakage)
-
-- **"As of t" means visible at t, not stamped before t.** Bus reports reach us a median 57 seconds after their
-  GPS time; a real-time model can only use a report once it was published. Every feature is built from data
-  whose *publication* time (the first feed that contained it, kept in bronze) is at or before *t*. Our
-  arrival estimates use the report *after* a stop, so an arrival only counts as known once that later report
-  was published.
-- **History features from the past only:** typical running times, per-trip habits and route summaries are
-  recomputed from days before the example's day.
-- **A test checks it:** for a sample of rows, every feature timestamp is at or before *t*; the build fails
-  otherwise.
-- **Label leakage in B:** "the previous trip never appeared" must be judged with what was visible at *t*, not
-  with the day's final answer.
-
-## 6. Feasibility
-
-- **Data:** enough now for B (8 complete days, about 2,400 missing trips) and for building A's pipeline; three
-  weeks for a first honest A result (about 2026-11-03); rain and event effects need more weeks.
-- **Volume:** A's table is millions of rows a day if every moment is used; we sample (for example one moment
-  every 2 minutes per trip) to a few million rows for training. Building it is a daily Databricks job like the
-  others.
-- **Compute (Free Edition):** feature tables are SQL in the daily job; training a few-million-row model takes
-  minutes on one serverless machine (LightGBM added as a job dependency). The daily quota is not published, so
-  training runs are measured and kept off the daily schedule at first.
-- **Tracking:** MLflow works on our workspace (checked 2026-10-22): each run records the data window, feature
-  list, settings, code version and scores.
-- **Using a model live:** the public map must never query Databricks. A trained tree model can be exported as a
-  small file (JSON trees) and evaluated in the browser or the relay, using only features the page can compute
-  live (positions, predictions, static history files). So we mark each feature "live" or "offline only"; the
-  live model may be a smaller version of the best offline one. Until then, models are evaluated offline and
-  reported on the site.
-
-## 7. Honest expectations
-
-- The agency is already about as good as "stays as late as now". A realistic win for A is a modest drop in the
-  bad cases (the 90th percentile) at 15 and 30 minutes, plus calibrated ranges, plus a clear account of when
-  the agency is wrong. If a model does not beat persistence, that is a result worth publishing: it measures
-  how predictable delay is from public data.
-- B is likely the bigger rider win: a missing trip is predictable from the block, and no one tells riders today.
-- Three weeks is thin for rain and events; the scorecard will say so.
-
-## 8. What we build, in order
-
-1. **B's training table and baselines** (now): one row per trip and moment before start, features as visible
-   then, label from trip_delivery; score the two rules. Then logistic regression and trees.
-2. **A's training table** (now, extending prediction_errors): features as visible at *t*, the leakage test,
-   and the baseline scoreboard on the same rows.
-3. **A's first model** (about 2026-11-03): a small feature set (lateness now, its trend, time left, hour,
-   route), then feature groups one at a time.
-4. **Reports:** a scorecard on the site (baselines, model, slices, ranges), dated and with sample sizes.
-5. **Live use:** export the best "live-computable" model and use it in the map, if it clearly wins.
-6. C and D when their data is ready.
-
-## 9. What industry research says about this plan (details: `docs/ml_industry_research.md`)
-
-- A has the strongest precedent; **beating an agency's own live predictions has no independent precedent** (only
-  vendors beating older systems), so it is a stretch goal. Scoring will therefore include the agency-style
-  window score (WMATA's definition: a bus 0-3 min away must arrive within 1 min early to 1 min late, a bus 12-30
-  min away within 4 min early to 6 min late; early counts as worse than late) next to average error.
-- B (will a trip run) has no published fixed-route precedent: novel, expect modest results.
-- Bunching is mostly made at the start of a route; check first-stop departure gaps before predicting it.
-- Added to the to-do list from the research: runtime-tuning analysis (actual run times against the timetable),
-  and the announcement lead time for missed trips.
+- TriMet, "Improve Arrival Predictions with Machine Learning Model" (adapted from TransLink; open code
+  OpenTransitTools/transitcast and pytransitcast): https://vi.trimet.org/imi/pdf/Improve%20Arrival%20Predictions%20with%20Machine%20Learning.pdf
+- Barnes et al., "BusTr: Predicting Bus Travel Times from Real-Time Traffic", KDD 2020: https://arxiv.org/abs/2007.00882
+- Liu, Sun, Wang, "BusTime: Which is the Right Prediction Model for My Bus Arrival Time?", 2020: https://arxiv.org/abs/2003.10373
+- Aemmer et al., "Generalization strategies for improving bus travel time prediction across networks", Journal
+  of Urban Management 2024: https://sintef.no/en/publications/publication/2274121
+- WMATA prediction accuracy definition: https://www.wmata.com/initiatives/open-data-hub/upload/SEDashboardDefinitions.pdf
+- More, with evidence quality, in `docs/ml_industry_research.md`.
 
 ## 10. Decisions for the owner
 
-- Start with B (will this trip run) now, and build A's table in parallel? (recommended)
-- Is a model that only matches the agency on average but gives honest ranges worth showing on the map?
-- Publish model scores on the public site as they come (recommended), or keep them internal until A is trained?
+- Start now with R0 (harness), the training table and R3 (Dublin's five models plus XGBoost)? (recommended)
+- Is the "could not reproduce" outcome acceptable as a finding for R1 (TriMet saw it)?
+- Publish the scorecard on the public site as results come?
