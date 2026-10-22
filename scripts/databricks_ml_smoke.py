@@ -79,7 +79,7 @@ def train():
     m = xgb.XGBRegressor(n_estimators=200, max_depth=8, tree_method="hist", n_jobs=-1).fit(X, y)
     a = round(time.time() - t, 1)
     t = time.time()
-    l = lgb.LGBMRegressor(n_estimators=200, num_leaves=127, n_jobs=-1, verbose=-1).fit(X, y)
+    boost = lgb.LGBMRegressor(n_estimators=200, num_leaves=127, n_jobs=-1, verbose=-1).fit(X, y)
     return {
         "xgboost_1M_rows_200_trees_seconds": a,
         "lightgbm_1M_rows_200_trees_seconds": round(time.time() - t, 1),
