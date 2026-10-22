@@ -84,10 +84,13 @@ traffic model (no road graph or car traffic), trip-cancellation prediction (no f
    proper search (Optuna) on the validation week only.
 5. **Ensembles:** average or stack the best of each family.
 
-**Compute:** Databricks Free Edition serverless; we have not confirmed whether a GPU is available (assume not).
-Trees on millions of rows are comfortable on CPU; neural networks are limited to small sizes and sampled data.
-The daily quota is unpublished, so training runs are measured and kept off the daily schedule at first.
-**Tracking:** MLflow (the workspace API answers; nothing recorded yet): each run records the data window, feature
+**Compute (measured 2026-10-22, `docs/ml_databricks.md`):** Databricks Free Edition serverless gives a job 4 CPU
+cores and about 15 GB of memory, **no GPU**. XGBoost trains 1 million rows by 30 features with 200 trees in 22
+seconds and LightGBM in 16; a small embedding network takes 11 seconds for 500,000 rows and 3 epochs; a small LSTM
+takes 30 seconds per epoch on 200,000 sequences; PyTorch (CPU), CatBoost, Optuna and pyGAM install on demand.
+So trees and small networks on a few million sampled rows are comfortable; large neural models are not. The daily
+quota is unpublished, so training runs are measured and kept off the daily schedule at first.
+**Tracking:** MLflow tracking and the Unity Catalog model registry both work (tested): each run records the data window, feature
 list, settings, code version and scores. Reproduced numbers are written to `docs/ml_results.md` with dates.
 
 ## 6. Not fooling ourselves

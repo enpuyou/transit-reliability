@@ -21,6 +21,7 @@ something starts failing, because free-plan limits change.
 | Databricks SQL warehouse | 1, 2X-Small | used only for manual checks | OK |
 | Databricks compute quota | not published; overrun stops compute for the rest of the day, in extreme cases the month | 2026-10-15: 21.5 DBU jobs + 10.7 DBU SQL (a heavy day: 48 min rebuild and verification queries); no cut-off seen | UNKNOWN quota; measured usage in `docs/runbook.md` |
 | Databricks storage | not published | about 1.4 GB per day raw measured (2.66 GB after 46 hours, 2026-10-15; earlier estimate 1.8); bronze about 0.29 GB total | UNKNOWN, must bound |
+| Databricks ML compute (job) | serverless only; unpublished quota | measured 2026-10-22: 4 cores, about 15 GB, no GPU; pip installs work; 1M-row XGBoost in 22 s | OK for trees and small networks |
 | Databricks outbound internet | trusted domains only | none needed (push design) | OK |
 | Databricks inactivity | accounts may be deleted after a prolonged period, threshold not published | active | OK |
 
