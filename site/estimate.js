@@ -99,6 +99,46 @@
     return shown + Math.max(0, FACTOR * (vel || 0) * (1 - (shown - target) / AHEAD_SCALE)) * dt;
   }
 
-  var api = { advance: advance, slice: slice, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
+  /* ---------- timetable pace ---------- */
+  var MOVING = 3; // m/s: at its last report the bus was moving if faster than this
+
+  function interp(xs, ys, x) {
+    if (x <= xs[0]) return ys[0];
+    var n = xs.length;
+    if (x >= xs[n - 1]) return ys[n - 1];
+    for (var i = 0; i + 1 < n; i++) {
+      if (x < xs[i + 1]) return xs[i + 1] > xs[i] ? ys[i] + (ys[i + 1] - ys[i]) * (x - xs[i]) / (xs[i + 1] - xs[i]) : ys[i];
+    }
+    return ys[n - 1];
+  }
+
+  /** A trip's timetable along a line: stops as [{dist (m along the line), time (unix s)}] in trip order, kept only
+      where both distance and time increase (so it can be read both ways). */
+  function timetable(stops) {
+    var d = [], t = [];
+    stops.forEach(function (s) {
+      if (!d.length || (s.dist > d[d.length - 1] && s.time >= t[t.length - 1])) { d.push(s.dist); t.push(s.time); }
+    });
+    return d.length >= 2 ? { d: d, t: t } : null;
+  }
+
+  /** "Timetable pace": keep the bus exactly as late as it was at its last report, and move it at the timetable's
+      pace (which knows the slow stretches and the timetable stops), never behind its last report. */
+  function timetablePace(rep, tt, nowSec) {
+    var delay = rep.ts - interp(tt.d, tt.t, rep.dist);
+    return Math.max(rep.dist, interp(tt.t, tt.d, nowSec - delay));
+  }
+
+  /** The estimate the map draws ("mixed, halfway"): while the bus was moving at its last report, halfway between
+      timetable pace and recent speed; when it was slow or stopped (or there is no timetable), recent speed alone.
+      Replayed on 240 real trips: typical error 120 m against 131 m for recent speed alone and 253 m for the raw
+      report, and no more often much worse than the report (scripts/lag_estimators.py). */
+  function mixed(rep, vel, nowSec, lineLength, tt) {
+    var bySpeed = estimate(rep, vel, nowSec, lineLength);
+    if (!tt || vel == null || vel <= MOVING) return bySpeed;
+    return Math.min(lineLength, (timetablePace(rep, tt, nowSec) + bySpeed) / 2);
+  }
+
+  var api = { mixed: mixed, timetable: timetable, timetablePace: timetablePace, advance: advance, slice: slice, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Estimate = api;
 })(typeof window !== "undefined" ? window : globalThis);

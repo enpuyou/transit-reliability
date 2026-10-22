@@ -1,0 +1,1 @@
+{"canceled": ["842666291", "872392891", "732750421", "694057151"], "skipped": [{"tripId": "727785291", "vehicle": null, "skippedSeqs": [45]}, {"tripId": "727785301", "vehicle": "7159", "skippedSeqs": [45]}, {"tripId": "727785311", "vehicle": null, "skippedSeqs": [45]}], "route": "100133", "routeCount": 15}

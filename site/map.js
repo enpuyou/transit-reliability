@@ -31,6 +31,7 @@
 
   function headHtml(p) {
     var bits = ["<b>Route " + esc(p.label) + "</b>"];
+    if (Number(p.offroute) === 1) bits.push('<span class="m"><b>Not on its route right now</b> (more than 150 m from the route line): it may be on its way to join its trip partway, on a detour, or not in service yet. Shown where it reported, with no estimate.</span>');
     if (p.ts) {
       var age = Math.max(0, Date.now() / 1000 - Number(p.ts));
       bits.push('<span class="m">position reported ' + seattle(Number(p.ts)) + " (" + ago(age) + " ago)" +
@@ -78,12 +79,23 @@
     Promise.all([getTrips(), getStatics()]).then(function (res) {
       var trip = GtfsRt.findTripUpdate(res[0], p.trip), stops = res[1][0] || {}, hist = (res[1][1] || {}).h || {};
       if (!trip) { if (!quiet || !el.querySelector("b")) el.textContent = "The agency has no prediction for this trip right now."; return; }
-      var next = trip.updates.filter(function (u) { return u.stopSeq >= Number(p.stopSeq) && u.arrTime; });
+      if (trip.canceled) { el.innerHTML = "<b>The agency has marked this trip canceled.</b>"; return; }
+      // the agency can mark stops of a trip as skipped (for example when a replacement bus joins the trip partway)
+      var ahead = trip.updates.filter(function (u) { return u.stopSeq >= Number(p.stopSeq); });
+      var skipped = ahead.filter(function (u) { return u.skipped; });
+      var skipNote = "";
+      if (skipped.length) {
+        var firstServed = ahead.filter(function (u) { return !u.skipped && u.arrTime; })[0];
+        skipNote = "<b>Skips " + skipped.length + " stop" + (skipped.length > 1 ? "s" : "") + "</b> (" + esc(stops[skipped[0].stopId] || "stop " + skipped[0].stopId) +
+          (skipped.length > 1 ? " to " + esc(stops[skipped[skipped.length - 1].stopId] || "stop " + skipped[skipped.length - 1].stopId) : "") + ")" +
+          (firstServed ? "; first stop it will serve: " + esc(stops[firstServed.stopId] || "stop " + firstServed.stopId) + " at about " + hhmm(firstServed.arrTime) : "") + "." + "<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>";
+      }
+      var next = ahead.filter(function (u) { return u.arrTime && !u.skipped; });
       var keyOf = function (u) { return p.route + "|" + p.dir + "|" + u.stopId; };
       var shown = next.slice(0, 3);
       var tp = next.filter(function (u) { return hist[keyOf(u)]; })[0];
       if (tp && shown.indexOf(tp) < 0) shown.push(tp);
-      if (!shown.length) { el.textContent = "No upcoming stops in the agency's predictions."; return; }
+      if (!shown.length) { el.innerHTML = skipNote || "No upcoming stops in the agency's predictions."; return; }
       var lastStop = trip.updates.length ? trip.updates[trip.updates.length - 1].stopId : null;
       var rows = shown.map(function (u) {
         var sched = u.arrDelay != null ? u.arrTime - u.arrDelay : null, b = sched ? bucket(sched) : null;
@@ -94,7 +106,7 @@
         return line;
       });
       var age = trip.feedTimestamp ? Date.now() / 1000 - trip.feedTimestamp : 0;
-      el.innerHTML = (lastStop && stops[lastStop] ? "<b>Toward " + esc(stops[lastStop]) + "</b><hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>" : "") + rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
+      el.innerHTML = (lastStop && stops[lastStop] ? "<b>Toward " + esc(stops[lastStop]) + "</b><hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>" : "") + skipNote + rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
         '<div class="m" style="margin-top:6px">Predictions as of ' + hhmm(trip.feedTimestamp) + (age > 600 ? " — OUT OF DATE, ignore them" : "") +
         ". History is kept only for stops with a timetable time, and comes from past days only (" + ((res[1][1] || {}).first_day || "?") + " to " + ((res[1][1] || {}).last_day || "?") + "); our arrival times are estimates from GPS.</div>";
     }).catch(function (err) { if (!quiet) el.textContent = "Couldn't load predictions (" + err.message + ")."; });
@@ -104,15 +116,16 @@
   var BLANK = { version: 8, glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf", sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9ecef" } }] };
   var map = new maplibregl.Map({ container: "livemap", style: new URLSearchParams(location.search).get("base") === "none" ? BLANK : STYLE, center: [-122.33, 47.6], zoom: 10.5, attributionControl: { compact: true } });
   window.transitMap = map; // handy for debugging in the browser console
+  window.transitBuses = pos;
   map.on("error", function (e) {
     console.log("map error: " + (e && e.error && e.error.message ? e.error.message : e));
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
   /* ---------- bus positions: every bus glides from where it was drawn to where it now is ---------- */
-  function propsOf(v, heading, est) {
+  function propsOf(v, heading, est, offroute) {
     return { id: v.id || "", route: v.routeId || "", color: colour(v.routeId), label: name(v.routeId), speed: v.speed,
-      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId, heading: heading == null ? -1 : heading, est: est ? 1 : 0 };
+      stopSeq: v.stopSeq, ts: v.ts, trip: v.tripId || "", dir: v.directionId, heading: heading == null ? -1 : heading, est: est ? 1 : 0, offroute: offroute ? 1 : 0 };
   }
   /* The agency's own heading when the bus reports one (few do); otherwise read it off the route line. */
   function headingOf(v) {
@@ -145,7 +158,41 @@
     });
     return best && best.off <= 150 ? best : null;
   }
-  function estDist(b, nowSec) { return Estimate.estimate(b.rep, b.vel, nowSec, b.len); }
+  function estDist(b, nowSec) { return Estimate.mixed(b.rep, b.vel, nowSec, b.len, b.tt); }
+
+  /* ---------- each route's timetable and "previous trip of this bus" (site/map/trips/<route>.json) ---------- */
+  var routeTrips = {};
+  function ensureRouteTrips(routeId) {
+    if (!routeId || routeTrips[routeId]) return Promise.resolve(routeTrips[routeId] || null);
+    routeTrips[routeId] = fetch("map/trips/" + routeId + ".json").then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { routeTrips[routeId] = j; return j; }).catch(function () { routeTrips[routeId] = null; return null; });
+    return routeTrips[routeId];
+  }
+  function loadedTrips(routeId) { var r = routeTrips[routeId]; return r && !r.then ? r : null; }
+  /* Timetable times count seconds from "noon minus 12 hours" of the service day in Seattle (the GTFS rule). */
+  function serviceBase(yyyymmdd) {
+    var y = Number(yyyymmdd.slice(0, 4)), m = Number(yyyymmdd.slice(4, 6)), d = Number(yyyymmdd.slice(6, 8));
+    var hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hourCycle: "h23" }).format(new Date(Date.UTC(y, m - 1, d, 20))));
+    return Date.UTC(y, m - 1, d, 12 + (20 - hour)) / 1000 - 12 * 3600;
+  }
+  function todayPacific() {
+    var p = {};
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return p.year + p.month + p.day;
+  }
+  /* The bus's trip timetable laid along its route line, for the "timetable pace" half of the estimate. */
+  function timetableFor(b, v) {
+    var data = loadedTrips(v.routeId), trip = data && data.trips[v.tripId];
+    if (!trip || !b.line) return null;
+    var base = serviceBase(v.startDate || todayPacific()), stops = [];
+    trip[5].split(";").forEach(function (part) {
+      var bits = part.split(":"), at = data.stops[bits[0]];
+      if (!at) return;
+      var p = Estimate.project(b.line, at[0], at[1]);
+      if (p.off <= 120) stops.push({ dist: p.dist, time: base + Number(bits[1]) });
+    });
+    return Estimate.timetable(stops);
+  }
   /* Called for every bus on every update. When the bus has a NEW report: (1) check the estimates we drew earlier
      against where the bus really was at those moments (the report carries the time its GPS fix was taken, so a late
      delivery does not matter), (2) remember the report, (3) work out its speed. */
@@ -154,7 +201,8 @@
     var fresh = !b.rep || v.ts !== b.rep.ts;
     if (fresh) {
       var hit = lineFor(v);
-      if (!hit) { b.est = false; b.rep = null; b.hist = []; b.preds = []; return; }
+      if (!hit) { b.est = false; b.rep = null; b.hist = []; b.preds = []; b.offRoute = !!(shapes[v.routeId + "|" + v.directionId]); return; }
+      b.offRoute = false;
       if (b.rep && b.line !== hit.line) { b.hist = []; b.preds = []; }
       var prev = b.hist.length ? b.hist[b.hist.length - 1] : null;
       b.line = hit.line; b.len = Estimate.length(hit.line);
@@ -168,6 +216,8 @@
       }
       b.preds = b.preds.filter(function (q) { return q.at >= v.ts; });
       b.rep = { ts: v.ts, dist: hit.dist };
+      var ttKey = v.tripId + "|" + v.routeId + "|" + v.directionId + "|" + (loadedTrips(v.routeId) ? 1 : 0);
+      if (b.ttKey !== ttKey || b.ttLine !== b.line) { b.tt = timetableFor(b, v); b.ttKey = ttKey; b.ttLine = b.line; }
       b.hist.push(b.rep); if (b.hist.length > 5) b.hist.shift();
       b.vel = Estimate.speed(b.hist);
     }
@@ -213,7 +263,7 @@
       if (!filter) return; // with every route selected there are too many buses to read: choose a route
       if (b.v.routeId !== filter) return;
       if (dirFilter && String(b.v.directionId) !== dirFilter) return;
-      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst) });
+      feats.push({ type: "Feature", geometry: { type: "Point", coordinates: [b.lon, b.lat] }, properties: propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst, b.offRoute) });
     });
     var src = map.getSource("buses");
     if (src) src.setData({ type: "FeatureCollection", features: feats });
@@ -285,6 +335,7 @@
     ensureStops();
     showStops();
     loadRouteTraffic();
+    ensureRouteTrips(selected).then(updateDepartures);
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -306,7 +357,7 @@
     if (!tracked) return;
     var b = pos[tracked.id];
     if (!b) { tracked.head.innerHTML += '<br><span class="m">This bus is no longer in the feed.</span>'; return; }
-    var p = propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst);
+    var p = propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst, b.offRoute);
     tracked.head.innerHTML = headHtml(p);
     loadPredictions(p, tracked.pred, true);
   }
@@ -329,9 +380,9 @@
   var stopTracked = null;
   function arrivalsHtml(p, trips, names) {
     var res = GtfsRt.arrivalsAtStop(trips, p.id), now = Date.now() / 1000;
-    var list = res.arrivals.filter(function (a) {
-      return a.time >= now - 30 && (!selected || a.routeId === selected) && (!selectedDir || String(a.directionId) === selectedDir);
-    }).slice(0, 4);
+    var mine = res.arrivals.filter(function (a) { return (!selected || a.routeId === selected) && (!selectedDir || String(a.directionId) === selectedDir); });
+    var list = mine.filter(function (a) { return !a.skipped && a.time >= now - 30; }).slice(0, 4);
+    var skips = mine.filter(function (a) { return a.skipped; });
     var title = "<b>" + esc(names[p.id] || "stop " + p.id) + "</b>";
     var kind = Number(p.tp) === 1 ? "Timetable stop: the schedule holds buses to a set time here." : "Regular stop: its scheduled time is calculated between timetable stops.";
     var rows = list.map(function (a) {
@@ -340,6 +391,8 @@
       return "<b>" + when + "</b> (" + hhmm(a.time) + ") route " + esc(name(a.routeId)) + (a.delay != null ? ", " + lateText(a.delay) : "");
     });
     var body = rows.length ? "Agency's predicted arrivals:<br>" + rows.join("<br>") : "No predicted arrivals here right now.";
+    if (skips.length) body += '<br><span class="m"><b>' + skips.length + " upcoming trip" + (skips.length > 1 ? "s" : "") + " will not stop here</b> (" +
+      skips.filter(function (a) { return a.canceled; }).length + " canceled, " + skips.filter(function (a) { return !a.canceled; }).length + " skipping this stop), according to the agency.</span>";
     var age = res.feedTimestamp ? now - res.feedTimestamp : 0;
     return title + '<br><span class="m">' + kind + '</span><div style="margin-top:6px">' + body + "</div>" +
       '<div class="m" style="margin-top:6px">Predictions as of ' + (res.feedTimestamp ? hhmm(res.feedTimestamp) : "?") + (age > 600 ? " (OUT OF DATE)" : "") +
@@ -370,7 +423,7 @@
     if (trafficBase) return Promise.resolve(trafficBase);
     if (location.hostname !== "localhost" && location.hostname !== "127.0.0.1") { trafficBase = RELAY; return Promise.resolve(trafficBase); }
     var local = "http://localhost:8787";
-    return fetch(local + "/traffic/segment?lat=47.6205&lon=-122.3212").then(function (r) { trafficBase = r.ok ? local : RELAY; return trafficBase; })
+    return fetch(local + "/memory/status").then(function (r) { trafficBase = r.ok ? local : RELAY; return trafficBase; })
       .catch(function () { trafficBase = RELAY; return trafficBase; });
   }
   /* Points every 450 m or so along the selected route's lines (both directions unless one is chosen), at most 120. */
@@ -433,6 +486,80 @@
   }
   setInterval(function () { if (!document.hidden) loadRouteTraffic(); }, TRAFFIC_MS);
 
+  /* ---------- next departures from the start of the route: is a bus there? ---------- */
+  // For the next trips that have not started, look at the trip the same bus runs just before (the timetable's block)
+  // and ask the relay's trip memory what happened to it: still running, finished near this trip's start (a bus is
+  // waiting), finished elsewhere, or never seen (then the next trip often does not run either: 84% on 2026-10-20).
+  var depBusy = false, WAIT_RADIUS_M = 250;
+  function metresBetween(a, b) {
+    var kx = 111320 * Math.cos(a[1] * Math.PI / 180);
+    return Math.hypot((a[0] - b[0]) * kx, (a[1] - b[1]) * 110540);
+  }
+  function updateDepartures() {
+    var el = document.getElementById("departures"), src = map.getSource("waiting");
+    var empty = { type: "FeatureCollection", features: [] };
+    if (!el) return;
+    if (!selected) { el.innerHTML = ""; if (src) src.setData(empty); return; }
+    var route = selected, dir = selectedDir, key = route + "|" + dir;
+    // a result is only thrown away if the route or direction changed meanwhile; one refresh at a time
+    var stale = function () { return selected + "|" + selectedDir !== key; };
+    if (depBusy === key) return;
+    depBusy = key;
+    var done = function () { if (depBusy === key) depBusy = false; };
+    Promise.all([ensureRouteTrips(route), getTrips(), getStatics(), getTrafficBase()]).then(function (res) {
+      var data = res[0], names = res[2][0] || {}, base = res[3];
+      if (!data || stale()) return done();
+      var now = Date.now() / 1000, running = {};
+      Object.keys(pos).forEach(function (id) { if (pos[id].v.tripId) running[pos[id].v.tripId] = pos[id]; });
+      var upcoming = GtfsRt.tripsForRoute(res[1], route).trips.map(function (t) {
+        var info = data.trips[t.tripId];
+        if (!info || running[t.tripId]) return null;
+        if (dir && String(info[0]) !== dir) return null;
+        var first = info[5].split(";")[0].split(":"), start = serviceBase(t.startDate || todayPacific()) + Number(first[1]);
+        if (start < now - 600 || start > now + 3 * 3600) return null;
+        return { t: t, info: info, start: start, firstStop: first[0], dir: String(info[0]) };
+      }).filter(Boolean).sort(function (a, b) { return a.start - b.start; });
+      var perDir = {}, pick = [];
+      upcoming.forEach(function (u) { perDir[u.dir] = (perDir[u.dir] || 0) + 1; if (perDir[u.dir] <= (dir ? 3 : 2)) pick.push(u); });
+      if (!pick.length) { el.innerHTML = '<span class="note">No upcoming departures from the start of this route in the agency\'s file.</span>'; if (src) src.setData(empty); return done(); }
+      var prevIds = pick.map(function (u) { return u.info[1]; }).filter(Boolean);
+      return fetch(base + "/memory/ended?trips=" + encodeURIComponent(prevIds.join(","))).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+        .then(function (mem) {
+          done();
+          if (stale()) return;
+          var feats = [], lines = pick.map(function (u) {
+            var info = u.info, prev = info[1], prevLast = info[3], prevEnd = info[4] == null ? null : serviceBase(u.t.startDate || todayPacific()) + info[4];
+            var startName = esc(names[u.firstStop] || "stop " + u.firstStop), at = data.stops[u.firstStop];
+            var head = "<b>" + hhmm(u.start) + "</b> toward " + esc(heads[route + "|" + u.dir] || "direction " + u.dir) + ": ";
+            var status, kind;
+            var skippedFirst = 0;
+            for (var i = 0; i < u.t.updates.length && u.t.updates[i].skipped; i++) skippedFirst++;
+            var joinAt = skippedFirst ? u.t.updates.filter(function (x) { return !x.skipped && (x.arrTime || x.depTime); })[0] : null;
+            if (u.t.canceled) { status = "the agency has marked this trip canceled."; kind = "missing"; }
+            else if (skippedFirst) { status = "skips its first " + skippedFirst + " stops" + (joinAt ? "; joins at " + esc(names[joinAt.stopId] || "stop " + joinAt.stopId) + " at about " + hhmm(joinAt.arrTime || joinAt.depTime) : "") + "."; kind = "partial"; }
+            else if (!prev) { status = "the bus's first trip of the day (it comes from the base); no earlier trip to check."; kind = "unknown"; }
+            else if (running[prev] || (mem && mem.running.indexOf(prev) >= 0)) { status = "the bus is still on its previous trip" + (running[prev] ? " (shown on the map)" : "") + "."; kind = "coming"; }
+            else if (mem && mem.ended[prev]) {
+              var e = mem.ended[prev], end = data.stops[prevLast];
+              var near = end && e.lon != null && metresBetween([e.lon, e.lat], end) <= WAIT_RADIUS_M;
+              status = near ? "<b>a bus should be waiting at " + startName + "</b> (its previous trip ended there at " + hhmm(e.ts || e.endedAt) + ")." :
+                "its previous trip stopped reporting at " + hhmm(e.ts || e.endedAt) + ", away from here; the bus is not confirmed at " + startName + ".";
+              kind = near ? "waiting" : "unknown";
+            } else if (mem && mem.since && prevEnd && prevEnd < now - 300 && mem.since < prevEnd - 900) {
+              status = "<b>the bus's previous trip never showed up.</b> This trip may not run normally (after a missing trip, the next one was also missing 84% of the time).";
+              kind = "missing";
+            } else if (prevEnd && prevEnd > now) { status = "the bus's previous trip is not due to finish until " + hhmm(prevEnd) + "."; kind = "coming"; }
+            else { status = "not known (the trip memory started at " + (mem && mem.since ? hhmm(mem.since) : "an unknown time") + ")."; kind = "unknown"; }
+            if (at) feats.push({ type: "Feature", geometry: { type: "Point", coordinates: at }, properties: { kind: kind, label: hhmm(u.start) + (kind === "waiting" ? " bus waiting" : kind === "missing" ? " no bus known" : "") } });
+            return head + status;
+          });
+          el.innerHTML = '<b>Next departures from the start</b> <span class="note">(is a bus there?)</span><br>' + lines.join("<br>");
+          if (src) src.setData({ type: "FeatureCollection", features: feats });
+        });
+    }).catch(function (e) { done(); console.log("departures error: " + (e && e.stack ? e.stack.split("\n").slice(0, 3).join(" / ") : e)); });
+  }
+  setInterval(function () { if (!document.hidden && selected) updateDepartures(); }, 30000);
+
   function fillRoutePicker(feed) {
     var ids = {};
     feed.vehicles.forEach(function (v) { if (v.routeId) ids[v.routeId] = true; });
@@ -492,6 +619,13 @@
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 14, 3.2, 17, 4.8],
       "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.3 } });
+    map.addSource("waiting", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "waiting", type: "circle", source: "waiting", paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 5, 16, 9], "circle-color": "#ffffff",
+      "circle-stroke-width": 3, "circle-stroke-color": ["match", ["get", "kind"], "waiting", "#2e9e4f", "missing", "#d63a2f", "partial", "#f08a24", "#9aa0a6"] } });
+    map.addLayer({ id: "waiting-label", type: "symbol", source: "waiting", minzoom: 12,
+      layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.2], "text-anchor": "top" },
+      paint: { "text-color": "#1d2330", "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
     map.addSource("bus-ghosts", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "bus-trail", type: "line", source: "bus-ghosts", filter: ["==", ["geometry-type"], "LineString"],
       paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-opacity": 0.8, "line-dasharray": [1, 1.4] } });
@@ -506,8 +640,9 @@
     // fans out in front of it, like the location dot in Apple Maps; with no known heading there is no beam.
     var BODY = ["interpolate", ["linear"], ["zoom"], 9, 4.5, 12, 6, 15, 7, 17, 8];
     var SIZE = ["interpolate", ["linear"], ["zoom"], 9, 0.8, 12, 1.1, 15, 1.3, 17, 1.5];
-    var disc = { "circle-radius": BODY, "circle-color": ["get", "color"], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.8 };
-    map.addLayer({ id: "bus-beam", type: "symbol", source: "buses", filter: [">=", ["get", "heading"], 0], layout: {
+    var disc = { "circle-radius": BODY, "circle-color": ["case", ["==", ["get", "offroute"], 1], "#9aa0a6", ["get", "color"]],
+      "circle-opacity": ["case", ["==", ["get", "offroute"], 1], 0.75, 1], "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.8 };
+    map.addLayer({ id: "bus-beam", type: "symbol", source: "buses", filter: ["all", [">=", ["get", "heading"], 0], ["!=", ["get", "offroute"], 1]], layout: {
       "icon-image": "beam", "icon-rotate": ["get", "heading"], "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-size": SIZE },
       paint: { "icon-color": ["get", "color"], "icon-opacity": 0.45 } });
     map.addLayer({ id: "bus-dots", type: "circle", source: "buses", paint: disc });

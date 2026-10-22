@@ -47,6 +47,7 @@
         return true;
       }
       if (w === 0 && f === 6) { v.directionId = r.varint(); return true; }
+      if (w === 0 && f === 4) { v.tripMark = r.varint(); return true; } // 0 scheduled, 1 added, 3 canceled
       return false;
     });
   }
@@ -126,9 +127,10 @@
     return e;
   }
   function readStopUpdate(r, end) {
-    var u = { stopSeq: null, stopId: null, arrTime: null, arrDelay: null, depTime: null, depDelay: null };
+    var u = { stopSeq: null, stopId: null, arrTime: null, arrDelay: null, depTime: null, depDelay: null, skipped: false };
     each(r, end, function (f, w) {
       if (w === 0 && f === 1) { u.stopSeq = r.varint(); return true; }
+      if (w === 0 && f === 5) { u.skipped = r.varint() === 1; return true; } // the agency says this stop will not be served
       if (w === 2) {
         var len = r.varint(), stop = r.p + len;
         if (f === 2) { var a = readEvent(r, stop); u.arrTime = a.time; u.arrDelay = a.delay; }
@@ -142,12 +144,13 @@
     return u;
   }
   function readTripUpdate(r, end) {
-    var t = { tripId: null, routeId: null, startDate: null, directionId: null, updates: [], timestamp: null };
+    var t = { tripId: null, routeId: null, startDate: null, directionId: null, tripMark: 0, vehicleId: null, updates: [], timestamp: null };
     each(r, end, function (f, w) {
       if (w === 2) {
         var len = r.varint(), stop = r.p + len;
         if (f === 1) readTrip(r, stop, t);
         else if (f === 2) t.updates.push(readStopUpdate(r, stop));
+        else if (f === 3) { var d = {}; readDescriptor(r, stop, d); t.vehicleId = d.id || null; }
         r.p = stop;
         return true;
       }
@@ -178,7 +181,7 @@
       r.p = stop;
       return true;
     });
-    if (found) found.feedTimestamp = header;
+    if (found) { found.feedTimestamp = header; found.canceled = found.tripMark === 3; }
     return found;
   }
 
@@ -195,8 +198,11 @@
           if (ew === 2 && ef === 3) {
             var l2 = r.varint(), s2 = r.p + l2, t = readTripUpdate(r, s2);
             t.updates.forEach(function (u) {
-              if (u.stopId === stopId && (u.arrTime || u.depTime)) {
-                out.push({ tripId: t.tripId, routeId: t.routeId, directionId: t.directionId, time: u.arrTime || u.depTime, delay: u.arrTime ? u.arrDelay : u.depDelay });
+              if (u.stopId !== stopId) return;
+              var skipped = u.skipped || t.tripMark === 3;
+              if (u.arrTime || u.depTime || skipped) {
+                out.push({ tripId: t.tripId, routeId: t.routeId, directionId: t.directionId, time: u.arrTime || u.depTime || null,
+                  delay: u.arrTime ? u.arrDelay : u.depDelay, skipped: skipped, canceled: t.tripMark === 3 });
               }
             });
             r.p = s2;
@@ -208,10 +214,34 @@
       r.p = stop;
       return true;
     });
-    out.sort(function (a, b) { return a.time - b.time; });
+    out.sort(function (a, b) { return (a.time || Infinity) - (b.time || Infinity); });
     return { feedTimestamp: header, arrivals: out };
   }
 
-  var api = { decodeVehicles: decodeVehicles, findTripUpdate: findTripUpdate, arrivalsAtStop: arrivalsAtStop };
+  /** Every trip update in the file whose route is `routeId` (with its stop updates). */
+  function tripsForRoute(bytes, routeId) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), r = new Reader(u8), out = [], header = null;
+    each(r, u8.length, function (f, w) {
+      if (w !== 2) return false;
+      var len = r.varint(), stop = r.p + len;
+      if (f === 1) header = readHeader(r, stop);
+      else if (f === 2) {
+        each(r, stop, function (ef, ew) {
+          if (ew === 2 && ef === 3) {
+            var l2 = r.varint(), s2 = r.p + l2, t = readTripUpdate(r, s2);
+            if (t.routeId === routeId) { t.canceled = t.tripMark === 3; out.push(t); }
+            r.p = s2;
+            return true;
+          }
+          return false;
+        });
+      }
+      r.p = stop;
+      return true;
+    });
+    return { feedTimestamp: header, trips: out };
+  }
+
+  var api = { decodeVehicles: decodeVehicles, findTripUpdate: findTripUpdate, arrivalsAtStop: arrivalsAtStop, tripsForRoute: tripsForRoute };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.GtfsRt = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -66,3 +66,26 @@ test("slice returns the stretch of line between two distances, turning corners",
   assert.ok(Math.abs(part[part.length - 1][1] - north(200)) < 1e-6, "ends 1200 m along, on the northward stretch");
   assert.equal(E.slice(line, 100, 300).length, 2, "no corner in between: just the two ends");
 });
+
+test("timetable pace keeps the bus as late as it was and moves it at the timetable's speed", () => {
+  // timetable: 0 m at t=0, 1000 m at t=100 (10 m/s), 1500 m at t=300 (2.5 m/s: a slow stretch)
+  const tt = E.timetable([{ dist: 0, time: 0 }, { dist: 1000, time: 100 }, { dist: 1500, time: 300 }]);
+  // last report: 500 m at t=80, i.e. 30 s late (the timetable has it there at t=50)
+  const rep = { ts: 80, dist: 500 };
+  assert.equal(E.timetablePace(rep, tt, 80), 500, "no time passed: where it reported");
+  assert.equal(E.timetablePace(rep, tt, 120), 900, "40 s later at 10 m/s");
+  assert.equal(E.timetablePace(rep, tt, 230), 1000 + 2.5 * (230 - 30 - 100), "into the slow stretch");
+  assert.equal(E.timetablePace({ ts: 80, dist: 1450 }, tt, 85), 1000 + 2.5 * 185, "5 s later, in the slow stretch");
+  assert.equal(E.timetablePace({ ts: 80, dist: 1450 }, tt, 70), 1450, "a clock earlier than the report never moves it back");
+  assert.equal(E.timetable([{ dist: 5, time: 0 }]), null, "one stop is not a timetable");
+});
+
+test("mixed: halfway between timetable pace and recent speed while moving, recent speed when slow", () => {
+  const tt = E.timetable([{ dist: 0, time: 0 }, { dist: 1000, time: 100 }, { dist: 1500, time: 300 }]);
+  const rep = { ts: 80, dist: 500 };
+  const bySpeed = E.estimate(rep, 8, 120, 1500); // 500 + 0.75 * 8 * 40 = 740
+  assert.equal(bySpeed, 740);
+  assert.equal(E.mixed(rep, 8, 120, 1500, tt), (900 + 740) / 2, "moving: halfway");
+  assert.equal(E.mixed(rep, 2, 120, 1500, tt), E.estimate(rep, 2, 120, 1500), "slow: recent speed only");
+  assert.equal(E.mixed(rep, 8, 120, 1500, null), 740, "no timetable: recent speed only");
+});

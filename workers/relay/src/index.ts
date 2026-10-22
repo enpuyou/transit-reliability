@@ -1,10 +1,24 @@
 import { CORS_HEADERS, feedFor, parsePoint, relay, trafficSegment, type RelayEnv } from "./relay";
+import { TripMemory } from "./memory";
+
+export { TripMemory };
+
+interface Env extends RelayEnv {
+  MEMORY: DurableObjectNamespace<TripMemory>;
+}
 
 export default {
-  async fetch(request: Request, env: RelayEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (request.method !== "GET") return new Response("method not allowed", { status: 405, headers: CORS_HEADERS });
     const url = new URL(request.url);
+    if (url.pathname === "/memory/ended" || url.pathname === "/memory/status") {
+      // one memory for everyone: the same Durable Object every time
+      const res = await env.MEMORY.get(env.MEMORY.idFromName("seattle")).fetch(request);
+      const headers = new Headers(res.headers);
+      for (const [k, v] of Object.entries(CORS_HEADERS)) headers.set(k, v);
+      return new Response(res.body, { status: res.status, headers });
+    }
     const isSegment = url.pathname === "/traffic/segment";
     const point = isSegment ? parsePoint(url.searchParams) : null;
     if (isSegment && !point) return new Response("not a point over the Seattle area", { status: 404, headers: CORS_HEADERS });
@@ -20,4 +34,4 @@ export default {
     if (fresh.status === 200) ctx.waitUntil(cache.put(key, fresh.clone()));
     return fresh;
   },
-} satisfies ExportedHandler<RelayEnv>;
+} satisfies ExportedHandler<Env>;

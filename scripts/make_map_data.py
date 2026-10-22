@@ -12,6 +12,11 @@
   main patterns (the same ones shapes.json draws), so a branching route lists the stops of every branch.
 - shapes.json: the route lines. Key "route|direction" -> list of lines (each a list of [lon, lat]):
   the shapes that at least 20% of that route direction's trips use, simplified to within about 8 m.
+- trips/<route id>.json: for each trip of the route in the newest timetable: its direction, its timetable
+  ("stop:seconds after midnight of the service day" per stop), and the trip the same bus runs just before it
+  (the schedule's block: same block and service pattern, the trip that starts last before this one), with that
+  trip's route, last stop and scheduled end; plus the coordinates of every stop the route's trips use. Used for
+  the "timetable pace" estimate and to say whether a bus is waiting at a trip's first stop.
 - site/data/stop_history.json (local preview only): typical lateness per timetable stop. The daily
   silver job builds the real one (`transit_reliability.public.map_data`); the site workflow copies it.
 
@@ -24,6 +29,7 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_site_example import make_query  # noqa: E402
@@ -102,6 +108,22 @@ def route_stops_sql() -> str:
       ORDER BY r.route_id, r.direction_id, r.shape_id, st.stop_sequence"""
 
 
+def trips_sql() -> str:
+    return f"""WITH fv AS (SELECT max(feed_version) AS v FROM {S}.gtfs_trips),
+      t AS (SELECT trip_id, route_id, direction_id, service_id, block_id FROM {S}.gtfs_trips, fv WHERE feed_version = fv.v),
+      st AS (SELECT trip_id, stop_sequence, stop_id, arrival_seconds FROM {S}.gtfs_stop_times, fv WHERE feed_version = fv.v),
+      per AS (SELECT trip_id, min_by(arrival_seconds, stop_sequence) AS start_s, max_by(arrival_seconds, stop_sequence) AS end_s,
+                max_by(stop_id, stop_sequence) AS last_stop,
+                concat_ws(';', transform(sort_array(collect_list(struct(stop_sequence, stop_id, arrival_seconds))), x -> concat(x.stop_id, ':', x.arrival_seconds))) AS times
+              FROM st GROUP BY trip_id),
+      j AS (SELECT t.*, per.start_s, per.end_s, per.last_stop, per.times,
+              lag(t.trip_id) OVER w AS prev_trip, lag(t.route_id) OVER w AS prev_route,
+              lag(per.last_stop) OVER w AS prev_last_stop, lag(per.end_s) OVER w AS prev_end_s
+            FROM t JOIN per ON per.trip_id = t.trip_id
+            WINDOW w AS (PARTITION BY t.block_id, t.service_id ORDER BY per.start_s))
+      SELECT route_id, trip_id, direction_id, prev_trip, prev_route, prev_last_stop, prev_end_s, times FROM j"""
+
+
 def write(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, separators=(",", ":"), sort_keys=True))
     print(f"wrote {path}: {path.stat().st_size:,} bytes")
@@ -145,6 +167,37 @@ def main() -> None:
             [str(stop), round(float(lon), 5), round(float(lat), 5), int(tp)]
         )
     write(out / "route_stops.json", route_stops)
+
+    coords = {
+        str(r[0]): [round(float(r[2]), 5), round(float(r[1]), 5)]
+        for r in q(
+            f"SELECT stop_id, max_by(stop_lat, feed_version), max_by(stop_lon, feed_version) FROM {S}.gtfs_stops GROUP BY stop_id"
+        )
+    }
+    per_route: dict[str, dict[str, Any]] = {}
+    for route, trip, direction, prev, prev_route, prev_last, prev_end, times in q(trips_sql()):
+        r = per_route.setdefault(str(route), {"stops": {}, "trips": {}})
+        r["trips"][str(trip)] = [
+            int(direction),
+            prev,
+            prev_route,
+            prev_last,
+            None if prev_end is None else int(prev_end),
+            times,
+        ]
+        for part in (times or "").split(";"):
+            sid = part.split(":")[0]
+            if sid in coords:
+                r["stops"][sid] = coords[sid]
+        if prev_last in coords:
+            r["stops"][prev_last] = coords[prev_last]
+    (out / "trips").mkdir(exist_ok=True)
+    total = 0
+    for route, data in per_route.items():
+        path = out / "trips" / f"{route}.json"
+        path.write_text(json.dumps(data, separators=(",", ":"), sort_keys=True))
+        total += path.stat().st_size
+    print(f"wrote {len(per_route)} files in {out / 'trips'}: {total:,} bytes in total")
 
     lines: dict[tuple[str, str, str], list[tuple[float, float]]] = {}
     for route, direction, shape, lat, lon in q(shapes_sql()):

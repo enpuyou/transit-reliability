@@ -210,6 +210,24 @@ route 49, the 17:00 trip toward Downtown): 16:07 scheduled with no bus; 16:39 bu
 skipped (joining at E Roy St & Broadway E); 17:01 the whole trip marked cancelled. Its previous trip in the block
 (15:52 to 16:29) never appeared.
 
+## Built 2026-10-21 evening: skips and cancellations, the mixed estimate, and the trip memory
+
+- The page now reads the agency's marks: a canceled trip says so; a bus whose next stops are skipped says
+  "skips N stops; first stop it will serve: X at about HH:MM"; a stop lists how many upcoming trips will not stop
+  there. A bus more than 150 m from its route line is drawn grey with no beam and no estimate, and its popup says
+  it is not on its route (it may be joining its trip partway, on a detour, or not in service yet).
+- The drawn estimate is now "mixed, halfway" (see the table above): it needs each trip's timetable, so
+  `scripts/make_map_data.py` writes `site/map/trips/<route>.json` (142 files, 15 MB in total, one loaded per chosen
+  route): per trip its direction, timetable, and the previous trip of the same bus from the schedule's block.
+  Timetable times count from noon minus 12 hours of the service day in Seattle (the GTFS rule).
+- Trip memory: a Cloudflare Durable Object in the relay (`workers/relay/src/memory.ts`) wakes every 30 s, reads
+  the bus file and records each trip when it disappears, with its bus and last position, for 6 hours. The page
+  shows "Next departures from the start" for the chosen route: canceled; skips its first stops and joins at X;
+  first trip of the bus's day; bus still on its previous trip; a bus should be waiting here (previous trip ended
+  within 250 m of its last stop); previous trip stopped reporting elsewhere; the previous trip never showed up
+  (warning: 84% of such next trips were also missing on 2026-10-20); not known (before the memory started).
+  First live check (route 49, 17:30): one "bus waiting at Pike St & 4th Ave", one "still on its previous trip".
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

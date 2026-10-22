@@ -14,3 +14,13 @@ enabled = true
 [vars]
 KCM_BASE_URL = "https://s3.amazonaws.com/kcm-alerts-realtime-prod"
 CACHE_SECONDS = "15"
+
+# Trip memory (src/memory.ts): one Durable Object that wakes every 30 s, reads the bus file and remembers trips
+# that have just finished, so the map can tell whether a bus is waiting for its next trip. Decision 0025.
+[[durable_objects.bindings]]
+name = "MEMORY"
+class_name = "TripMemory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TripMemory"]

@@ -52,3 +52,17 @@ test("lists the predicted arrivals at a stop the same as the Python parser", () 
   }
   assert.deepEqual(arrivalsAtStop(file, "no-such-stop").arrivals, []);
 });
+
+test("reads the agency's canceled-trip and skipped-stop marks the same as the Python parser", () => {
+  const { findTripUpdate, tripsForRoute } = createRequire(import.meta.url)("../gtfsrt.js");
+  const file = new Uint8Array(readFileSync(new URL("../../tests/fixtures/tripupdates.pb", import.meta.url)));
+  const exp = JSON.parse(readFileSync(new URL("./marks_expected.json", import.meta.url), "utf8"));
+  for (const id of exp.canceled) assert.equal(findTripUpdate(file, id).canceled, true, `${id} should be canceled`);
+  for (const t of exp.skipped) {
+    const got = findTripUpdate(file, t.tripId);
+    assert.equal(got.canceled, false);
+    assert.equal(got.vehicleId, t.vehicle);
+    assert.deepEqual(got.updates.filter((u) => u.skipped).map((u) => u.stopSeq), t.skippedSeqs);
+  }
+  assert.equal(tripsForRoute(file, exp.route).trips.length, exp.routeCount);
+});

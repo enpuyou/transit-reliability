@@ -1305,3 +1305,19 @@ its last report moved forward along its route at 75% of its recent speed (`site/
 the map ("Accuracy check") compares every estimate with where the bus really was, once the bus's later reports
 arrive, and shows the typical error of the estimate next to the typical error of just showing the last report.
 It needs about 3 minutes in the tab to fill in. Offline version on stored data: `uv run python scripts/lag_experiment.py`.
+
+## Trip memory (relay Durable Object, decision 0025)
+
+```bash
+curl -s https://transit-relay.youenpu.workers.dev/memory/status
+# {"since": <unix s when it started knowing>, "lastRun": <last wake-up>, "running": ~600, "finishedKept": <trips that ended in the last 6 h>}
+# healthy: lastRun within the last minute, running between 100 and 900 in the daytime, finishedKept growing
+curl -s "https://transit-relay.youenpu.workers.dev/memory/ended?trips=<trip id>,<trip id>"   # what it knows about those trips
+cd workers/relay && npm run tail                                                          # look for memory_wake_failed
+```
+
+If lastRun is old, the alarm stopped: any request to /memory/status restarts it. Locally (`npx wrangler dev`) it
+runs too, with its own local storage. Free-plan budget: about 2,900 wake-ups and about 35,000 written rows a day
+against 100,000 each (`docs/limits.md`).
+
+Regenerate the per-route timetables after a new schedule (a few times a year): `uv run python scripts/make_map_data.py --profile enpu`.
