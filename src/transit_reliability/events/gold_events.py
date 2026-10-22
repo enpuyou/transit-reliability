@@ -58,7 +58,7 @@ def event_impact_sql(prefix: str) -> str:
       WHERE e.start_ts BETWEEN current_timestamp() - INTERVAL {PAST_DAYS} DAYS AND current_timestamp() - INTERVAL 6 HOURS
         AND coalesce(e.status, '') NOT IN ('cancelled', 'postponed')),
     windows AS (
-      SELECT ev.*, w.name AS window, h.hour
+      SELECT ev.*, wx.w.name AS window, hx.hour AS hour
       FROM ev LATERAL VIEW explode(array(named_struct('name', 'before', 'h', array(ev.start_hour - 2, ev.start_hour - 1)),
                                          named_struct('name', 'after', 'h', array(ev.start_hour + 2, ev.start_hour + 3)))) wx AS w
       LATERAL VIEW explode(w.h) hx AS hour),
