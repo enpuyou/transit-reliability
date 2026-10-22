@@ -1,5 +1,7 @@
 # Machine learning plan: what we could predict, and why
 
+> Superseded on 2026-10-22 by `docs/ml_design.md` (the plan of record). This file keeps the first reasoning.
+
 Written 2026-10-21, before any model is trained. Nothing here is built yet. It says what questions are
 worth asking, what information each model would use, why that information should help, and when we have
 enough data to start. Plain language on purpose: a "feature" is just one piece of information the model
