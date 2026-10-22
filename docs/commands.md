@@ -1316,6 +1316,9 @@ curl -s "https://transit-relay.youenpu.workers.dev/memory/ended?trips=<trip id>,
 cd workers/relay && npm run tail                                                          # look for memory_wake_failed
 ```
 
+Measure its real usage (requests, rows written) from Cloudflare's analytics: the GraphQL query used on 2026-10-22
+is in `docs/limits.md`'s numbers; the dashboard shows the same under Workers & Pages > transit-relay > Durable Objects.
+
 If lastRun is old, the alarm stopped: any request to /memory/status restarts it. Locally (`npx wrangler dev`) it
 runs too, with its own local storage. Free-plan budget: about 2,900 wake-ups and about 35,000 written rows a day
 against 100,000 each (`docs/limits.md`).
