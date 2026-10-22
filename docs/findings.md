@@ -6,13 +6,16 @@ percentage should be read with its sample size. Status: **preliminary** unless s
 
 ## 2026-10-22 trips that did not run, and whether riders were told (gold.trip_delivery, service date 2026-10-20)
 
-Of 12,938 scheduled trips (Tuesday), 9,992 ran, 2,504 ran with at least one stop marked skipped, 16 were
-canceled late, none were canceled with notice (at least 15 minutes before the start), and 426 did not run
-and were never announced. So of the 442 that did not run, 96 percent were never marked canceled; the agency
-marked 31 trips canceled that day, 15 of which ran anyway, and its cancellations appeared a median 8 minutes
-after the trip's scheduled start (90th percentile: 10.5 minutes before). When a bus's previous trip did not
-run, this trip did not run either 84 percent of the time (330 of 395). "Did not run" means no bus position
-was ever matched; a bus running with its tracker off looks the same (share unknown). One weekday only.
+Of 12,938 scheduled trips (Tuesday): 9,992 ran, 2,504 ran with at least one stop marked skipped, 16 were
+canceled late, none were canceled with notice (at least 15 minutes before the start), 322 did not run and were
+never announced, and 104 were on five routes that never send live data (973, 975, Valley Shuttle,
+Duvall-Monroe Shuttle, Easy Loop), so whether they ran is unknown and they are left out. On tracked routes, 338
+trips (about 2.6 percent) did not run and 95 percent of those were never marked canceled; the agency marked 31
+trips canceled that day, 15 of which ran anyway, and its cancellations appeared a median 8 minutes after the
+trip's scheduled start. When a bus's previous trip did not run, this trip did not run either 84 percent of the
+time. "Did not run" means no bus position was ever matched; a bus with its tracker off looks the same (share
+unknown). First caught and corrected the same day: the untracked routes had first been counted as "not run"
+(about 104 trips a weekday), and 2026-10-13 is a partial day (collection began 21:43 UTC) and is left out.
 
 ## 2026-10-22 the agency's feed drops a trip at its scheduled end (service date 2026-10-20)
 

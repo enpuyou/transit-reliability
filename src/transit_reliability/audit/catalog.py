@@ -405,7 +405,7 @@ def delivery(prefix: str, day: str) -> list[CheckSpec]:
         CheckSpec(
             "trip_delivery_without_outcome",
             f"SELECT count(*) FROM {td} WHERE service_date = DATE'{day}' AND outcome IS NULL",
-            "every trip gets one of the five outcomes",
+            "every trip gets one of the six outcomes",
             maximum=0,
         ),
     ]

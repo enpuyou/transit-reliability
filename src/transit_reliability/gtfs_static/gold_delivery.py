@@ -9,7 +9,10 @@ to it that day. The agency's prediction file can mark a whole trip canceled and 
 - ran, skipped stops: it ran but the agency marked at least one of its stops as skipped;
 - canceled with notice: it did not run and was marked canceled at least NOTICE_MIN minutes before its start;
 - canceled late: it did not run and was marked canceled later than that (or after its start);
-- did not run, not announced: no bus ever reported on it and it was never marked canceled.
+- did not run, not announced: no bus ever reported on it and it was never marked canceled;
+- route not tracked: no bus of its route has reported a position in the last 28 days. Some small community
+  and school routes (973, 975, Valley Shuttle, Duvall-Monroe Shuttle, Easy Loop on 2026-10-14 to 10-21, about
+  104 trips a weekday) never send live data, so whether they ran is unknown; they are kept out of "not run".
 
 "Did not run" means no bus position was matched: a bus running without its tracker on looks the same
 (unverified share). Each row also says whether the same bus's previous trip (the timetable's block)
@@ -26,9 +29,13 @@ from transit_reliability.gtfs_static.gold_segments import band_sql, day_type_sql
 TABLE = "trip_delivery"
 SUMMARY = "trip_delivery_summary"
 NOTICE_MIN = 15
+TRACKED_DAYS = 28  # a route counts as tracked if any of its buses reported in this many days
 RECOMPUTE_DAYS = 2
 WINDOW_DAYS = 28
 COMPLETE_AFTER_DAYS = 2
+# Collection began 2026-10-13 21:43 UTC, so most of that service date has no bus positions and its trips look
+# "not run" (6,785 of 12,938). Summaries and charts start at the first full day.
+FIRST_FULL_DAY = dt.date(2026, 10, 14)
 
 
 def trip_delivery_sql(prefix: str, day: dt.date) -> str:
@@ -44,6 +51,8 @@ def trip_delivery_sql(prefix: str, day: dt.date) -> str:
       SELECT trip_id, min(scheduled_departure_ts) AS sched_start FROM {silver}.scheduled_stop_times
       WHERE service_date = DATE'{d}' GROUP BY trip_id),
     seen AS (SELECT DISTINCT trip_id FROM {silver}.vehicle_positions WHERE service_date = DATE'{d}' AND trip_id IS NOT NULL),
+    tracked AS (SELECT DISTINCT route_id FROM {silver}.vehicle_positions
+                WHERE service_date BETWEEN DATE'{d}' - INTERVAL {TRACKED_DAYS - 1} DAYS AND DATE'{d}' AND route_id IS NOT NULL),
     marks AS (
       SELECT trip_id,
              max(CASE WHEN trip_schedule_relationship = 3 THEN 1 ELSE 0 END) AS canceled,
@@ -54,17 +63,20 @@ def trip_delivery_sql(prefix: str, day: dt.date) -> str:
     s AS (
       SELECT t.*, st.sched_start, (seen.trip_id IS NOT NULL) AS ran, coalesce(m.canceled, 0) = 1 AS canceled, m.canceled_at,
              coalesce(m.skipped_stops, 0) AS skipped_stops, coalesce(m.bus_named, 0) = 1 AS bus_named,
+             (tr.route_id IS NOT NULL) AS route_tracked,
              lag(t.trip_id) OVER w AS prev_trip_id, lag(seen.trip_id IS NOT NULL) OVER w AS prev_ran
       FROM trips t JOIN starts st ON st.trip_id = t.trip_id
       LEFT JOIN seen ON seen.trip_id = t.trip_id LEFT JOIN marks m ON m.trip_id = t.trip_id
+      LEFT JOIN tracked tr ON tr.route_id = t.route_id
       WINDOW w AS (PARTITION BY t.block_id, t.service_id ORDER BY st.sched_start))
     SELECT s.service_date, s.trip_id, s.route_id, s.direction_id, s.block_id, s.sched_start,
            hour({pt}) AS start_hour_pt, {band_sql(f"hour({pt})")} AS band, {day_type_sql("s.service_date")} AS day_type,
            s.ran, s.canceled, s.canceled_at,
            CASE WHEN s.canceled_at IS NULL THEN NULL ELSE (unix_timestamp(s.sched_start) - unix_timestamp(s.canceled_at)) / 60.0 END AS notice_min,
-           s.skipped_stops, s.bus_named, s.prev_trip_id, s.prev_ran,
+           s.skipped_stops, s.bus_named, s.route_tracked, s.prev_trip_id, s.prev_ran,
            CASE WHEN s.ran AND s.skipped_stops > 0 THEN 'ran, skipped stops'
                 WHEN s.ran THEN 'ran'
+                WHEN NOT s.route_tracked THEN 'route not tracked'
                 WHEN s.canceled AND unix_timestamp(s.sched_start) - unix_timestamp(s.canceled_at) >= {NOTICE_MIN} * 60 THEN 'canceled with notice'
                 WHEN s.canceled THEN 'canceled late'
                 ELSE 'did not run, not announced' END AS outcome
@@ -74,7 +86,7 @@ def trip_delivery_sql(prefix: str, day: dt.date) -> str:
 def trip_delivery_summary_sql(prefix: str, last_day: dt.date) -> str:
     gold = f"workspace.{prefix}_gold"
     silver = f"workspace.{prefix}_silver"
-    first = last_day - dt.timedelta(days=WINDOW_DAYS - 1)
+    first = max(last_day - dt.timedelta(days=WINDOW_DAYS - 1), FIRST_FULL_DAY)
     return f"""
     WITH d AS (SELECT * FROM {gold}.{TABLE} WHERE service_date BETWEEN DATE'{first.isoformat()}' AND DATE'{last_day.isoformat()}'),
     routes AS (SELECT route_id, max_by(route_short_name, feed_version) AS route_short_name FROM {silver}.gtfs_routes GROUP BY route_id)
@@ -84,8 +96,9 @@ def trip_delivery_summary_sql(prefix: str, last_day: dt.date) -> str:
            sum(CASE WHEN outcome = 'canceled with notice' THEN 1 ELSE 0 END) AS n_canceled_with_notice,
            sum(CASE WHEN outcome = 'canceled late' THEN 1 ELSE 0 END) AS n_canceled_late,
            sum(CASE WHEN outcome = 'did not run, not announced' THEN 1 ELSE 0 END) AS n_not_run_not_announced,
+           sum(CASE WHEN outcome = 'route not tracked' THEN 1 ELSE 0 END) AS n_route_not_tracked,
            sum(CASE WHEN prev_ran = false THEN 1 ELSE 0 END) AS n_after_missing_previous,
-           sum(CASE WHEN prev_ran = false AND NOT ran THEN 1 ELSE 0 END) AS n_missing_after_missing_previous,
+           sum(CASE WHEN prev_ran = false AND NOT ran AND route_tracked THEN 1 ELSE 0 END) AS n_missing_after_missing_previous,
            count(DISTINCT service_date) AS n_days, min(service_date) AS first_day, max(service_date) AS last_day
     FROM d LEFT JOIN routes r ON r.route_id = d.route_id
     GROUP BY d.route_id, r.route_short_name, d.band, d.day_type"""

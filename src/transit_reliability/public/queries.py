@@ -100,7 +100,9 @@ def _daily_metric_parts(prefix: str) -> list[str]:
 def _distribution_parts(prefix: str) -> list[str]:
     silver, gold = _table(prefix, "silver"), _table(prefix, "gold")
     sv, tp, pe = silver("stop_visits"), gold("trip_performance"), gold("prediction_errors")
-    td = gold("trip_delivery")
+    # trip delivery starts at the first full day of collection (gold_delivery.FIRST_FULL_DAY)
+    # and leaves out routes that never send live data ("route not tracked"): whether they ran is unknown
+    td = f"(SELECT * FROM {gold('trip_delivery')} WHERE service_date >= DATE'2026-10-14' AND route_tracked)"
     cd = f"service_date = {COMPLETE_DAY}"
     delay_bin = "least(greatest(floor(arr_delay_s / 60), -10), 20)"
     width = "unix_timestamp(arr_hi) - unix_timestamp(arr_lo)"

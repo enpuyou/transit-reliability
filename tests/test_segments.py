@@ -78,4 +78,8 @@ def test_trip_delivery_sql_names_the_five_outcomes_and_the_previous_trip() -> No
         assert outcome in sql
     assert "PARTITION BY t.block_id, t.service_id" in sql and "15 * 60" in sql
     summary = trip_delivery_summary_sql("transit", dt.date(2026, 10, 20))
-    assert "DATE'2026-09-23' AND DATE'2026-10-20'" in summary
+    assert (
+        "DATE'2026-10-14' AND DATE'2026-10-20'" in summary
+    )  # not before the first full day of collection
+    later = trip_delivery_summary_sql("transit", dt.date(2026, 12, 20))
+    assert "DATE'2026-11-23' AND DATE'2026-12-20'" in later
