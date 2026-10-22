@@ -4,6 +4,32 @@ Dated claims with their evidence and caveats. Nothing here is final: the data co
 days (collection began 2026-10-13), times are GPS estimates (typically within about 15 s), and every
 percentage should be read with its sample size. Status: **preliminary** unless stated.
 
+## 2026-10-22 trips that did not run, and whether riders were told (gold.trip_delivery, service date 2026-10-20)
+
+Of 12,938 scheduled trips (Tuesday), 9,992 ran, 2,504 ran with at least one stop marked skipped, 16 were
+canceled late, none were canceled with notice (at least 15 minutes before the start), and 426 did not run
+and were never announced. So of the 442 that did not run, 96 percent were never marked canceled; the agency
+marked 31 trips canceled that day, 15 of which ran anyway, and its cancellations appeared a median 8 minutes
+after the trip's scheduled start (90th percentile: 10.5 minutes before). When a bus's previous trip did not
+run, this trip did not run either 84 percent of the time (330 of 395). "Did not run" means no bus position
+was ever matched; a bus running with its tracker off looks the same (share unknown). One weekday only.
+
+## 2026-10-22 the agency's feed drops a trip at its scheduled end (service date 2026-10-20)
+
+For trips whose last report came more than 250 m before the final stop, 90 to 97 percent of those last reports
+came within a minute of the trip's scheduled end time: the agency stops showing a trip when its scheduled
+time runs out, not when the bus arrives. On-time buses go quiet at the stop; late ones are cut off while
+still driving. Next-trip outcomes: after a trip whose last report was over 3 km short, the next trip was
+missing 2.9 percent of the time (0.5 percent otherwise). Checked against reality on 2026-10-22: 74 of 74
+upcoming trips whose bus had gone quiet short of the terminal ran (`scripts/check_departures.py`).
+
+## 2026-10-22 placing a bus between reports (scripts/lag_estimators.py, 240 trips, 2026-10-16 and 10-20)
+
+Reports reach the map a median 57 s after the GPS fix. The raw report is a typical 253 m from where the bus
+really is (behind it 84 percent of the time); moving it forward by recent speed and the timetable's pace
+("mixed, halfway") cuts that to 120 m (9 in 10 within 379 m) and is more than 200 m worse than the raw report
+only 3 percent of the time.
+
 ## 2026-10-20 bunching and gaps (decision 0023; frequent service, 2026-10-13 to 10-20)
 
 About 34,000 frequent pairs a day (buses scheduled 4 to 15 minutes apart at a timepoint); a pair is
