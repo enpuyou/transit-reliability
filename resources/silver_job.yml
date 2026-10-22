@@ -167,6 +167,27 @@ resources:
               - --landing-volume
               - ${var.landing_volume}
           environment_key: default
+        - task_key: events
+          # the newest version of every event from the daily Ticketmaster pull (GitHub workflow events.yml)
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_silver_events
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --landing-volume
+              - ${var.landing_volume}
+          environment_key: default
+        - task_key: event_routes
+          depends_on:
+            - task_key: events
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_event_routes
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: weather_impact
           depends_on:
             - task_key: weather
@@ -186,6 +207,7 @@ resources:
             - task_key: segment_runtimes
             - task_key: headway_summary
             - task_key: weather_impact
+            - task_key: event_routes
           python_wheel_task:
             package_name: transit_reliability
             entry_point: run_health_checks

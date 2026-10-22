@@ -1335,3 +1335,17 @@ uv run python scripts/check_departures.py recheck --file /tmp/departures.json   
 
 A good panel: nearly every "bus waiting" and "still on its previous trip" trip ran; "previous trip never showed
 up" trips mostly did not.
+
+## Events (Ticketmaster, decision 0026)
+
+```bash
+# the key lives in .env (ignored by git) locally and as the GitHub secret TICKETMASTER_KEY
+set -a; . ./.env; set +a
+python3 scripts/fetch_events.py --days 21 --out /tmp/events_out          # about 360 events in 2 pages
+grep -l "$TICKETMASTER_KEY" /tmp/events_out/* | wc -l                     # must print 0: the key is removed before saving
+uv run python scripts/make_map_data.py --profile enpu --events-dir /tmp/events_out   # local preview of site/data/events.json
+gh workflow run events.yml                                                # land today's pull now instead of waiting
+```
+
+In Databricks: `SELECT name, start_ts, venue_name, large_venue FROM workspace.transit_silver.events ORDER BY start_ts`
+and `SELECT * FROM workspace.transit_gold.event_routes WHERE route_short_name = '1'`.

@@ -126,6 +126,61 @@ def trips_sql() -> str:
       SELECT route_id, trip_id, direction_id, prev_trip, prev_route, prev_last_stop, prev_end_s, times FROM j"""
 
 
+def preview_events(folder: Path, map_dir: Path) -> None:
+    """Local stand-in for the daily job's events.json: events from fetched files, routes whose stops
+    (site/map/route_stops.json, main patterns only) are within 400 m of the venue."""
+
+    import math
+
+    from transit_reliability.events.parse import parse_events, pulled_at_from_name
+    from transit_reliability.public.map_data import events_payload
+
+    route_stops = json.loads((map_dir / "route_stops.json").read_text())
+    latest: dict[str, dict[str, Any]] = {}
+    for f in sorted(folder.glob("*.json")):
+        for r in parse_events(f.read_text(), f.name, pulled_at_from_name(f.name)):
+            latest[r["event_id"]] = r
+    now = dt.datetime.now(dt.UTC)
+    rows = []
+    for e in latest.values():
+        if e["latitude"] is None or e["start_ts"] is None:
+            continue
+        if not now - dt.timedelta(hours=6) <= e["start_ts"] <= now + dt.timedelta(days=3):
+            continue
+        kx = 111320 * math.cos(math.radians(e["latitude"]))
+        for key, stops in route_stops.items():
+            near = min(
+                math.hypot((s[1] - e["longitude"]) * kx, (s[2] - e["latitude"]) * 110540)
+                for s in stops
+            )
+            if near <= 400:
+                rows.append(
+                    (
+                        e["event_id"],
+                        e["name"],
+                        e["segment"],
+                        e["start_ts"],
+                        e["status"],
+                        e["venue_name"],
+                        e["latitude"],
+                        e["longitude"],
+                        e["large_venue"],
+                        e["venue_seats"],
+                        key.split("|")[0],
+                        round(near),
+                    )
+                )
+    best: dict[tuple[str, str], tuple[Any, ...]] = {}
+    for r in rows:
+        k = (r[0], r[10])
+        if k not in best or r[11] < best[k][11]:
+            best[k] = r
+    payload = events_payload(list(best.values()))
+    Path("site/data").mkdir(parents=True, exist_ok=True)
+    Path("site/data/events.json").write_text(json.dumps(payload, separators=(",", ":")))
+    print(f"wrote site/data/events.json (local preview): {len(payload)} events")
+
+
 def write(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, separators=(",", ":"), sort_keys=True))
     print(f"wrote {path}: {path.stat().st_size:,} bytes")
@@ -135,7 +190,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", required=True)
     parser.add_argument("--out-dir", default="site/map")
+    parser.add_argument(
+        "--events-dir", help="local preview: build site/data/events.json from fetched event files"
+    )
     args = parser.parse_args()
+    if args.events_dir:
+        preview_events(Path(args.events_dir), Path(args.out_dir))
+        return
     q = make_query(args.profile)
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)

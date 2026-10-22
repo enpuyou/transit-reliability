@@ -385,6 +385,32 @@ def headways(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def events(prefix: str) -> list[CheckSpec]:
+    """The daily event pull is fresh, and the event tables have one row per event (and route)."""
+
+    ev, er = _t(prefix, "silver", "events"), _t(prefix, "gold", "event_routes")
+    return [
+        CheckSpec(
+            "events_hours_since_newest_pull",
+            f"SELECT (unix_timestamp(current_timestamp()) - unix_timestamp(max(pulled_at))) / 3600.0 FROM {ev}",
+            "events are pulled from Ticketmaster once a day (GitHub workflow events.yml); older than 50 hours means two pulls were missed",
+            maximum=50.0,
+        ),
+        CheckSpec(
+            "events_duplicate_ids",
+            f"SELECT count(*) - count(DISTINCT event_id) FROM {ev}",
+            "silver keeps the newest version of each event, so each event appears once",
+            maximum=0,
+        ),
+        CheckSpec(
+            "event_routes_duplicate_keys",
+            f"SELECT count(*) - count(DISTINCT event_id, route_id) FROM {er}",
+            "one row per event and route",
+            maximum=0,
+        ),
+    ]
+
+
 def weather(prefix: str) -> list[CheckSpec]:
     """Weather tables are unique per station and time, and the impact table matches an independent recount."""
 
@@ -433,4 +459,5 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *segments(prefix, day),
         *headways(prefix, day),
         *weather(prefix),
+        *events(prefix),
     ]

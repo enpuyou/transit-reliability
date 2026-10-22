@@ -352,6 +352,31 @@ def build_silver_weather() -> None:
     build_weather(_spark_session(), args.schema_prefix, args.landing_volume)
 
 
+def build_silver_events() -> None:
+    """The newest version of every event landed by the daily Ticketmaster pull."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--landing-volume", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.events.silver_events import build_events
+
+    build_events(_spark_session(), args.schema_prefix, args.landing_volume)
+
+
+def build_gold_event_routes() -> None:
+    """Which bus routes pass near each event."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.events.gold_events import build_event_routes
+
+    build_event_routes(_spark_session(), args.schema_prefix)
+
+
 def build_gold_weather_impact() -> None:
     """Compare reliability across dry, foggy and rainy hours."""
 

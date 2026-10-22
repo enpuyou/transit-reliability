@@ -1,0 +1,60 @@
+name: events
+
+# Once a day: fetch the next three weeks of Seattle-area events (games, concerts, shows) from Ticketmaster
+# and land them in the Databricks volume (Databricks blocks most outbound internet, so the fetch happens
+# here). The daily silver job (11:45 UTC) turns them into silver.events and gold.event_routes; the live map
+# shows events near the chosen route. Scheduled at 09:17 UTC, early so a late start (GitHub's schedule can
+# run hours late, decision 0020) still lands before the silver job; a missed day is caught by the daily
+# check events_hours_since_newest_pull (limit 50 hours). Decision 0026.
+# Needs repo secrets DATABRICKS_HOST, DATABRICKS_TOKEN and TICKETMASTER_KEY.
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "How many days ahead to fetch (default 21)"
+        required: false
+        default: "21"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: events
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      TICKETMASTER_KEY: ${{ secrets.TICKETMASTER_KEY }}
+      LANDING: dbfs:/Volumes/workspace/transit_landing/raw/events
+      DAYS: ${{ inputs.days || '21' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+
+      - name: Check secrets are configured
+        run: |
+          test -n "$DATABRICKS_HOST" || { echo "DATABRICKS_HOST secret is missing"; exit 1; }
+          test -n "$DATABRICKS_TOKEN" || { echo "DATABRICKS_TOKEN secret is missing"; exit 1; }
+          test -n "$TICKETMASTER_KEY" || { echo "TICKETMASTER_KEY secret is missing"; exit 1; }
+
+      - name: Fetch events
+        run: python3 scripts/fetch_events.py --days "$DAYS" --out events_out
+
+      - name: Upload to the landing volume
+        run: |
+          day="$(date -u +%F)"
+          databricks fs mkdir "$LANDING/dt=$day"
+          for f in events_out/*.json; do
+            databricks fs cp "$f" "$LANDING/dt=$day/$(basename "$f")" --overwrite
+          done
+          databricks fs ls "$LANDING/dt=$day" | tail -3

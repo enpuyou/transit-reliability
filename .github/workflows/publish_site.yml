@@ -60,6 +60,9 @@ jobs:
       - name: Fetch each route's per-trip history (optional, like the file above)
         run: databricks fs cp -r dbfs:/Volumes/workspace/transit_ops/state/public/trip_history site/data/trip_history --overwrite || echo "no trip_history yet"
 
+      - name: Fetch upcoming events near routes (optional, built by the daily job)
+        run: databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/events.json site/data/events.json --overwrite || echo "no events.json yet"
+
       - name: Live probes (status.json)
         # never blocks publishing: a failing probe is exactly what visitors need to see
         run: python3 scripts/watchdog.py --json-out site/data/status.json || true

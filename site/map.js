@@ -353,6 +353,7 @@
     loadRouteTraffic();
     ensureRouteTrips(selected).then(updateDepartures);
     ensureTripHistory(selected);
+    updateEvents();
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -605,6 +606,43 @@
   }
   setInterval(function () { if (!document.hidden && selected) updateDepartures(); }, 30000);
 
+  /* ---------- events near the chosen route (data/events.json, built daily from Ticketmaster) ---------- */
+  var eventsData = null;
+  function getEvents() {
+    if (!eventsData) eventsData = fetch("data/events.json").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; });
+    return eventsData;
+  }
+  function dayWord(unix) {
+    var d = function (t) { return new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(t * 1000)); };
+    var now = Date.now() / 1000;
+    if (d(unix) === d(now)) return "today";
+    if (d(unix) === d(now + 86400)) return "tomorrow";
+    return new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", weekday: "long" }).format(new Date(unix * 1000));
+  }
+  function updateEvents() {
+    var el = document.getElementById("events"), src = map.getSource("events"), empty = { type: "FeatureCollection", features: [] };
+    if (!el) return;
+    if (!selected) { el.innerHTML = ""; if (src) src.setData(empty); return; }
+    var route = selected;
+    getEvents().then(function (all) {
+      if (route !== selected) return;
+      var now = Date.now() / 1000;
+      var near = (all || []).filter(function (e) {
+        return e.routes && e.routes[route] != null && e.start && e.start > now - 3 * 3600 && e.start < now + 36 * 3600 && e.status !== "cancelled";
+      }).sort(function (a, b) { return (b.large - a.large) || (a.start - b.start); });
+      if (src) src.setData({ type: "FeatureCollection", features: near.map(function (e) {
+        return { type: "Feature", geometry: { type: "Point", coordinates: e.at }, properties: { large: e.large ? 1 : 0, label: (e.large ? "★ " : "") + e.venue } };
+      }) });
+      if (!near.length) { el.innerHTML = ""; return; }
+      var shown = near.slice(0, 6), more = near.length - shown.length;
+      el.innerHTML = "<b>Events near route " + esc(name(route)) + "</b> <span class=\"note\">(a stop within 400 m of the venue; big events can slow buses before the start and after the end)</span><br>" +
+        shown.map(function (e) {
+          return (e.large ? "★ " : "") + esc(e.name) + " at " + esc(e.venue) + (e.large ? " (large venue)" : "") + ", " + dayWord(e.start) + " " + hhmm(e.start) +
+            " (nearest stop about " + Math.round(e.routes[route] / 50) * 50 + " m)";
+        }).join("<br>") + (more > 0 ? "<br><span class=\"note\">and " + more + " smaller event" + (more > 1 ? "s" : "") + "</span>" : "");
+    });
+  }
+
   // for checking the page from a script (and from the browser console): open the popup of a bus by its id
   window.transitOpenBus = function (id) {
     var b = pos[id];
@@ -672,6 +710,13 @@
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 14, 3.2, 17, 4.8],
       "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.3 } });
+    map.addSource("events", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "events", type: "circle", source: "events", paint: {
+      "circle-radius": ["case", ["==", ["get", "large"], 1], 9, 6], "circle-color": "#8e44ad", "circle-opacity": 0.85,
+      "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+    map.addLayer({ id: "events-label", type: "symbol", source: "events", minzoom: 12,
+      layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.3], "text-anchor": "top" },
+      paint: { "text-color": "#6c3483", "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
     map.addSource("waiting", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "waiting", type: "circle", source: "waiting", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 5, 16, 9], "circle-color": "#ffffff",

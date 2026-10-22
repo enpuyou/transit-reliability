@@ -20,6 +20,7 @@ MIN_TRIPS = 5
 MAX_WIDTH_S = 120
 HISTORY_FILE = ("public", "stop_history.json")
 TRIP_HISTORY_DIR = ("public", "trip_history")
+EVENTS_FILE = ("public", "events.json")
 MIN_DAYS_PER_TRIP = 3
 
 _PT = "from_utc_timestamp(sched_arr, 'America/Los_Angeles')"
@@ -123,3 +124,51 @@ def export_trip_history(spark: Any, prefix: str, state_volume: str) -> None:
     print(
         f"wrote {len(payloads)} route files to {folder}: {total:,} bytes, {len(rows)} trip-stop rows"
     )
+
+
+def events_payload(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+    """Group event_routes rows (event, name, segment, start, status, venue, lat, lon, large, seats,
+    route, nearest stop m) into one entry per event with the routes that pass near it."""
+
+    by: dict[str, dict[str, Any]] = {}
+    for eid, name, segment, start, status, venue, lat, lon, large, seats, route, near in rows:
+        e = by.setdefault(
+            str(eid),
+            {
+                "id": str(eid),
+                "name": name,
+                "kind": segment,
+                "start": int(start.timestamp()) if hasattr(start, "timestamp") else start,
+                "status": status,
+                "venue": venue,
+                "at": [round(float(lon), 5), round(float(lat), 5)],
+                "large": bool(large),
+                "seats": seats,
+                "routes": {},
+            },
+        )
+        e["routes"][str(route)] = int(near)
+    return sorted(by.values(), key=lambda e: (e["start"] or 0, e["name"] or ""))
+
+
+def export_events(spark: Any, prefix: str, state_volume: str) -> None:
+    """Events from 6 hours ago to 3 days ahead with the routes near them, for the live map."""
+
+    table = f"workspace.{prefix}_gold.event_routes"
+    if not spark.catalog.tableExists(table):
+        print("no event_routes table yet; no events file")
+        return
+    rows = [
+        tuple(r)
+        for r in spark.sql(
+            f"SELECT event_id, name, segment, start_ts, status, venue_name, latitude, longitude, large_venue, "
+            f"venue_seats, route_id, nearest_stop_m FROM {table} "
+            f"WHERE start_ts BETWEEN current_timestamp() - INTERVAL 6 HOURS AND current_timestamp() + INTERVAL 3 DAYS"
+        ).collect()
+    ]
+    path = volume_path(state_volume, *EVENTS_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = events_payload(rows)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, separators=(",", ":")))
+    print(f"wrote {path}: {len(payload)} events")
