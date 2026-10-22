@@ -164,7 +164,18 @@ calibration ("70 percent likely to run" should come true about 70 percent of the
 5. **Live use:** export the best "live-computable" model and use it in the map, if it clearly wins.
 6. C and D when their data is ready.
 
-## 9. Decisions for the owner
+## 9. What industry research says about this plan (details: `docs/ml_industry_research.md`)
+
+- A has the strongest precedent; **beating an agency's own live predictions has no independent precedent** (only
+  vendors beating older systems), so it is a stretch goal. Scoring will therefore include the agency-style
+  window score (WMATA's definition: a bus 0-3 min away must arrive within 1 min early to 1 min late, a bus 12-30
+  min away within 4 min early to 6 min late; early counts as worse than late) next to average error.
+- B (will a trip run) has no published fixed-route precedent: novel, expect modest results.
+- Bunching is mostly made at the start of a route; check first-stop departure gaps before predicting it.
+- Added to the to-do list from the research: runtime-tuning analysis (actual run times against the timetable),
+  and the announcement lead time for missed trips.
+
+## 10. Decisions for the owner
 
 - Start with B (will this trip run) now, and build A's table in parallel? (recommended)
 - Is a model that only matches the agency on average but gives honest ranges worth showing on the map?
