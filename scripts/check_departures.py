@@ -29,6 +29,7 @@ RELAY = "https://transit-relay.youenpu.workers.dev"
 TRIPS_DIR = Path("site/map/trips")
 PT = ZoneInfo("America/Los_Angeles")
 WAIT_RADIUS_M = 250
+NEAR_END_M = 1500  # buses often stop reporting on the last stretch (typically about 300 m before the last stop)
 
 
 def get(url: str) -> bytes:
@@ -122,10 +123,13 @@ def snapshot(out_path: str) -> None:
         elif prev in mem["ended"]:
             e = mem["ended"][prev]
             end = u["stops"].get(prev_last)
-            near = (
-                end and e["lon"] is not None and metres([e["lon"], e["lat"]], end) <= WAIT_RADIUS_M
-            )
-            label = "bus waiting" if near else "previous trip ended elsewhere"
+            gap = metres([e["lon"], e["lat"]], end) if end and e["lon"] is not None else None
+            if gap is not None and gap <= WAIT_RADIUS_M:
+                label = "bus waiting"
+            elif gap is not None and gap <= NEAR_END_M:
+                label = "previous trip went quiet near its end"
+            else:
+                label = "previous trip went quiet far from its end"
         elif mem["since"] and prev_end and prev_end < now - 300 and mem["since"] < prev_end - 900:
             label = "previous trip never showed up"
         elif prev_end and prev_end > now:

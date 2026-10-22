@@ -519,7 +519,7 @@
   // For the next trips that have not started, look at the trip the same bus runs just before (the timetable's block)
   // and ask the relay's trip memory what happened to it: still running, finished near this trip's start (a bus is
   // waiting), finished elsewhere, or never seen (then the next trip often does not run either: 84% on 2026-10-20).
-  var depBusy = false, WAIT_RADIUS_M = 250;
+  var depBusy = false, WAIT_RADIUS_M = 250, NEAR_END_M = 1500;
   function metresBetween(a, b) {
     var kx = 111320 * Math.cos(a[1] * Math.PI / 180);
     return Math.hypot((a[0] - b[0]) * kx, (a[1] - b[1]) * 110540);
@@ -569,11 +569,19 @@
             else if (!prev) { status = "the bus's first trip of the day (it comes from the base); no earlier trip to check."; kind = "unknown"; }
             else if (running[prev] || (mem && mem.running.indexOf(prev) >= 0)) { status = "the bus is still on its previous trip" + (running[prev] ? " (shown on the map)" : "") + "."; kind = "coming"; }
             else if (mem && mem.ended[prev]) {
-              var e = mem.ended[prev], end = data.stops[prevLast];
-              var near = end && e.lon != null && metresBetween([e.lon, e.lat], end) <= WAIT_RADIUS_M;
-              status = near ? "<b>a bus should be waiting at " + startName + "</b> (its previous trip ended there at " + hhmm(e.ts || e.endedAt) + ")." :
-                "its previous trip stopped reporting at " + hhmm(e.ts || e.endedAt) + ", away from here; the bus is not confirmed at " + startName + ".";
-              kind = near ? "waiting" : "unknown";
+              // buses often stop reporting on the last stretch of a trip (typically about 300 m before its last stop),
+              // so how far from its last stop it went quiet decides what we can say
+              var e = mem.ended[prev], end = data.stops[prevLast], when = hhmm(e.ts || e.endedAt);
+              var gap = end && e.lon != null ? metresBetween([e.lon, e.lat], end) : null;
+              var gapText = gap == null ? "" : gap < 1000 ? "about " + Math.round(gap / 50) * 50 + " m" : (gap / 1000).toFixed(1) + " km";
+              if (gap != null && gap <= WAIT_RADIUS_M) {
+                status = "<b>a bus should be waiting at " + startName + "</b> (its previous trip ended there at " + when + ")."; kind = "waiting";
+              } else if (gap != null && gap <= NEAR_END_M) {
+                status = "<b>the bus is most likely at " + startName + " or about to arrive</b>: its previous trip went quiet at " + when + ", " + gapText +
+                  " before its last stop (buses often stop reporting on the last stretch)."; kind = "waiting";
+              } else {
+                status = "its previous trip went quiet at " + when + (gapText ? ", " + gapText + " before its last stop" : "") + "; we can't confirm a bus at " + startName + "."; kind = "unknown";
+              }
             } else if (mem && mem.since && prevEnd && prevEnd < now - 300 && mem.since < prevEnd - 900) {
               status = "<b>the bus's previous trip never showed up.</b> This trip may not run normally (after a missing trip, the next one was also missing 84% of the time).";
               kind = "missing";
