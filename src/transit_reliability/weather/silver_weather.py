@@ -41,6 +41,16 @@ def hourly_sql(prefix: str) -> str:
     FROM {obs} GROUP BY date_trunc('HOUR', observed_ts)"""
 
 
+def dedupe_sql(target: str) -> str:
+    """Rewrite the observations table with one row per station and observation time (the first ingested)."""
+
+    return (
+        f"CREATE OR REPLACE TABLE {target} AS SELECT * EXCEPT (rn) FROM ("
+        f"SELECT *, row_number() OVER (PARTITION BY station, observed_ts ORDER BY ingested_at, source_file) AS rn "
+        f"FROM {target}) WHERE rn = 1"
+    )
+
+
 def build_weather(spark: Any, prefix: str, landing_volume: str) -> None:
     """Parse landed files not yet ingested, merge new observations, rebuild the hourly table."""
 
@@ -87,8 +97,12 @@ def build_weather(spark: Any, prefix: str, landing_volume: str) -> None:
                         None,
                     )
                 )
-        frame = spark.createDataFrame(rows, OBS_DDL).withColumn(
-            "ingested_at", F.current_timestamp()
+        # each hourly fetch covers the last 3 hours, so one batch of files holds the same reading up to 3 times:
+        # keep one per station and observation time before comparing with the table (2026-10-22 incident)
+        frame = (
+            spark.createDataFrame(rows, OBS_DDL)
+            .withColumn("ingested_at", F.current_timestamp())
+            .dropDuplicates(["station", "observed_ts"])
         )
         if not spark.catalog.tableExists(target):
             frame.write.format("delta").mode("append").saveAsTable(target)
@@ -97,6 +111,13 @@ def build_weather(spark: Any, prefix: str, landing_volume: str) -> None:
             spark.sql(
                 f"MERGE INTO {target} t USING (SELECT * FROM incoming_weather) s ON t.station <=> s.station AND t.observed_ts <=> s.observed_ts WHEN NOT MATCHED THEN INSERT *"
             )
+    # repair: if repeats got in anyway (they did before this fix), rewrite the table keeping the first one ingested
+    dupes = spark.sql(
+        f"SELECT count(*) - count(DISTINCT station, observed_ts) AS d FROM {target}"
+    ).first()["d"]
+    if dupes:
+        print(f"weather observations: removing {dupes} repeated readings")
+        spark.sql(dedupe_sql(target))
     n = spark.table(target).count()
     print(f"weather observations: {n} rows ({len(rows)} parsed this run)")
     spark.sql(f"CREATE OR REPLACE TABLE {silver}.{HOURLY} AS {hourly_sql(prefix)}")

@@ -104,3 +104,13 @@ def test_the_hourly_sql_uses_the_same_thresholds_as_the_pure_rule() -> None:
         and f">= {FOG_SHARE_FOR_FOG} THEN 'fog'" in sql
     )
     assert "workspace.transit_silver.weather_observations" in sql and "America/Los_Angeles" in sql
+
+
+def test_dedupe_sql_keeps_one_row_per_station_and_time() -> None:
+    from transit_reliability.weather.silver_weather import dedupe_sql
+
+    sql = dedupe_sql("workspace.transit_silver.weather_observations")
+    assert "PARTITION BY station, observed_ts" in sql and "WHERE rn = 1" in sql
+    assert sql.startswith(
+        "CREATE OR REPLACE TABLE workspace.transit_silver.weather_observations AS"
+    )
