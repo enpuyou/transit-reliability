@@ -1,0 +1,47 @@
+name: incidents
+
+# Every 2 hours: fetch the last 30 hours of Seattle Fire Department 911 dispatches (City of Seattle open
+# data, free, no key) and land them in the Databricks volume. Each run overlaps the last, so a late or
+# missed run (GitHub's schedule is best-effort, decision 0020) loses nothing; silver keeps one row per
+# incident. The daily silver job builds silver.incidents and gold.incident_routes. Decision 0027.
+# Needs repo secrets DATABRICKS_HOST and DATABRICKS_TOKEN.
+
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: incidents
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LANDING: dbfs:/Volumes/workspace/transit_landing/raw/incidents
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+      - name: Check secrets are configured
+        run: |
+          test -n "$DATABRICKS_HOST" || { echo "DATABRICKS_HOST secret is missing"; exit 1; }
+          test -n "$DATABRICKS_TOKEN" || { echo "DATABRICKS_TOKEN secret is missing"; exit 1; }
+      - name: Fetch dispatches
+        run: python3 scripts/fetch_incidents.py --hours 30 --out incidents_out
+      - name: Upload to the landing volume
+        run: |
+          day="$(date -u +%F)"
+          databricks fs mkdir "$LANDING/dt=$day"
+          for f in incidents_out/*.json; do
+            databricks fs cp "$f" "$LANDING/dt=$day/$(basename "$f")" --overwrite
+          done
+          databricks fs ls "$LANDING/dt=$day" | tail -3

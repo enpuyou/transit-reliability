@@ -354,6 +354,7 @@
     ensureRouteTrips(selected).then(updateDepartures);
     ensureTripHistory(selected);
     updateEvents();
+    updateIncidents();
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -643,6 +644,59 @@
     });
   }
 
+  /* ---------- recent collisions and fires near the chosen route (Seattle Fire 911, read live) ---------- */
+  // City of Seattle open data allows browsers to read it directly. Its times are Seattle local time with no zone.
+  var INCIDENTS_URL = "https://data.seattle.gov/resource/kzjm-xkqj.json", INCIDENT_NEAR_M = 150, INCIDENT_HOURS = 3;
+  function incidentCategory(kind) {
+    var k = (kind || "").toLowerCase();
+    if (k.indexOf("mvi") === 0 || k.indexOf("motor vehicle") >= 0 || k.indexOf("collision") >= 0 || k.indexOf("car fire") >= 0) return "traffic";
+    if (k.indexOf("fire") >= 0 && k.indexOf("alarm") < 0) return "fire";
+    return "other";
+  }
+  function seattleOffsetHours(unix) {
+    var hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hourCycle: "h23" }).format(new Date(unix * 1000)));
+    return (new Date(unix * 1000).getUTCHours() - hour + 24) % 24; // 7 in summer, 8 in winter
+  }
+  function seattleLocalText(unix) {
+    var p = {};
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+      .formatToParts(new Date(unix * 1000)).forEach(function (x) { p[x.type] = x.value; });
+    return p.year + "-" + p.month + "-" + p.day + "T" + p.hour + ":" + p.minute + ":" + p.second;
+  }
+  function localToUnix(text) {
+    var b = text.split(/[-T:.]/).map(Number), guess = Date.UTC(b[0], b[1] - 1, b[2], b[3], b[4], b[5]) / 1000;
+    return guess + seattleOffsetHours(guess) * 3600;
+  }
+  function updateIncidents() {
+    var el = document.getElementById("incidents"), src = map.getSource("incidents"), empty = { type: "FeatureCollection", features: [] };
+    if (!el) return;
+    if (!selected) { el.innerHTML = ""; if (src) src.setData(empty); return; }
+    var route = selected, lines = [];
+    Object.keys(shapes || {}).forEach(function (key) { if (key.split("|")[0] === route) lines = lines.concat(shapes[key]); });
+    var since = seattleLocalText(Date.now() / 1000 - INCIDENT_HOURS * 3600);
+    var url = INCIDENTS_URL + "?$where=" + encodeURIComponent("datetime > '" + since + "'") + "&$order=" + encodeURIComponent("datetime DESC") + "&$limit=500";
+    fetch(url).then(function (r) { return r.ok ? r.json() : []; }).then(function (rows) {
+      if (route !== selected) return;
+      var now = Date.now() / 1000;
+      var near = rows.filter(function (x) {
+        if (incidentCategory(x.type) === "other" || !x.latitude || !x.longitude) return false;
+        var lon = Number(x.longitude), lat = Number(x.latitude);
+        return lines.some(function (l) { return Estimate.project(l, lon, lat).off <= INCIDENT_NEAR_M; });
+      });
+      if (src) src.setData({ type: "FeatureCollection", features: near.map(function (x) {
+        return { type: "Feature", geometry: { type: "Point", coordinates: [Number(x.longitude), Number(x.latitude)] }, properties: { label: x.type } };
+      }) });
+      if (!near.length) { el.innerHTML = ""; return; }
+      el.innerHTML = "<b>Recent collisions and fires near route " + esc(name(route)) + "</b> <span class=\"note\">(Seattle Fire 911 dispatches in the last " + INCIDENT_HOURS +
+        " hours within " + INCIDENT_NEAR_M + " m of the route; a dispatch does not always mean the road was blocked)</span><br>" +
+        near.slice(0, 5).map(function (x) {
+          var mins = Math.max(0, Math.round((now - localToUnix(x.datetime)) / 60));
+          return "▲ " + esc(x.type) + " at " + esc(x.address || "?") + ", " + (mins < 90 ? mins + " min ago" : Math.round(mins / 60) + " h ago");
+        }).join("<br>");
+    }).catch(function () { el.innerHTML = ""; });
+  }
+  setInterval(function () { if (!document.hidden && selected) updateIncidents(); }, 5 * 60 * 1000);
+
   // for checking the page from a script (and from the browser console): open the popup of a bus by its id
   window.transitOpenBus = function (id) {
     var b = pos[id];
@@ -710,6 +764,9 @@
     map.addLayer({ id: "route-stops", type: "circle", source: "route-stops", paint: {
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 1.8, 14, 3.2, 17, 4.8],
       "circle-color": "#ffffff", "circle-stroke-color": "#1d2330", "circle-stroke-width": 1.3 } });
+    map.addSource("incidents", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addLayer({ id: "incidents", type: "circle", source: "incidents", paint: {
+      "circle-radius": 7, "circle-color": "#c0392b", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
     map.addSource("events", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "events", type: "circle", source: "events", paint: {
       "circle-radius": ["case", ["==", ["get", "large"], 1], 9, 6], "circle-color": "#8e44ad", "circle-opacity": 0.85,

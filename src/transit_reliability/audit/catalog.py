@@ -411,6 +411,26 @@ def delivery(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def incidents(prefix: str) -> list[CheckSpec]:
+    """Incidents are fetched every 2 hours and kept once each."""
+
+    inc = _t(prefix, "silver", "incidents")
+    return [
+        CheckSpec(
+            "incidents_hours_since_newest_pull",
+            f"SELECT (unix_timestamp(current_timestamp()) - unix_timestamp(max(pulled_at))) / 3600.0 FROM {inc}",
+            "Seattle Fire dispatches are fetched every 2 hours (GitHub workflow incidents.yml), each time the last 30 hours; older than 26 hours means data is being lost",
+            maximum=26.0,
+        ),
+        CheckSpec(
+            "incidents_duplicate_numbers",
+            f"SELECT count(*) - count(DISTINCT incident_number) FROM {inc}",
+            "fetches overlap, so repeats must be dropped: one row per incident",
+            maximum=0,
+        ),
+    ]
+
+
 def events(prefix: str) -> list[CheckSpec]:
     """The daily event pull is fresh, and the event tables have one row per event (and route)."""
 
@@ -492,5 +512,6 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *headways(prefix, day),
         *weather(prefix),
         *events(prefix),
+        *incidents(prefix),
         *delivery(prefix, day),
     ]

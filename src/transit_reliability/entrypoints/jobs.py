@@ -380,6 +380,31 @@ def build_gold_trip_delivery_summary() -> None:
     build_trip_delivery_summary(_spark_session(), args.schema_prefix)
 
 
+def build_silver_incidents() -> None:
+    """One row per Seattle Fire 911 dispatch from the files landed every 2 hours."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--landing-volume", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.incidents.silver_incidents import build_incidents
+
+    build_incidents(_spark_session(), args.schema_prefix, args.landing_volume)
+
+
+def build_gold_incident_routes() -> None:
+    """Collisions and fires near bus stops, with the routes they touch."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.incidents.gold_incidents import build_incident_routes
+
+    build_incident_routes(_spark_session(), args.schema_prefix)
+
+
 def build_silver_events() -> None:
     """The newest version of every event landed by the daily Ticketmaster pull."""
 

@@ -190,6 +190,27 @@ resources:
               - --landing-volume
               - ${var.landing_volume}
           environment_key: default
+        - task_key: incidents
+          # Seattle Fire 911 dispatches landed every 2 hours (GitHub workflow incidents.yml), decision 0027
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_silver_incidents
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+              - --landing-volume
+              - ${var.landing_volume}
+          environment_key: default
+        - task_key: incident_routes
+          depends_on:
+            - task_key: incidents
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_incident_routes
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: events
           # the newest version of every event from the daily Ticketmaster pull (GitHub workflow events.yml)
           python_wheel_task:
@@ -234,6 +255,7 @@ resources:
             - task_key: weather_impact
             - task_key: event_routes
             - task_key: trip_delivery_summary
+            - task_key: incident_routes
           python_wheel_task:
             package_name: transit_reliability
             entry_point: run_health_checks
