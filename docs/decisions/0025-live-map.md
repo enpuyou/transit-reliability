@@ -228,6 +228,24 @@ skipped (joining at E Roy St & Broadway E); 17:01 the whole trip marked cancelle
   (warning: 84% of such next trips were also missing on 2026-10-20); not known (before the memory started).
   First live check (route 49, 17:30): one "bus waiting at Pike St & 4th Ave", one "still on its previous trip".
 
+## Buses go quiet at the trip's SCHEDULED end time (measured 2026-10-20, `scripts/where_trips_go_quiet.py`)
+
+For every trip that was seen (12,496), where and when its last report came:
+
+| Last report, distance to the trip's final stop | Trips | Last report within 1 min of the scheduled end | Next trip never ran |
+|---|---|---|---|
+| within 250 m | 5,612 | 35% | 0.5% |
+| 250 m to 1.5 km | 4,825 | 90% | 0.5% |
+| 1.5 to 3 km | 1,346 | 97% | 0.5% |
+| over 3 km | 713 | 90% | 2.9% |
+
+So the agency stops showing a trip when its scheduled time runs out: an on-time bus arrives and goes quiet at the
+stop; a late one is cut off while still driving. By what follows the trip: next trip ran (11,171) last report
+typically 313 m from the final stop (over 3 km for 5%); last trip of the bus's day (1,243) 521 m (13% over 3 km);
+next trip never ran (82) 587 m (26% over 3 km). The departures panel therefore says "on its way, running late,
+roughly N minutes" (distance at 20 km/h minus the time since) instead of "away from here", and gives distances,
+not report times (the owner found the times meaningless to a rider).
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

@@ -127,9 +127,9 @@ def snapshot(out_path: str) -> None:
             if gap is not None and gap <= WAIT_RADIUS_M:
                 label = "bus waiting"
             elif gap is not None and gap <= NEAR_END_M:
-                label = "previous trip went quiet near its end"
+                label = "on its way, under 1.5 km to go"
             else:
-                label = "previous trip went quiet far from its end"
+                label = "on its way, over 1.5 km to go"
         elif mem["since"] and prev_end and prev_end < now - 300 and mem["since"] < prev_end - 900:
             label = "previous trip never showed up"
         elif prev_end and prev_end > now:
