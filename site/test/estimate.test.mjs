@@ -89,3 +89,15 @@ test("mixed: halfway between timetable pace and recent speed while moving, recen
   assert.equal(E.mixed(rep, 2, 120, 1500, tt), E.estimate(rep, 2, 120, 1500), "slow: recent speed only");
   assert.equal(E.mixed(rep, 8, 120, 1500, null), 740, "no timetable: recent speed only");
 });
+
+test("clipAlong keeps the parts of a road that run along the route, and drops cross streets and overhangs", () => {
+  // route: east 1,000 m along y = 47.6, then north
+  const road = [[east(-300), 47.6], [east(-100), 47.6], [east(100), 47.6], [east(400), 47.6]]; // runs on 300 m before the route starts
+  const kept = E.clipAlong(road, [line], 30, 35);
+  assert.equal(kept.length, 1);
+  assert.deepEqual(kept[0], [[east(-100), 47.6], [east(100), 47.6], [east(400), 47.6]], "the overhang before the route is dropped");
+  const cross = [[east(500), north(-200)], [east(500), north(-5)], [east(500), north(5)], [east(500), north(200)]]; // a north-south street crossing the route
+  assert.deepEqual(E.clipAlong(cross, [line], 30, 35), [], "a crossing street is not the route even where it touches it");
+  const reverse = road.slice().reverse();
+  assert.equal(E.clipAlong(reverse, [line], 30, 35).length, 1, "the other direction of a two-way road counts too");
+});

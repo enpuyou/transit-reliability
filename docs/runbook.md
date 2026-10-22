@@ -138,3 +138,13 @@ or expired the probes stop and the public page turns red with "Cannot confirm th
 GitHub's own schedule is only a fallback. Databricks CLI login (`databricks auth login --profile enpu`)
 also expires; on 2026-10-20 both CLI profiles were invalid ("Refresh token is invalid") and had to be
 renewed in a browser; scheduled jobs and the GitHub workflows (which use their own token) were unaffected.
+
+## Live map (2026-10-21 to 22; decision 0025)
+
+| Measure | Value | How |
+|---|---|---|
+| Age of a bus report when the map shows it | median 57 s, 90th percentile 73 s | `scripts/lag_estimators.py`, 240 trips, 2026-10-16/20 |
+| Error of the drawn position (typical / 9 in 10) | raw report 253 / 642 m; recent speed 131 / 406 m; mixed 120 / 379 m | same |
+| Trip memory uptime | continuous from 2026-10-22 00:28 UTC; 4,233 finished trips kept (6 h) at 11:43 Seattle | `/memory/status` |
+| Traffic along the route (share of the route coloured, all drawn road on the route) | route 1: 94%, 49: 99%, 7: 88% (was 21 / 74 / 79% before asking TomTom at street zoom) | `scripts` traffic check, 2026-10-22 |
+| Trip history | 404,517 trip-stop rows, 137 routes, 7.9 MB | `scripts/make_map_data.py`, 2026-10-22 |

@@ -1321,3 +1321,14 @@ runs too, with its own local storage. Free-plan budget: about 2,900 wake-ups and
 against 100,000 each (`docs/limits.md`).
 
 Regenerate the per-route timetables after a new schedule (a few times a year): `uv run python scripts/make_map_data.py --profile enpu`.
+
+## Check the "Next departures from the start" panel against reality
+
+```bash
+uv run python scripts/check_departures.py snapshot --out /tmp/departures.json   # labels trips due in the next 30 min
+# wait 45 minutes or more, then:
+uv run python scripts/check_departures.py recheck --file /tmp/departures.json   # per label: how many trips ran
+```
+
+A good panel: nearly every "bus waiting" and "still on its previous trip" trip ran; "previous trip never showed
+up" trips mostly did not.

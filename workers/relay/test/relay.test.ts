@@ -69,7 +69,7 @@ describe("trafficSegment", () => {
     const res = await trafficSegment({ ...env, TOMTOM_KEY: "secret-value" }, p, fake);
     expect(seen.key).toBe("secret-value");
     expect(seen.url).not.toContain("secret-value");
-    expect(seen.url).toContain("point=47.6123,-122.3346");
+    expect(seen.url).toContain("absolute/18/json?point=47.6123,-122.3346");
     expect(await res.json()).toEqual({ frc: "FRC4", cur: 30, free: 50, conf: 0.9, closed: false, coords: [[-122.3, 47.6], [-122.31, 47.61]] });
     expect(res.headers.get("cache-control")).toBe("public, max-age=90");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");

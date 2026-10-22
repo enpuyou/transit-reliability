@@ -2,6 +2,7 @@ export interface RelayEnv {
   KCM_BASE_URL: string;
   CACHE_SECONDS: string;
   TRAFFIC_CACHE_SECONDS?: string;
+  TRAFFIC_ZOOM?: string;
   /** TomTom API key. A Worker secret (`wrangler secret put TOMTOM_KEY`), never in the browser or the repository. */
   TOMTOM_KEY?: string;
 }
@@ -79,7 +80,10 @@ export interface Segment {
 /** Ask TomTom for the road segment nearest a point; returns a compact JSON answer, or {"none":true} if there is none. */
 export async function trafficSegment(env: RelayEnv, p: Point, fetcher: typeof fetch = fetch): Promise<Response> {
   if (!env.TOMTOM_KEY) return new Response("traffic is not configured", { status: 503, headers: CORS_HEADERS });
-  const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${p.lat},${p.lon}&unit=KMPH`;
+  // the zoom level decides which roads TomTom considers: at 10 only bigger roads, so a point on a small street got the
+  // nearest main road instead (route 1 was 21% covered); 18 includes minor streets
+  const zoom = Number(env.TRAFFIC_ZOOM) > 0 ? Number(env.TRAFFIC_ZOOM) : 18;
+  const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/${zoom}/json?point=${p.lat},${p.lon}&unit=KMPH`;
   const upstream = await fetcher(url, { headers: { "TomTom-Api-Key": env.TOMTOM_KEY } });
   const headers = new Headers(CORS_HEADERS);
   headers.set("content-type", "application/json");

@@ -35,7 +35,7 @@
     if (p.ts) {
       var age = Math.max(0, Date.now() / 1000 - Number(p.ts));
       bits.push('<span class="m">position reported ' + seattle(Number(p.ts)) + " (" + ago(age) + " ago)" +
-        (Number(p.est) === 1 ? "; the dot is an estimate: the bus is moved forward along its route at 75% of its recent speed since then" : (age > 45 ? "; the bus has likely moved on since, a bus can cover about 100 m in 10 s" : "")) + "</span>");
+        (Number(p.est) === 1 ? "; the dot is an estimate of where it is now: moved forward along its route from that report using its recent speed and the timetable's pace (the hollow circle is the report itself)" : (age > 45 ? "; the bus has likely moved on since, a bus can cover about 100 m in 10 s" : "")) + "</span>");
     }
     if (p.heading != null && Number(p.heading) >= 0) bits.push("heading " + Heading.compass(Number(p.heading)));
     if (p.speed != null && p.speed !== "null") bits.push("speed " + Math.round(Number(p.speed) * 2.237) + " mph");
@@ -76,7 +76,7 @@
   function hhmm(unix) { return new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit" }).format(new Date(unix * 1000)); }
 
   function loadPredictions(p, el, quiet) {
-    Promise.all([getTrips(), getStatics()]).then(function (res) {
+    Promise.all([getTrips(), getStatics(), ensureTripHistory(p.route)]).then(function (res) {
       var trip = GtfsRt.findTripUpdate(res[0], p.trip), stops = res[1][0] || {}, hist = (res[1][1] || {}).h || {};
       if (!trip) { if (!quiet || !el.querySelector("b")) el.textContent = "The agency has no prediction for this trip right now."; return; }
       if (trip.canceled) { el.innerHTML = "<b>The agency has marked this trip canceled.</b>"; return; }
@@ -102,13 +102,15 @@
         var h = b && hist[keyOf(u)] && hist[keyOf(u)][b.key];
         var line = "<b>" + esc(stops[u.stopId] || "stop " + u.stopId) + "</b><br>" +
           "Agency predicts <b>" + hhmm(u.arrTime) + "</b>" + (sched ? ", timetable " + hhmm(sched) + " (" + lateText(u.arrDelay) + ")" : "");
-        if (h) line += '<br><span class="m">Usually ' + lateText(h[0]) + " here on " + b.text + "; 1 trip in 7 is " + minutes(h[1]) + (h[1] > 0 ? " late or more" : " early or less") + " (" + h[2] + " trips).</span>";
+        var mine = tripUsually(p.route, p.trip, u.stopId, sched);
+        if (mine) line += '<br><span class="m">This trip usually gets here at <b>' + hhmm(mine.at) + "</b> (" + lateText(mine.late) + "; on 1 day in 7 " + minutes(mine.p85) + (mine.p85 > 0 ? " late or more" : " early or less") + "; " + mine.days + " past days).</span>";
+        else if (h) line += '<br><span class="m">Usually ' + lateText(h[0]) + " here on " + b.text + "; 1 trip in 7 is " + minutes(h[1]) + (h[1] > 0 ? " late or more" : " early or less") + " (" + h[2] + " trips).</span>";
         return line;
       });
       var age = trip.feedTimestamp ? Date.now() / 1000 - trip.feedTimestamp : 0;
       el.innerHTML = (lastStop && stops[lastStop] ? "<b>Toward " + esc(stops[lastStop]) + "</b><hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>" : "") + skipNote + rows.join("<hr style='border:0;border-top:1px solid #dcdfe6;margin:6px 0'>") +
         '<div class="m" style="margin-top:6px">Predictions as of ' + hhmm(trip.feedTimestamp) + (age > 600 ? " — OUT OF DATE, ignore them" : "") +
-        ". History is kept only for stops with a timetable time, and comes from past days only (" + ((res[1][1] || {}).first_day || "?") + " to " + ((res[1][1] || {}).last_day || "?") + "); our arrival times are estimates from GPS.</div>";
+        ". ‘This trip usually’ comes from this exact trip on past days; ‘usually … here on’ (when there is no trip history) is every trip of the route at that time of day, timetable stops only. Past days only (" + ((res[1][1] || {}).first_day || "?") + " to " + ((res[1][1] || {}).last_day || "?") + "); our arrival times are estimates from GPS.</div>";
     }).catch(function (err) { if (!quiet) el.textContent = "Couldn't load predictions (" + err.message + ")."; });
   }
 
@@ -167,6 +169,20 @@
     routeTrips[routeId] = fetch("map/trips/" + routeId + ".json").then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) { routeTrips[routeId] = j; return j; }).catch(function () { routeTrips[routeId] = null; return null; });
     return routeTrips[routeId];
+  }
+  // how late each exact trip usually reached each stop over past days (data/trip_history/<route>.json, built daily)
+  var tripHistory = {};
+  function ensureTripHistory(routeId) {
+    if (!routeId) return Promise.resolve(null);
+    if (tripHistory[routeId] !== undefined) return Promise.resolve(tripHistory[routeId]).then(function (x) { return x && x.then ? null : x; });
+    tripHistory[routeId] = fetch("data/trip_history/" + routeId + ".json").then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { tripHistory[routeId] = j; return j; }).catch(function () { tripHistory[routeId] = null; return null; });
+    return tripHistory[routeId];
+  }
+  function tripUsually(routeId, tripId, stopId, schedUnix) {
+    var h = tripHistory[routeId], x = h && !h.then && h.t[tripId] && h.t[tripId][stopId];
+    if (!x || schedUnix == null) return null;
+    return { at: schedUnix + x[0], late: x[0], p85: x[1], days: x[2], from: h.first_day, to: h.last_day };
   }
   function loadedTrips(routeId) { var r = routeTrips[routeId]; return r && !r.then ? r : null; }
   /* Timetable times count seconds from "noon minus 12 hours" of the service day in Seattle (the GTFS rule). */
@@ -336,6 +352,7 @@
     showStops();
     loadRouteTraffic();
     ensureRouteTrips(selected).then(updateDepartures);
+    ensureTripHistory(selected);
     var want = selectedDir ? ["all", ["==", ["get", "route"], selected], ["==", ["get", "dir"], selectedDir]] : ["==", ["get", "route"], selected];
     ["lines-casing", "lines-selected", "lines-flow"].forEach(function (id) {
       if (map.getLayer(id)) map.setFilter(id, want);
@@ -388,7 +405,9 @@
     var rows = list.map(function (a) {
       var mins = Math.max(0, Math.round((a.time - now) / 60));
       var when = mins <= 0 ? "arriving now" : "in " + mins + " min";
-      return "<b>" + when + "</b> (" + hhmm(a.time) + ") route " + esc(name(a.routeId)) + (a.delay != null ? ", " + lateText(a.delay) : "");
+      var mine = a.delay != null ? tripUsually(a.routeId, a.tripId, p.id, a.time - a.delay) : null;
+      return "<b>" + when + "</b> (" + hhmm(a.time) + ") route " + esc(name(a.routeId)) + (a.delay != null ? ", " + lateText(a.delay) : "") +
+        (mine ? '<span class="m">; this trip usually gets here at ' + hhmm(mine.at) + "</span>" : "");
     });
     var body = rows.length ? "Agency's predicted arrivals:<br>" + rows.join("<br>") : "No predicted arrivals here right now.";
     if (skips.length) body += '<br><span class="m"><b>' + skips.length + " upcoming trip" + (skips.length > 1 ? "s" : "") + " will not stop here</b> (" +
@@ -400,7 +419,7 @@
   }
   function refreshStopPopup() {
     if (!stopTracked) return;
-    Promise.all([getTrips(), getStatics()]).then(function (res) {
+    Promise.all([getTrips(), getStatics(), ensureTripHistory(selected)]).then(function (res) {
       if (stopTracked) stopTracked.el.innerHTML = arrivalsHtml(stopTracked.p, res[0], res[1][0] || {});
     }).catch(function () {});
   }
@@ -463,7 +482,11 @@
       var workers = []; for (var w = 0; w < 6; w++) workers.push(worker());
       return Promise.all(workers).then(function () {
         if (version !== trafficVersion) return; // the route changed while we were asking
-        var feats = [], seenSeg = {}, ok = 0, slowest = null;
+        var feats = [], seenSeg = {}, ok = 0, slowest = null, closed = 0, routeLines = [];
+        Object.keys(shapes || {}).forEach(function (key) {
+          var parts = key.split("|");
+          if (parts[0] === route && (!selectedDir || parts[1] === selectedDir)) routeLines = routeLines.concat(shapes[key]);
+        });
         answers.forEach(function (s) {
           if (!s || s.none || !s.coords || s.coords.length < 2 || !(s.free > 0)) return;
           ok++;
@@ -471,13 +494,19 @@
           if (seenSeg[k]) return;
           seenSeg[k] = true;
           var ratio = s.closed ? 0 : Math.min(1.2, s.cur / s.free);
-          if (slowest == null || ratio < slowest) slowest = ratio;
-          feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: s.coords }, properties: { ratio: ratio, closed: s.closed ? 1 : 0 } });
+          // TomTom answers with the whole road stretch, which runs on past the route and can be a cross street:
+          // keep only the parts that run along the chosen route (within 30 m, within 35 degrees of its direction)
+          var runs = Estimate.clipAlong(s.coords, routeLines, 30, 35);
+          if (!runs.length) return;
+          if (s.closed) closed++;
+          else if (slowest == null || ratio < slowest) slowest = ratio;
+          runs.forEach(function (c) { feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: c }, properties: { ratio: ratio, closed: s.closed ? 1 : 0 } }); });
         });
         var data = { type: "FeatureCollection", features: feats };
         var text = ok === 0 ? "No traffic information for route " + name(route) + " right now." :
           "Traffic along route " + name(route) + " (TomTom, " + ok + " of " + pts.length + " points): green normal speed, yellow a little slow, orange slow, red very slow" +
-          (slowest != null ? "; the slowest stretch is moving at " + Math.round(slowest * 100) + "% of its normal speed" : "") + ". Refreshes every 90 seconds.";
+          (slowest != null ? "; the slowest stretch is moving at " + Math.round(slowest * 100) + "% of its normal speed" : "") +
+          (closed ? "; " + closed + " stretch" + (closed > 1 ? "es" : "") + " marked closed (dark red)" : "") + ". Refreshes every 90 seconds.";
         trafficCache[key] = { at: Date.now(), data: data, note: text };
         src.setData(data);
         if (note) note.textContent = text;
@@ -559,6 +588,14 @@
     }).catch(function (e) { done(); console.log("departures error: " + (e && e.stack ? e.stack.split("\n").slice(0, 3).join(" / ") : e)); });
   }
   setInterval(function () { if (!document.hidden && selected) updateDepartures(); }, 30000);
+
+  // for checking the page from a script (and from the browser console): open the popup of a bus by its id
+  window.transitOpenBus = function (id) {
+    var b = pos[id];
+    if (!b) return false;
+    openPopup(propsOf(b.v, b.drawnEst ? b.beam : b.heading, b.drawnEst, b.offRoute), [b.lon, b.lat]);
+    return true;
+  };
 
   function fillRoutePicker(feed) {
     var ids = {};

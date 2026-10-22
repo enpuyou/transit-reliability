@@ -437,6 +437,27 @@ A checklist of what exists and how to recreate it. Details are in `docs/commands
    ingest_job -t dev` -> verify -> repeat for `-t prod`, then unpause.
 8. **Operate:** the daily routine in section 7.
 
+## 14. The live map: the pieces outside Databricks (see also decision 0025)
+
+Databricks is for history; the live map never touches it. Three small things on Cloudflare and one on GitHub:
+
+1. **Relay Worker** (`workers/relay`): a tiny web program. It fetches the agency's live files for the page
+   (browsers may not read them directly), remembers each answer 15 s so many viewers cost the agency little,
+   and holds the TomTom key as a **secret** (a value stored on Cloudflare, never in the code: set with
+   `npx wrangler secret put TOMTOM_KEY --name transit-relay`). Deploy with `npx wrangler deploy` in that folder.
+2. **Trip memory**: a **Durable Object** (a Worker with its own small database that lives on) inside the relay.
+   It sets an **alarm** to wake itself every 30 s, reads the bus file, and writes down each trip that has just
+   finished. Check it: `curl https://transit-relay.youenpu.workers.dev/memory/status` (lastRun should be under a
+   minute old). Free plan: 100,000 requests and 100,000 written rows a day; we use a few percent.
+3. **Static data on the site** (`site/map/`): route lines, stops, timetables per route, made by
+   `scripts/make_map_data.py` from silver (re-run after a new schedule). **Daily data** (`site/data/`):
+   history files written by the daily job's `map_history` step and copied by the site workflow.
+4. **The page** (`site/map.html`, `map.js`, `estimate.js`, `gtfsrt.js`): reads the relay every 10 s, decodes
+   the files itself, estimates where each bus is now, and checks its own estimates as later reports arrive.
+
+Develop locally: `cd site && python3 -m http.server 8000`, and in `workers/relay` put the key in `.dev.vars`
+(ignored by git) and run `npx wrangler dev --port 8787`. Opened from localhost, the page uses that local relay.
+
 ## 12. Glossary
 
 | Term | Meaning |
@@ -452,6 +473,9 @@ A checklist of what exists and how to recreate it. Details are in `docs/commands
 | Unity Catalog | catalog/schema/table/volume naming and permissions |
 | Volume | UC-managed file storage addressed by path |
 | DBU | Databricks compute billing unit |
+| Worker | a small program Cloudflare runs on request or on a timer |
+| Durable Object | a Worker that keeps its own small database and can wake itself with an alarm |
+| Secret (Cloudflare) | a value stored with a Worker (like an API key), readable by the code, never in the repository |
 
 ## 13. Where to read next
 

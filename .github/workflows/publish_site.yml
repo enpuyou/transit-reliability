@@ -57,6 +57,9 @@ jobs:
         # optional: the map popup just omits "usually ..." lines if it is missing
         run: databricks fs cp dbfs:/Volumes/workspace/transit_ops/state/public/stop_history.json site/data/stop_history.json --overwrite || echo "no stop_history.json yet"
 
+      - name: Fetch each route's per-trip history (optional, like the file above)
+        run: databricks fs cp -r dbfs:/Volumes/workspace/transit_ops/state/public/trip_history site/data/trip_history --overwrite || echo "no trip_history yet"
+
       - name: Live probes (status.json)
         # never blocks publishing: a failing probe is exactly what visitors need to see
         run: python3 scripts/watchdog.py --json-out site/data/status.json || true

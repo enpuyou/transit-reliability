@@ -139,6 +139,31 @@
     return Math.min(lineLength, (timetablePace(rep, tt, nowSec) + bySpeed) / 2);
   }
 
-  var api = { mixed: mixed, timetable: timetable, timetablePace: timetablePace, advance: advance, slice: slice, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
+  /** Keep only the parts of a road (list of [lon, lat]) that run along one of the route `lines`: each piece of road
+      whose middle is within `maxOff` metres of a line and whose direction is within `maxAngle` degrees of the line's
+      (either way, for a two-way road). Returns the kept runs, each a list of [lon, lat] with at least 2 points.
+      Used to keep TomTom's road stretches to the route itself (they run on past the route and include cross streets). */
+  function clipAlong(coords, lines, maxOff, maxAngle) {
+    var runs = [], run = null;
+    for (var i = 0; i + 1 < coords.length; i++) {
+      var a = coords[i], b = coords[i + 1], mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      var kx = M_PER_DEG_LON_AT_EQUATOR * Math.cos(mid[1] * Math.PI / 180);
+      var bearing = (Math.atan2((b[0] - a[0]) * kx, (b[1] - a[1]) * M_PER_DEG_LAT) * 180 / Math.PI + 360) % 360;
+      var keep = false;
+      for (var j = 0; j < lines.length && !keep; j++) {
+        var p = project(lines[j], mid[0], mid[1]);
+        if (p.off > maxOff) continue;
+        var diff = Math.abs(((bearing - pointAt(lines[j], p.dist)[2]) % 180 + 180) % 180);
+        keep = Math.min(diff, 180 - diff) <= maxAngle;
+      }
+      if (keep) {
+        if (!run) { run = [a]; runs.push(run); }
+        run.push(b);
+      } else run = null;
+    }
+    return runs;
+  }
+
+  var api = { clipAlong: clipAlong, mixed: mixed, timetable: timetable, timetablePace: timetablePace, advance: advance, slice: slice, project: project, length: length, pointAt: pointAt, speed: speed, estimate: estimate, FACTOR: FACTOR };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Estimate = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -39,6 +39,8 @@ from transit_reliability.public.map_data import (  # noqa: E402
     WINDOW_DAYS,
     history_payload,
     history_sql,
+    trip_history_payloads,
+    trip_history_sql,
 )
 
 S = "workspace.transit_silver"
@@ -220,6 +222,14 @@ def main() -> None:
     local = Path("site/data")
     local.mkdir(parents=True, exist_ok=True)
     write(local / "stop_history.json", history_payload(rows, first, last_day))
+    # per-trip history, one file per route (the daily job writes the same into the state volume)
+    trips_rows = [tuple(r) for r in q(trip_history_sql("transit", first, last_day))]
+    (local / "trip_history").mkdir(exist_ok=True)
+    for route, payload in trip_history_payloads(trips_rows, first, last_day).items():
+        (local / "trip_history" / f"{route}.json").write_text(
+            json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        )
+    print(f"wrote site/data/trip_history/: {len(trips_rows)} trip-stop rows")
 
 
 if __name__ == "__main__":

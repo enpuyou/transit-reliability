@@ -112,3 +112,20 @@ def test_stop_history_payload_and_sql() -> None:
     assert (out["first_day"], out["last_day"]) == ("2026-10-13", "2026-10-19")
     sql = history_sql("transit", dt.date(2026, 10, 13), dt.date(2026, 10, 19))
     assert "workspace.transit_silver.stop_visits" in sql and "timepoint = 1" in sql
+
+
+def test_trip_history_payloads_split_by_route() -> None:
+    import datetime as dt
+
+    from transit_reliability.public.map_data import trip_history_payloads, trip_history_sql
+
+    rows = [
+        ("100447", "801199791", "10911", 61.2, 140.9, 7),
+        ("100447", "801199791", "10912", 30.0, 90.0, 6),
+        ("100001", "t1", "s1", -5.0, 20.0, 3),
+    ]
+    out = trip_history_payloads(rows, dt.date(2026, 10, 13), dt.date(2026, 10, 20))
+    assert out["100447"]["t"]["801199791"] == {"10911": [61, 141, 7], "10912": [30, 90, 6]}
+    assert out["100001"]["first_day"] == "2026-10-13"
+    sql = trip_history_sql("transit", dt.date(2026, 10, 13), dt.date(2026, 10, 20))
+    assert "GROUP BY route_id, trip_id, stop_id" in sql and "count(*) >= 3" in sql

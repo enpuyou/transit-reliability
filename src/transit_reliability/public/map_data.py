@@ -19,6 +19,8 @@ COMPLETE_AFTER_DAYS = 2
 MIN_TRIPS = 5
 MAX_WIDTH_S = 120
 HISTORY_FILE = ("public", "stop_history.json")
+TRIP_HISTORY_DIR = ("public", "trip_history")
+MIN_DAYS_PER_TRIP = 3
 
 _PT = "from_utc_timestamp(sched_arr, 'America/Los_Angeles')"
 _BAND = (
@@ -69,4 +71,55 @@ def export_map_history(spark: Any, prefix: str, state_volume: str) -> None:
         handle.write(text)
     print(
         f"wrote {path}: {len(text):,} bytes, {len(payload['h'])} stops, {first_day} to {last_day}"
+    )
+
+
+def trip_history_sql(prefix: str, first_day: dt.date, last_day: dt.date) -> str:
+    """For each trip and stop: how late this exact trip usually reached the stop (median, 85th percentile, days)."""
+
+    return f"""SELECT route_id, trip_id, stop_id, percentile(arr_delay_s, 0.5) AS med, percentile(arr_delay_s, 0.85) AS p85,
+        count(*) AS n
+        FROM workspace.{prefix}_silver.stop_visits
+        WHERE arr_est IS NOT NULL AND arr_delay_s IS NOT NULL
+          AND unix_timestamp(arr_hi) - unix_timestamp(arr_lo) <= {MAX_WIDTH_S}
+          AND service_date BETWEEN DATE'{first_day.isoformat()}' AND DATE'{last_day.isoformat()}'
+        GROUP BY route_id, trip_id, stop_id HAVING count(*) >= {MIN_DAYS_PER_TRIP}"""
+
+
+def trip_history_payloads(
+    rows: list[tuple[Any, ...]], first_day: dt.date, last_day: dt.date
+) -> dict[str, dict[str, Any]]:
+    """One payload per route: {"first_day", "last_day", "t": {trip: {stop: [median s late, 85th pct, days]}}}."""
+
+    out: dict[str, dict[str, Any]] = {}
+    for route, trip, stop, med, p85, n in rows:
+        r = out.setdefault(
+            str(route),
+            {"first_day": first_day.isoformat(), "last_day": last_day.isoformat(), "t": {}},
+        )
+        r["t"].setdefault(str(trip), {})[str(stop)] = [round(float(med)), round(float(p85)), int(n)]
+    return out
+
+
+def export_trip_history(spark: Any, prefix: str, state_volume: str) -> None:
+    silver = f"workspace.{prefix}_silver.stop_visits"
+    oldest, newest = spark.sql(
+        f"SELECT min(service_date), max(service_date) FROM {silver} WHERE arr_est IS NOT NULL"
+    ).first()
+    last_day = newest - dt.timedelta(days=COMPLETE_AFTER_DAYS)
+    first_day = max(last_day - dt.timedelta(days=WINDOW_DAYS - 1), oldest)
+    rows = [tuple(r) for r in spark.sql(trip_history_sql(prefix, first_day, last_day)).collect()]
+    payloads = trip_history_payloads(rows, first_day, last_day)
+    if not payloads:
+        raise RuntimeError("trip history is empty; refusing to publish empty files")
+    folder = volume_path(state_volume, *TRIP_HISTORY_DIR)
+    os.makedirs(folder, exist_ok=True)
+    total = 0
+    for route, payload in payloads.items():
+        text = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        with open(os.path.join(folder, f"{route}.json"), "w", encoding="utf-8") as handle:
+            handle.write(text)
+        total += len(text)
+    print(
+        f"wrote {len(payloads)} route files to {folder}: {total:,} bytes, {len(rows)} trip-stop rows"
     )
