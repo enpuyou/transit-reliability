@@ -184,6 +184,32 @@ not neutral: it is always behind, by about a minute of travel, and a rider canno
 OneBusAway API (Seattle) keeps the last real fix (lastKnownLocation) apart from a projected position; we found no
 published accuracy comparison of such methods.
 
+## Mixed estimators, and ahead versus behind (2026-10-21, same replay)
+
+| Method | typical | 9 in 10 | 99 in 100 | median signed (+ ahead) | >200 m ahead | >200 m behind |
+|---|---|---|---|---|---|---|
+| last report | 253 | 642 | 1305 | -253 | 0.0% | 58.9% |
+| recent speed (map now) | 131 | 406 | 784 | -44 | 8.8% | 25.7% |
+| timetable pace | 145 | 404 | 732 | +51 | 25.9% | 11.6% |
+| agency prediction | 136 | 438 | 974 | +31 | 21.5% | 14.6% |
+| mixed (timetable when moving) | 119 | 385 | 801 | -40 | 7.6% | 24.5% |
+| mixed, halfway | 120 | 379 | 766 | -39 | 7.4% | 24.6% |
+
+Being drawn BEHIND the bus is the costly mistake for a rider waiting ahead of it (the bus comes sooner than it
+looks); the raw report is behind 84% of the time.
+
+## Skipped stops, cancelled and missing trips (Tuesday 2026-10-20, bronze trip_updates)
+
+The agency's prediction file does carry this: a trip-level mark (3 = cancelled) and a stop-level mark (1 =
+skipped); we store both in bronze, but the map's feed reader ignores them. 31 trips were marked cancelled; 2,542
+had at least one stop marked skipped (cause unverified: detours and closed stops are likely). Of the 442 scheduled
+trips that never appeared in the position feed: 16 were marked cancelled, 38 had some skipped stops, 23 had a bus
+named but never reported a position, and 248 were not in the prediction file at all. The feed carries no reason for
+a cancellation (GTFS-realtime has none for trips), so why a trip did not run is not in our data. Example (2026-10-21,
+route 49, the 17:00 trip toward Downtown): 16:07 scheduled with no bus; 16:39 bus 4318 named, stops 1 to 12
+skipped (joining at E Roy St & Broadway E); 17:01 the whole trip marked cancelled. Its previous trip in the block
+(15:52 to 16:29) never appeared.
+
 ## Not built yet
 
 - The history file is made by running `scripts/make_map_data.py` by hand; it should be refreshed daily

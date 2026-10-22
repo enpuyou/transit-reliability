@@ -198,11 +198,20 @@ def replay(data: dict, out: dict) -> None:
                 max(last, interp(pt_, pd_, w)) if len(pd_) > 1 else est["recent speed"]
             )
             moving = v is not None and v > 3
+            # mixed: timetable pace while the bus was moving at its last report, recent speed when slow or stopped
+            est["mixed"] = est["timetable pace"] if moving else est["recent speed"]
+            # mixed, halfway: while moving, halfway between timetable pace and recent speed
+            est["mixed, halfway"] = (
+                (est["timetable pace"] + est["recent speed"]) / 2 if moving else est["recent speed"]
+            )
             for name, e in est.items():
                 err = abs(e - truth)
                 out["err"].setdefault(name, []).append(err)
                 out["err_moving" if moving else "err_slow"].setdefault(name, []).append(err)
                 out["worse"].setdefault(name, []).append(err - abs(last - truth))
+                out["signed"].setdefault(name, []).append(
+                    e - truth
+                )  # + ahead of the bus, - behind it
             out["age"].append(w - ts[k])
             w += STEP_S
 
@@ -217,13 +226,33 @@ def main() -> None:
     ap.add_argument("--profile", required=True)
     ap.add_argument("--days", nargs="+", default=["2026-10-16", "2026-10-20"])
     ap.add_argument("--trips", type=int, default=120)
+    ap.add_argument(
+        "--save", default="/tmp/lag_estimators.pkl", help="where to keep the raw results"
+    )
     args = ap.parse_args()
     q = make_query(args.profile)
-    out: dict = {"trips": 0, "err": {}, "err_moving": {}, "err_slow": {}, "worse": {}, "age": []}
+    out: dict = {
+        "trips": 0,
+        "err": {},
+        "err_moving": {},
+        "err_slow": {},
+        "worse": {},
+        "signed": {},
+        "age": [],
+    }
     for day in args.days:
         replay(load_day(q, day, args.trips), out)
+    # keep the raw results so the report can be reprinted without replaying (minutes of queries)
+    import pickle
+
+    with open(args.save, "wb") as f:
+        pickle.dump(out, f)
+    report(out, args.days)
+
+
+def report(out: dict, days: list[str]) -> None:
     print(
-        f"days {' '.join(args.days)} | trips replayed {out['trips']} | moments compared {len(out['age'])} (every {STEP_S} s)"
+        f"days {' '.join(days)} | trips replayed {out['trips']} | moments compared {len(out['age'])} (every {STEP_S} s)"
     )
     print(
         f"age of the newest visible report at those moments: median {statistics.median(out['age']):.0f} s, 90th percentile {pct(out['age'], 0.9):.0f} s\n"
@@ -235,6 +264,16 @@ def main() -> None:
         worse = out["worse"][name]
         print(
             f"{name:34}{pct(errs, 0.5):>9.0f}{pct(errs, 0.9):>9.0f}{pct(errs, 0.99):>11.0f}{sum(1 for x in worse if x > 25) / len(worse):>25.0%}{sum(1 for x in worse if x > 200) / len(worse):>14.1%}"
+        )
+    print(
+        "\nahead of or behind the real bus, metres along the route (+ drawn ahead of the bus, - behind it):"
+    )
+    print(f"{'':34}{'median':>9}{'ahead':>8}{'behind':>8}{'ahead >200 m':>14}{'behind >200 m':>15}")
+    for name, xs in out["signed"].items():
+        n = len(xs)
+        print(
+            f"{name:34}{statistics.median(xs):>9.0f}{sum(1 for x in xs if x > 25) / n:>8.0%}{sum(1 for x in xs if x < -25) / n:>8.0%}"
+            f"{sum(1 for x in xs if x > 200) / n:>14.1%}{sum(1 for x in xs if x < -200) / n:>15.1%}"
         )
     for label, key in (
         ("bus moving at its last report (> 3 m/s)", "err_moving"),
