@@ -57,3 +57,25 @@ def test_segment_sql_is_scoped_to_the_day_and_prefix_and_only_reads() -> None:
     summary = segment_runtimes_sql("transit", dt.date(2026, 10, 16))
     assert "DATE'2026-09-19'" in summary and "DATE'2026-10-16'" in summary  # 28 days, inclusive
     assert "HAVING count(*) >= 10" in summary
+
+
+def test_trip_delivery_sql_names_the_five_outcomes_and_the_previous_trip() -> None:
+    import datetime as dt
+
+    from transit_reliability.gtfs_static.gold_delivery import (
+        trip_delivery_sql,
+        trip_delivery_summary_sql,
+    )
+
+    sql = trip_delivery_sql("transit", dt.date(2026, 10, 20))
+    for outcome in (
+        "'ran'",
+        "'ran, skipped stops'",
+        "'canceled with notice'",
+        "'canceled late'",
+        "'did not run, not announced'",
+    ):
+        assert outcome in sql
+    assert "PARTITION BY t.block_id, t.service_id" in sql and "15 * 60" in sql
+    summary = trip_delivery_summary_sql("transit", dt.date(2026, 10, 20))
+    assert "DATE'2026-09-23' AND DATE'2026-10-20'" in summary

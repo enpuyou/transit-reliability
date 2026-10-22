@@ -260,6 +260,25 @@ TABLES = (
         "current_timestamp()",
     ),
     TableInfo(
+        "gold",
+        "trip_delivery",
+        "For every scheduled trip: did it run (a bus reported on it), and if not, did the agency "
+        "announce it (marked canceled, and how long before its start)? Also whether the same bus's "
+        "previous trip ran.",
+        "one scheduled trip on one service date",
+        "daily silver job",
+        "max(service_date)",
+    ),
+    TableInfo(
+        "gold",
+        "event_routes",
+        "Upcoming and recent events (Ticketmaster) with each bus route that stops within 400 m "
+        "of the venue.",
+        "one event and one route",
+        "daily silver job (events pulled daily from Ticketmaster)",
+        "max(start_ts)",
+    ),
+    TableInfo(
         "ops",
         "check_results",
         "Every monitoring check ever run: value, rule, verdict, and the SQL to rerun it.",

@@ -281,6 +281,27 @@
         var htot = hbands.map(function (b) { return ["bunched", "gapped", "regular", "uncertain"].reduce(function (a, c) { return a + hget(b, c); }, 0) || 1; });
         out.push(barChart({ title: "Are buses evenly spaced? Frequent routes, by time of day (weekdays, last 28 days)", caption: "On routes with a bus every 4 to 15 minutes, each pair of consecutive buses at a timepoint is compared with the scheduled gap: BUNCHED if they ran less than a quarter of the scheduled gap apart (a long wait follows), GAPPED if more than twice the scheduled gap, REGULAR if clearly between. The gap between two buses is estimated from GPS (about 50 seconds of uncertainty), so a pair is only called bunched or gapped when its whole estimated range says so; anything straddling a limit is 'uncertain'. Route-level results are kept in the findings and are not ranked here.", categories: hbands.map(function (b) { return hnames[b]; }), mode: "stack", pct: true, yMax: 1, series: [["bunched", "var(--c5)"], ["gapped", "var(--c2)"], ["uncertain", "var(--c6)"], ["regular", "var(--c3)"]].map(function (c) { return { name: c[0], color: c[1], values: hbands.map(function (b, i) { return hget(b, c[0]) / htot[i]; }) }; }), xLabel: "time of day (Seattle time)" }));
       }
+      var dv = dist(data, "delivery_outcomes_by_day"), dap = dist(data, "delivery_after_previous"), dmr = dist(data, "delivery_missing_by_route");
+      if (dv.length) {
+        var dvDays = Array.from(new Set(dv.map(function (r) { return r.bucket.split("|")[0]; }))).sort();
+        var dvGet = function (day, outcome) { var r = dv.filter(function (x) { return x.bucket === day + "|" + outcome; })[0]; return r ? r.value : 0; };
+        out.push(barChart({ title: "Scheduled trips that did not run, per day, and whether the agency said so (last 14 complete days)", caption: "A trip did not run when no bus position was ever matched to it (a bus running with its tracker off looks the same). Announced: the agency marked the trip canceled; with notice means at least 15 minutes before its scheduled start. Most trips that did not run were never announced, and announced ones were often marked after their start.",
+          categories: dvDays, mode: "stack", series: [
+            { name: "not run, not announced", values: dvDays.map(function (d) { return dvGet(d, "did not run, not announced"); }), color: "var(--c5)" },
+            { name: "canceled late (under 15 min notice)", values: dvDays.map(function (d) { return dvGet(d, "canceled late"); }), color: "var(--c2)" },
+            { name: "canceled with notice", values: dvDays.map(function (d) { return dvGet(d, "canceled with notice"); }), color: "var(--c3)" }] }));
+      }
+      if (dap.length) {
+        var ap = function (k) { var r = dap.filter(function (x) { return x.bucket === k; })[0]; return r ? r.value : 0; };
+        var shareAfter = function (prev) { var m = ap(prev + "|missing"), t = m + ap(prev + "|ran"); return t ? m / t : 0; };
+        out.push(barChart({ title: "A missing trip is usually followed by another (last 28 complete days)", caption: "Share of trips that did not run, depending on whether the same bus's previous trip (from the timetable's blocks) ran. When one trip is missing, the next one by that bus usually is too.",
+          categories: ["previous trip ran", "previous trip missing"], series: [{ name: "share not run", values: [shareAfter("previous ran"), shareAfter("previous missing")].map(function (v) { return Math.round(v * 1000) / 10; }) }] }));
+      }
+      if (dmr.length) {
+        var ordered = dmr.slice().sort(function (a, b) { return a.bucket_order - b.bucket_order; });
+        out.push(barChart({ title: "Routes with the most trips that did not run (last 28 complete days, routes with at least 100 scheduled trips)", caption: "Percent of scheduled trips with no bus ever matched.",
+          categories: ordered.map(function (r) { return "route " + r.bucket; }), series: [{ name: "percent not run", values: ordered.map(function (r) { return Math.round(r.value * 1000) / 10; }), color: "var(--c5)" }] }));
+      }
       var wh = dist(data, "weather_hours_by_class"), wp = dist(data, "weather_impact_on_time_share"), wn = dist(data, "weather_impact_hours");
       if (wh.length) {
         var hrs = {}; wh.forEach(function (r) { hrs[r.bucket] = r.value; });

@@ -385,6 +385,32 @@ def headways(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def delivery(prefix: str, day: str) -> list[CheckSpec]:
+    """trip_delivery has one row per scheduled trip of the day, each with an outcome."""
+
+    td, st = _t(prefix, "gold", "trip_delivery"), _t(prefix, "silver", "scheduled_trips")
+    return [
+        CheckSpec(
+            "trip_delivery_rows_match_schedule",
+            f"SELECT abs((SELECT count(*) FROM {td} WHERE service_date = DATE'{day}') - (SELECT count(*) FROM {st} WHERE service_date = DATE'{day}'))",
+            "one row for every scheduled trip of the day, no more, no fewer",
+            maximum=0,
+        ),
+        CheckSpec(
+            "trip_delivery_duplicate_keys",
+            f"SELECT count(*) - count(DISTINCT trip_id) FROM {td} WHERE service_date = DATE'{day}'",
+            "one row per trip and service date",
+            maximum=0,
+        ),
+        CheckSpec(
+            "trip_delivery_without_outcome",
+            f"SELECT count(*) FROM {td} WHERE service_date = DATE'{day}' AND outcome IS NULL",
+            "every trip gets one of the five outcomes",
+            maximum=0,
+        ),
+    ]
+
+
 def events(prefix: str) -> list[CheckSpec]:
     """The daily event pull is fresh, and the event tables have one row per event (and route)."""
 
@@ -460,4 +486,5 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *headways(prefix, day),
         *weather(prefix),
         *events(prefix),
+        *delivery(prefix, day),
     ]

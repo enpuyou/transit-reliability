@@ -352,6 +352,34 @@ def build_silver_weather() -> None:
     build_weather(_spark_session(), args.schema_prefix, args.landing_volume)
 
 
+def build_gold_trip_delivery() -> None:
+    """One row per scheduled trip and date: did it run, and was a missing one announced?"""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--rebuild-from", help="recompute service dates from this one (YYYY-MM-DD)")
+    args = parser.parse_args()
+
+    import datetime as dt
+
+    from transit_reliability.gtfs_static.gold_delivery import build_trip_delivery
+
+    since = dt.date.fromisoformat(args.rebuild_from) if args.rebuild_from else None
+    build_trip_delivery(_spark_session(), args.schema_prefix, since)
+
+
+def build_gold_trip_delivery_summary() -> None:
+    """Trip delivery over the last 28 complete days, by route, time band and day type."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.gtfs_static.gold_delivery import build_trip_delivery_summary
+
+    build_trip_delivery_summary(_spark_session(), args.schema_prefix)
+
+
 def build_silver_events() -> None:
     """The newest version of every event landed by the daily Ticketmaster pull."""
 

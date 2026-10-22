@@ -100,6 +100,7 @@ def _daily_metric_parts(prefix: str) -> list[str]:
 def _distribution_parts(prefix: str) -> list[str]:
     silver, gold = _table(prefix, "silver"), _table(prefix, "gold")
     sv, tp, pe = silver("stop_visits"), gold("trip_performance"), gold("prediction_errors")
+    td = gold("trip_delivery")
     cd = f"service_date = {COMPLETE_DAY}"
     delay_bin = "least(greatest(floor(arr_delay_s / 60), -10), 20)"
     width = "unix_timestamp(arr_hi) - unix_timestamp(arr_lo)"
@@ -140,6 +141,10 @@ def _distribution_parts(prefix: str) -> list[str]:
     wh, wi = silver("weather_hourly"), gold("weather_impact")
     border2 = "CASE band WHEN 'am_peak' THEN 0 WHEN 'midday' THEN 1 WHEN 'pm_peak' THEN 2 WHEN 'evening' THEN 3 ELSE 4 END"
     parts += [
+        # trip delivery (did each scheduled trip run, and was a missing one announced?), last 14 complete days
+        f"SELECT 'delivery_outcomes_by_day', {COMPLETE_DAY}, concat(CAST(service_date AS STRING), '|', outcome), 0, CAST(count(*) AS DOUBLE) FROM {td} WHERE service_date BETWEEN date_sub({COMPLETE_DAY}, 13) AND {COMPLETE_DAY} GROUP BY 3",
+        f"SELECT 'delivery_after_previous', {COMPLETE_DAY}, concat(CASE WHEN prev_ran = false THEN 'previous missing' WHEN prev_ran THEN 'previous ran' ELSE 'first trip' END, '|', CASE WHEN ran THEN 'ran' ELSE 'missing' END), 0, CAST(count(*) AS DOUBLE) FROM {td} WHERE service_date BETWEEN date_sub({COMPLETE_DAY}, 27) AND {COMPLETE_DAY} GROUP BY 3",
+        f"SELECT 'delivery_missing_by_route', {COMPLETE_DAY}, route, CAST(rk AS INT), share FROM (SELECT coalesce(r.short_name, d.route_id) AS route, avg(CASE WHEN d.ran THEN 0.0 ELSE 1.0 END) AS share, row_number() OVER (ORDER BY avg(CASE WHEN d.ran THEN 0.0 ELSE 1.0 END) DESC) AS rk FROM {td} d LEFT JOIN (SELECT route_id, max_by(route_short_name, feed_version) AS short_name FROM {silver('gtfs_routes')} GROUP BY route_id) r ON r.route_id = d.route_id WHERE d.service_date BETWEEN date_sub({COMPLETE_DAY}, 27) AND {COMPLETE_DAY} GROUP BY 1 HAVING count(*) >= 100) WHERE rk <= 12",
         f"SELECT 'weather_hours_by_class', {COMPLETE_DAY}, weather_class, CASE weather_class WHEN 'dry' THEN 0 WHEN 'fog' THEN 1 ELSE 2 END, CAST(count(*) AS DOUBLE) FROM {wh} WHERE n_obs >= 6 GROUP BY weather_class",
         f"SELECT 'weather_impact_on_time_share', {COMPLETE_DAY}, concat(band, '|', weather_class), {border2}, sum(n_on_time) / sum(n_scored) FROM {wi} WHERE day_type = 'weekday' GROUP BY band, weather_class",
         f"SELECT 'weather_impact_hours', {COMPLETE_DAY}, concat(band, '|', weather_class), {border2}, CAST(sum(n_hours) AS DOUBLE) FROM {wi} WHERE day_type = 'weekday' GROUP BY band, weather_class",
@@ -294,6 +299,14 @@ def sample_queries(prefix: str) -> dict[str, tuple[str, str]]:
         "silver.weather_hourly": (
             "silver",
             f"SELECT to_json(struct(hour_start, pt_date, pt_hour, n_obs, n_stations, temp_c_avg, wind_kmh_avg, visibility_m_min, wet_share, fog_share, weather_class)) FROM {wh_} WHERE hour_start = (SELECT max(hour_start) FROM {wh_}) LIMIT 1",
+        ),
+        "gold.trip_delivery": (
+            "gold",
+            f"SELECT to_json(struct(service_date, route_id, direction_id, sched_start, band, ran, canceled, notice_min, skipped_stops, prev_ran, outcome)) FROM {gold('trip_delivery')} WHERE {latest_day(gold('trip_delivery'))} AND NOT ran ORDER BY sched_start LIMIT 1",
+        ),
+        "gold.event_routes": (
+            "gold",
+            f"SELECT to_json(struct(name, segment, start_ts, status, venue_name, large_venue, route_short_name, nearest_stop_m)) FROM {gold('event_routes')} ORDER BY large_venue DESC, start_ts LIMIT 1",
         ),
         "gold.weather_impact": (
             "gold",

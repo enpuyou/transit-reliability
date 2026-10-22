@@ -157,6 +157,29 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: trip_delivery
+          # did each scheduled trip run, and was a missing one announced (gold.trip_delivery)
+          depends_on:
+            - task_key: vehicle_positions
+            - task_key: trip_updates
+            - task_key: expand_schedule
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_trip_delivery
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: trip_delivery_summary
+          depends_on:
+            - task_key: trip_delivery
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_gold_trip_delivery_summary
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: weather
           python_wheel_task:
             package_name: transit_reliability
@@ -208,6 +231,7 @@ resources:
             - task_key: headway_summary
             - task_key: weather_impact
             - task_key: event_routes
+            - task_key: trip_delivery_summary
           python_wheel_task:
             package_name: transit_reliability
             entry_point: run_health_checks
