@@ -1349,3 +1349,29 @@ gh workflow run events.yml                                                # land
 
 In Databricks: `SELECT name, start_ts, venue_name, large_venue FROM workspace.transit_silver.events ORDER BY start_ts`
 and `SELECT * FROM workspace.transit_gold.event_routes WHERE route_short_name = '1'`.
+
+## After every deploy: smoke test (and the deploy workflow)
+
+```bash
+uv run python scripts/smoke_test.py --profile enpu     # every prod job has exactly the steps in resources/*.yml,
+                                                        # newest runs did not fail, relay and site answer; exit 1 on a problem
+```
+
+Or deploy from GitHub: Actions > deploy > Run workflow, type `deploy-prod` (tests, bundle deploy, smoke test; tick
+"relay" to redeploy the relay Worker, which needs a `CLOUDFLARE_API_TOKEN` repository secret). Outage drills:
+`docs/drills.md`.
+
+## Incidents (Seattle Fire 911, decision 0027)
+
+```bash
+python3 scripts/fetch_incidents.py --hours 30 --out /tmp/incidents_out   # about 450 dispatches
+gh workflow run incidents.yml                                             # land now instead of waiting (every 2 h)
+```
+
+In Databricks: `SELECT category, count(*) FROM workspace.transit_silver.incidents GROUP BY 1` and
+`SELECT * FROM workspace.transit_gold.incident_routes ORDER BY dispatched_ts DESC`.
+
+## Trip delivery (did each trip run?)
+
+`SELECT outcome, count(*) FROM workspace.transit_gold.trip_delivery WHERE service_date = current_date() - 2 GROUP BY 1`
+gives the day's ran / ran with skipped stops / canceled with notice / canceled late / did not run, not announced.

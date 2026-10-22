@@ -1,0 +1,61 @@
+name: deploy
+
+# Deploy to production on purpose, then prove it worked. Started by hand only (Actions > deploy > Run
+# workflow), never on push: the prod bundle is unpaused and spends compute, so a person decides when.
+# Steps: run the tests, deploy the Databricks bundle to prod, run the smoke test (scripts/smoke_test.py:
+# every prod job has exactly the steps in resources/*.yml, newest runs did not fail, the relay and the
+# site answer). Optionally deploys the relay Worker too, if a Cloudflare token is configured.
+# Needs repo secrets DATABRICKS_HOST and DATABRICKS_TOKEN; CLOUDFLARE_API_TOKEN only for the Worker.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type deploy-prod to deploy the Databricks bundle to production"
+        required: true
+      relay:
+        description: "Also deploy the relay Worker (needs the CLOUDFLARE_API_TOKEN secret)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: inputs.confirm == 'deploy-prod'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-groups --python 3.12
+      - name: Tests first
+        run: |
+          uv run --group dev python -m ruff check .
+          uv run --group dev python -m mypy src tests
+          uv run --group dev python -m pytest -q
+      - uses: databricks/setup-cli@v1.20.0
+        with:
+          version: 1.20.0
+      - name: Deploy the Databricks bundle to prod
+        run: |
+          databricks bundle validate -t prod
+          databricks bundle deploy -t prod
+      - name: Deploy the relay Worker
+        if: inputs.relay && env.CLOUDFLARE_API_TOKEN != ''
+        working-directory: workers/relay
+        run: |
+          npm ci
+          npm run typecheck && npm test
+          npx wrangler deploy
+      - name: Smoke test
+        run: uv run python scripts/smoke_test.py
