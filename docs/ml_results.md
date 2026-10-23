@@ -5,23 +5,33 @@ covers a few weeks of one city. Method and plan: `docs/ml_design.md`. Scoring: `
 a bus predicted 0 to 3 minutes away must arrive within 1 minute early to 1 minute late; 3 to 6: 1.5 early to 2
 late; 6 to 12: 2.5 early to 3.5 late; 12 to 30: 4 early to 6 late).
 
-## 2026-10-22 R0: baseline scoreboard, one day (service date 2026-10-20), rows where all four predictors answer
+## 2026-10-22 R0: baseline scoreboard, six weekdays (2026-10-14 to 10-21, without the weekend)
 
-Window score (share of arrivals inside the window) / typical absolute error in seconds / bias in seconds (actual
-minus predicted; positive = the bus came later than predicted), by the predictor's own minutes-away bucket.
+Production table `ml.baseline_scores_daily`, rows where all four predictors answer (fresh assigned agency
+prediction, history of at least 5 past observations, complete days). Weekend days are not scored yet: the history
+predictor needs an earlier weekend (the first one is Oct 17-18, so Oct 24-25 is the first scorable weekend).
+Intervals resample the six days (95 percent). Window score = share of arrivals inside WMATA's window for the
+predictor's own minutes-away bucket; error in seconds; bias = actual minus predicted (positive = came later).
 
-| Predictor | 0-3 min | 3-6 min | 6-12 min | 12-30 min | All |
-|---|---|---|---|---|---|
-| Timetable | 28.0% / 186 / +172 | 44.4% / 181 / +138 | 64.7% / 186 / +127 | 83.7% / 186 / +109 | 64.9% / 185 / +127 |
-| Stays as late as now (published information only) | 70.1% / 57 / +30 | 77.0% / 77 / +22 | 86.5% / 99 / +19 | 90.9% / 133 / +13 | 84.7% / 105 / +18 |
-| Historical average (past days only) | 39.8% / 126 / +87 | 48.7% / 134 / +17 | 66.8% / 149 / -3 | 84.8% / 159 / -9 | 69.9% / 149 / +7 |
-| Agency (KCM) | 70.3% / 57 / +23 | 75.5% / 78 / +10 | 85.0% / 100 / +2 | 89.7% / 134 / -9 | 83.7% / 106 / +1 |
+| Predictor | Window score, all buckets | Typical absolute error | Bias | Rows |
+|---|---|---|---|---|
+| Timetable | 64.5% [63.2, 65.9] | 185 s | +125 s | 5.29 M |
+| Historical average (past days only) | 68.7% [67.8, 69.5] | 152 s | -3 s | 5.58 M |
+| Agency (KCM) | 83.8% [83.6, 83.9] | 106 s | -2 s | 5.85 M |
+| **Stays as late as now (published information only)** | **84.7% [84.4, 84.9]** | **104 s** | +16 s | 5.85 M |
 
-Rows scored per bucket: 112,000 to 498,000 (each predictor puts a row in its own bucket). Reading: the agency and
-"stays as late as now" are about equal and both far ahead of the timetable and the historical average; "stays as
-late as now" is slightly ahead of the agency in every bucket from 3 minutes out (by 1.5 to 1.2 points in the window
-score), and the agency is nearly unbiased while persistence runs about 18 seconds early-biased on predicted time
-(buses come later than "as late as now" suggests). One day only; this is the bar the models must clear.
+By window, persistence minus agency (window score points, with a 95 percent day-resampled interval):
 
-Caveats: one weekday; our arrival times are our own estimates (interval at most 60 s); the agency row needs a
-fresh assigned prediction, which excludes the cases where the agency has none.
+| Minutes away | Persistence | Agency | Difference |
+|---|---|---|---|
+| 0-3 | 70.5% | 71.1% | -0.5 [-0.9, -0.05] |
+| 3-6 | 77.1% | 75.7% | +1.4 [+1.1, +1.6] |
+| 6-12 | 86.3% | 84.9% | +1.4 [+1.3, +1.6] |
+| 12-30 | 90.7% | 89.5% | +1.2 [+1.1, +1.3] |
+
+Reading: the agency and "stays as late as now" are within about one point of each other, but the intervals say the
+difference is real and small: persistence ahead by about 1.2 to 1.4 points at 3 minutes and beyond, the agency
+ahead by about half a point in the last 3 minutes. Both are about 19 points ahead of the timetable. The agency is
+nearly unbiased; persistence runs 16 seconds toward "predicted earlier than the bus came". **This is the bar any
+model must clear.** An earlier one-day figure (Oct 20: persistence 84.7, agency 83.7) matches. Six days of one city;
+resampling days does not capture week-to-week changes; weekends are missing.
