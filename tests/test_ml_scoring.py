@@ -84,6 +84,7 @@ def test_scoreboard_sql_scores_every_predictor_on_the_same_rows() -> None:
     for name in PREDICTORS:
         assert f"'{name}' AS predictor" in sql
     # one shared filter: the agency prediction must exist, be fresh and not canceled
-    assert sql.count("WHERE hist_delay_mean_s IS NOT NULL AND kcm_has_bus") == 1
+    assert sql.count("WHERE hist_delay_mean_s IS NOT NULL AND hist_n >= 5 AND kcm_has_bus") == 1
+    assert "service_date <= date_sub(" in sql  # incomplete days are not scored
     plus = scoreboard_sql("t", {"model": "model_pred"})
     assert "'model' AS predictor" in plus

@@ -8,7 +8,8 @@ function later by adding their predictions as one more predictor.
 
 Common rows: only rows where every predictor has an answer are scored, so nobody wins by skipping the hard
 cases. That means the agency had a bus assigned and fresh (at most KCM_MAX_AGE_S seconds old), the trip was
-not canceled, and history exists (so the first day of collection is out).
+not canceled, history has at least MIN_HISTORY_N past observations (a day type needs an earlier day of the same
+type, so the first weekend is out), and the service date is complete (yesterday or earlier).
 
 For each predictor the error is `actual - predicted` (negative = the bus came early) and the "minutes away"
 is the predictor's OWN predicted time minus the moment (as in WMATA's definition). The daily sums let
@@ -18,6 +19,13 @@ is the predictor's OWN predicted time minus the moment (as in WMATA's definition
 from transit_reliability.ml.scoring import bucket_sql, window_sql
 
 KCM_MAX_AGE_S = 120
+MIN_HISTORY_N = (
+    5  # a historical average of fewer past observations is too thin to count as a predictor
+)
+# a service date is complete once its after-midnight trips have ended: yesterday and earlier
+COMPLETE_DAY = (
+    "date_sub(to_date(from_utc_timestamp(current_timestamp(), 'America/Los_Angeles')), 1)"
+)
 PREDICTORS = {
     "timetable": "sched",
     "persistence": "sched + delay_now_s",
@@ -39,8 +47,8 @@ def scoreboard_sql(examples_table: str, extra_predictors: dict[str, str] | None 
       SELECT service_date, CAST(as_of AS DOUBLE) AS t, CAST(actual_ts AS DOUBLE) AS actual, CAST(sched_ts AS DOUBLE) AS sched,
              delay_now_s, hist_delay_mean_s, CAST(kcm_pred_ts AS DOUBLE) AS kcm_pred
       FROM {examples_table}
-      WHERE hist_delay_mean_s IS NOT NULL AND kcm_has_bus AND NOT kcm_canceled AND kcm_pred_ts IS NOT NULL
-        AND kcm_age_s <= {KCM_MAX_AGE_S}),
+      WHERE hist_delay_mean_s IS NOT NULL AND hist_n >= {MIN_HISTORY_N} AND kcm_has_bus AND NOT kcm_canceled
+        AND kcm_pred_ts IS NOT NULL AND kcm_age_s <= {KCM_MAX_AGE_S} AND service_date <= {COMPLETE_DAY}),
     preds AS ({union}),
     scored AS (
       SELECT service_date, predictor, actual - pred AS err_s, actual - t AS to_go_s,
