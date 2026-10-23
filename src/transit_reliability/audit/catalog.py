@@ -422,6 +422,8 @@ def ml_examples(prefix: str, day: str) -> list[CheckSpec]:
         "ml_examples_leak_history_not_from_before": "hist_last_day >= service_date",
         "ml_examples_leak_target_already_reached": "actual_ts <= as_of",
         "ml_examples_leak_now_stop_not_before_target": "last_seq >= stop_sequence",
+        # a negative age would say how many seconds the agency's prediction stayed unchanged AFTER the moment
+        "ml_examples_leak_agency_age_from_future": "kcm_age_s < 0",
     }
     out = [
         CheckSpec(

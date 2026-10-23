@@ -88,3 +88,16 @@ def test_scoreboard_sql_scores_every_predictor_on_the_same_rows() -> None:
     assert "service_date <= date_sub(" in sql  # incomplete days are not scored
     plus = scoreboard_sql("t", {"model": "model_pred"})
     assert "'model' AS predictor" in plus
+
+
+def test_agency_prediction_age_can_never_reveal_the_future() -> None:
+    import datetime as dt
+
+    from transit_reliability.audit.catalog import ml_examples
+    from transit_reliability.ml.arrival_examples import arrival_examples_sql
+
+    assert "greatest(0, t.as_of - k.last_seen) AS kcm_age_s" in arrival_examples_sql(
+        "transit", dt.date(2026, 10, 20)
+    )
+    names = {c.name for c in ml_examples("transit", "2026-10-20")}
+    assert "ml_examples_leak_agency_age_from_future" in names

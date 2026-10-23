@@ -22,6 +22,9 @@ NO PEEKING (the "as of t" rule). Every feature comes from information that had b
 - the agency's prediction: the newest snapshot first seen at or before `as_of`;
 - history (typical lateness at this stop, time of day and day type): only service dates BEFORE this one;
 - weather: the last COMPLETE hour before `as_of`.
+Freshness of the agency's prediction (`kcm_age_s`) is time since it was last confirmed, never below zero: a
+negative value would say "this prediction stayed unchanged for N more seconds after the moment", which is the
+future (found and fixed 2026-10-22: the first version had it, and no check caught it until a row was read by hand).
 The audit columns `state_visible_at`, `kcm_first_seen` and `hist_last_day` let the checks prove it
 (`ml_examples_leak_*` in audit/catalog.py): none may be later than `as_of` (or this service date).
 """
@@ -102,7 +105,7 @@ def arrival_examples_sql(prefix: str, day: dt.date) -> str:
            st.delay_now_s, st.delay_prev_s, st.delay_now_s - st.delay_prev_s AS delay_step_s, st.last_seq,
            t.stop_sequence - st.last_seq AS stops_to_go, t.as_of - st.last_actual AS state_age_s,
            t.as_of - st.state_visible_at AS state_visible_lag_s, t.sched - st.last_sched AS sched_gap_s,
-           timestamp_seconds(k.kcm_pred) AS kcm_pred_ts, k.kcm_pred - t.sched AS kcm_delay_s, t.as_of - k.last_seen AS kcm_age_s,
+           timestamp_seconds(k.kcm_pred) AS kcm_pred_ts, k.kcm_pred - t.sched AS kcm_delay_s, greatest(0, t.as_of - k.last_seen) AS kcm_age_s,
            (k.vehicle_id IS NOT NULL AND k.vehicle_id <> '') AS kcm_has_bus, (k.trip_rel = 3) AS kcm_canceled,
            h.hist_delay_mean_s, h.hist_n, w.weather_class AS weather_prev_hour,
            timestamp_seconds(st.state_visible_at) AS state_visible_at, timestamp_seconds(k.first_seen) AS kcm_first_seen, h.hist_last_day

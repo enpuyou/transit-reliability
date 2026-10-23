@@ -25,6 +25,16 @@ it. Reports reach us a median 57 s after their GPS time, so using the stamp woul
   (`ml_examples_leak_*`, `ml_examples_duplicate_keys`, `ml_examples_rows`). **Checked that the checks can fail:**
   planting each of the five leaks in a copy of the table was caught every time (counts of 52 to 10,073 rows).
 
+## A leak found by reading one row (2026-10-22)
+
+The first version stored the agency prediction's age as moment minus `last_seen`. `last_seen` can be AFTER the
+moment (the snapshot stayed unchanged for minutes more), so the age came out negative (-666 s on the example
+row): the model would have been told how long the prediction was going to stay the same, which is the future.
+The five leak checks did not look at that column. Fixed: the age is clipped at zero, a sixth leak check
+(`ml_examples_leak_agency_age_from_future`) was added, and the table was dropped and rebuilt. The baseline
+scoreboard was not affected (it only requires the age to be at most 120 s). Lesson: checks only cover the leaks
+someone thought of; read real rows, and treat every column that looks at a time "since" something as suspect.
+
 ## What a row holds (v1)
 
 Label: `lateness_s` (how late the bus was at the stop; our arrival estimate, interval at most 60 s). Features:
