@@ -1375,3 +1375,20 @@ In Databricks: `SELECT category, count(*) FROM workspace.transit_silver.incident
 
 `SELECT outcome, count(*) FROM workspace.transit_gold.trip_delivery WHERE service_date = current_date() - 2 GROUP BY 1`
 gives the day's ran / ran with skipped stops / canceled with notice / canceled late / did not run, not announced.
+
+## Machine learning: the training table and the scoreboard (decision 0028)
+
+```sql
+-- the training table: one row per bus, moment (every 6 min) and stop still ahead
+SELECT service_date, count(*) FROM workspace.transit_ml.arrival_examples GROUP BY 1 ORDER BY 1;
+-- the baseline scoreboard (daily sums): window score by predictor and bucket
+SELECT predictor, bucket, sum(n_in_window) / sum(n) AS window_score, sum(sum_abs_err) / sum(n) AS mae_s, sum(n)
+FROM workspace.transit_ml.baseline_scores_daily GROUP BY 1, 2 ORDER BY 2, 1;
+```
+
+```bash
+# rebuild the training table from a date (after changing its SQL), as a one-off run of the silver job step
+databricks bundle run silver_job -t prod --profile enpu --only ml_examples,ml_baseline_scores
+```
+
+The seven `ml_examples_*` daily checks fail the build if any feature is published after its moment.

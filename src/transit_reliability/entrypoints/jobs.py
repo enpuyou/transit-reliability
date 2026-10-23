@@ -352,6 +352,34 @@ def build_silver_weather() -> None:
     build_weather(_spark_session(), args.schema_prefix, args.landing_volume)
 
 
+def build_ml_arrival_examples() -> None:
+    """The arrival-time training table: bus, moment, stop ahead, with only published information."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    parser.add_argument("--rebuild-from", help="recompute service dates from this one (YYYY-MM-DD)")
+    args = parser.parse_args()
+
+    import datetime as dt
+
+    from transit_reliability.ml.arrival_examples import build_arrival_examples
+
+    since = dt.date.fromisoformat(args.rebuild_from) if args.rebuild_from else None
+    build_arrival_examples(_spark_session(), args.schema_prefix, since)
+
+
+def build_ml_baseline_scores() -> None:
+    """Score the timetable, persistence, history and the agency on identical rows (WMATA)."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--schema-prefix", required=True)
+    args = parser.parse_args()
+
+    from transit_reliability.ml.scoreboard import build_baseline_scores
+
+    build_baseline_scores(_spark_session(), args.schema_prefix)
+
+
 def build_gold_trip_delivery() -> None:
     """One row per scheduled trip and date: did it run, and was a missing one announced?"""
 

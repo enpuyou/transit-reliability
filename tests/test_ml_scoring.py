@@ -74,3 +74,16 @@ def test_paired_gain_says_when_a_difference_is_clear() -> None:
     assert diff == pytest.approx(0.2) and lo > 0  # clearly better
     same = paired_gain_by_day(a, dict(a))
     assert same[0] == 0 and same[1] <= 0 <= same[2]  # no clear difference
+
+
+def test_scoreboard_sql_scores_every_predictor_on_the_same_rows() -> None:
+    from transit_reliability.ml.scoreboard import PREDICTORS, scoreboard_sql
+
+    sql = scoreboard_sql("workspace.transit_ml.arrival_examples")
+    assert "FROM workspace.transit_ml.arrival_examples" in sql and "UNION ALL" in sql
+    for name in PREDICTORS:
+        assert f"'{name}' AS predictor" in sql
+    # one shared filter: the agency prediction must exist, be fresh and not canceled
+    assert sql.count("WHERE hist_delay_mean_s IS NOT NULL AND kcm_has_bus") == 1
+    plus = scoreboard_sql("t", {"model": "model_pred"})
+    assert "'model' AS predictor" in plus

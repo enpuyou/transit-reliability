@@ -39,6 +39,11 @@ traffic model (no road graph or car traffic), trip-cancellation prediction (no f
 
 ## 3. Data, shared by all rungs
 
+(Built 2026-10-22, decision 0028: `ml.arrival_examples`, moments on a clock grid, only published information,
+seven leak checks proven able to fail; the baseline scoreboard is in `docs/ml_results.md`. The text below is the
+original plan; where it says "extending `gold.prediction_errors`" the final design deliberately does not, because
+that table fixes the moment from the actual arrival, which would leak the answer to a model.)
+
 - **One training table** extending `gold.prediction_errors` (2.4 million scored agency predictions at 5 minutes
   ahead, 1.6 million at 15, 0.7 million at 30, for 2026-10-14 to 10-21). One row = a bus, a moment *t*, a later
   stop, with a label. Label quality: our arrival estimate from GPS; only stops whose interval is at most 60
@@ -60,7 +65,7 @@ traffic model (no road graph or car traffic), trip-cancellation prediction (no f
   validation week before it is used for choices; the test week is touched once per model version; a rolling
   check moves the window forward a week at a time.
 - **Same rows for everyone.** Models and baselines are scored on exactly the same examples.
-- **Baselines (measured 2026-10-14 to 10-21, truth interval at most 60 s, typical / bad error in seconds):**
+- **Baselines (from `gold.prediction_errors`, 2026-10-14 to 10-21, truth interval at most 60 s, typical / bad error in seconds; its persistence is slightly optimistic, see decision 0028; the honest scoreboard is in `docs/ml_results.md`):**
   5 minutes ahead: KCM 61 / 167, "stays as late as now" 56 / 150, timetable 139 / 421; 15 minutes: 94 / 250,
   92 / 242, 152 / 450; 30 minutes: 129 / 343, 129 / 346, 169 / 501. The simple rule already matches the agency.
 - **Is a gain real?** Confidence by resampling whole days of trips, not rows. Following BusTr, repeat neural

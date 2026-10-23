@@ -180,6 +180,29 @@ resources:
               - --schema-prefix
               - ${var.schema_prefix}
           environment_key: default
+        - task_key: ml_examples
+          # the arrival-time training table (docs/ml_design.md): only information published by each moment
+          depends_on:
+            - task_key: stop_visits
+            - task_key: trip_updates
+            - task_key: weather
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_ml_arrival_examples
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
+        - task_key: ml_baseline_scores
+          depends_on:
+            - task_key: ml_examples
+          python_wheel_task:
+            package_name: transit_reliability
+            entry_point: build_ml_baseline_scores
+            parameters:
+              - --schema-prefix
+              - ${var.schema_prefix}
+          environment_key: default
         - task_key: weather
           python_wheel_task:
             package_name: transit_reliability
@@ -256,6 +279,7 @@ resources:
             - task_key: event_routes
             - task_key: trip_delivery_summary
             - task_key: incident_routes
+            - task_key: ml_baseline_scores
           python_wheel_task:
             package_name: transit_reliability
             entry_point: run_health_checks

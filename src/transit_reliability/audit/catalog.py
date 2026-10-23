@@ -411,6 +411,47 @@ def delivery(prefix: str, day: str) -> list[CheckSpec]:
     ]
 
 
+def ml_examples(prefix: str, day: str) -> list[CheckSpec]:
+    """The training table never contains information from after its moment (the "as of t" rule)."""
+
+    t = _t(prefix, "ml", "arrival_examples")
+    where = f"service_date = DATE'{day}'"
+    leaks = {
+        "ml_examples_leak_state_published_after_moment": "state_visible_at > as_of",
+        "ml_examples_leak_agency_snapshot_after_moment": "kcm_first_seen > as_of",
+        "ml_examples_leak_history_not_from_before": "hist_last_day >= service_date",
+        "ml_examples_leak_target_already_reached": "actual_ts <= as_of",
+        "ml_examples_leak_now_stop_not_before_target": "last_seq >= stop_sequence",
+    }
+    out = [
+        CheckSpec(
+            name,
+            f"SELECT count(*) FROM {t} WHERE {where} AND {cond}",
+            "a feature built from information not yet published at the example's moment would let a model "
+            "peek at the future; this must be zero",
+            maximum=0,
+        )
+        for name, cond in leaks.items()
+    ]
+    out.append(
+        CheckSpec(
+            "ml_examples_duplicate_keys",
+            f"SELECT count(*) - count(DISTINCT trip_id, stop_sequence, as_of) FROM {t} WHERE {where}",
+            "one row per trip, stop and moment",
+            maximum=0,
+        )
+    )
+    out.append(
+        CheckSpec(
+            "ml_examples_rows",
+            f"SELECT count(*) FROM {t} WHERE {where}",
+            "a full weekday gives about 1.2 million rows (1.2 million on 2026-10-20); a collapse means a join broke",
+            minimum=300000,
+        )
+    )
+    return out
+
+
 def incidents(prefix: str) -> list[CheckSpec]:
     """Incidents are fetched every 2 hours and kept once each."""
 
@@ -513,5 +554,6 @@ def _all(prefix: str, day: str) -> list[CheckSpec]:
         *weather(prefix),
         *events(prefix),
         *incidents(prefix),
+        *ml_examples(prefix, day),
         *delivery(prefix, day),
     ]
